@@ -1313,6 +1313,19 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       );
     }
     const prefix = hauntDropItemIdPrefix(populationValue.populationId);
+    if (populationValue.preHauntReward === true) {
+      // A haunt rewarded before death inventories existed owes no pieces (see `migrateV15ToV16`).
+      // The marker excuses that and nothing else: it cannot be used to explain away a v16 drop with
+      // items deleted out of it, because a marked population must own no pieces whatsoever.
+      const carriesPieces = run.items.some((entry) => entry.itemId.startsWith(`${prefix}.`));
+      if (carriesPieces) {
+        fail(
+          `populations.${populationIndex}.preHauntReward`,
+          'a pre-haunt reward cannot coexist with death-inventory pieces',
+        );
+      }
+      continue;
+    }
     // A champion hands back every piece. A DEFEATED echo hands back exactly one, always at index
     // zero -- but an APPEASED one gave back the whole set, so it owes every piece too, and the
     // rule has to say so here or a save missing pieces 1..N-1 decodes clean and only blows up

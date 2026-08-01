@@ -69,6 +69,19 @@ export const bossRewardReceipt = z.strictObject({
     .min(1)
     .readonly(),
 });
+/**
+ * Marks a haunt whose reward was created BEFORE the death-inventory drop existed -- set only by
+ * `migrateV15ToV16`, never by the engine. Such a haunt owes no `item.haunt.<populationId>.NNNN`
+ * pieces: a pre-haunt champion's single reward is renamed into piece zero by that same migration,
+ * and a pre-haunt echo genuinely surrendered nothing at all.
+ *
+ * `z.literal(true).optional()` rather than a boolean: the field is present-and-true or absent, so
+ * there is no `false` state to reason about, and a save can only carry it by having been migrated
+ * (or forged -- which `validateSemantics` then refuses to let excuse a partially deleted drop,
+ * since a marked population must own no pieces whatsoever).
+ */
+const preHauntReward = z.literal(true).optional();
+
 export const legacyPopulation = z.discriminatedUnion('model', [
   z.strictObject({ ...populationBase, model: z.literal('individual') }),
   z.strictObject({
@@ -113,6 +126,7 @@ export const legacyPopulation = z.discriminatedUnion('model', [
     rank: z.literal(1),
     defeated: z.boolean(),
     rewardCreated: z.boolean(),
+    preHauntReward: preHauntReward,
     equipmentContentIds: z.array(identifier).readonly(),
     abilityIds: z.array(identifier).readonly(),
   }),
@@ -124,6 +138,7 @@ export const legacyPopulation = z.discriminatedUnion('model', [
     rank: z.number().int().min(2).max(10),
     defeated: z.boolean(),
     lootCreated: z.boolean(),
+    preHauntReward: preHauntReward,
     equipmentContentIds: z.array(identifier).readonly(),
     abilityIds: z.array(identifier).readonly(),
   }),

@@ -454,8 +454,9 @@ export interface CastableSpellView {
  * A player-known fallen hero haunting this run: an Echo or Champion population retained from the
  * player's OWN Hall standings (`state.fallenHeroDecisions` joined to `state.fallenHeroStandings`).
  * Nothing here is hidden state -- every field is already visible on the Hall screen for this same
- * hero -- so this projects unconditionally for every retained decision, unlike the perception-gated
- * `actors`/`groundItems` arrays.
+ * hero -- so no field is perception-gated the way `actors`/`groundItems` are. Which haunts appear
+ * IS gated, though: a retained decision surfaces only once it has been encountered or placed, since
+ * `retained` alone is the outcome of a hidden gate roll (see the filter below).
  */
 export interface HauntView {
   readonly hallRecordId: OpaqueId;

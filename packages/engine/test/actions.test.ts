@@ -549,6 +549,7 @@ describe('offer validation', () => {
       appeased?: boolean;
       defeated?: boolean;
       retained?: boolean;
+      encountered?: boolean;
       hauntHealth?: number;
       hauntAt?: Readonly<{ x: number; y: number }>;
     }> = {},
@@ -630,7 +631,7 @@ describe('offer validation', () => {
           // The rank-1 Champion is never gate-rolled: only Echoes carry a roll.
           gateRoll: null,
           retained: overrides.retained ?? true,
-          encountered: true,
+          encountered: overrides.encountered ?? true,
           defeated: overrides.defeated ?? false,
           appeased: overrides.appeased ?? false,
         },
@@ -733,6 +734,20 @@ describe('offer validation', () => {
       reason: 'target.invalid',
     });
     expect(validate(heroBesideHaunt({ retained: false }), offerCommand(SCROLL_ID))).toEqual({
+      status: 'invalid',
+      reason: 'target.invalid',
+    });
+  });
+
+  it('rejects an offer to a haunt the hero has never seen', () => {
+    // Without this gate a handcrafted offer is a redaction oracle: a wrong-category offer to an
+    // unseen haunt would answer `offer.refused` (proving it IS a haunt) and a right-category one
+    // would resolve outright. The client only offers an encountered haunt, so no play changes.
+    expect(validate(heroBesideHaunt({ encountered: false }), offerCommand(SCROLL_ID))).toEqual({
+      status: 'invalid',
+      reason: 'target.invalid',
+    });
+    expect(validate(heroBesideHaunt({ encountered: false }), offerCommand(SWORD_ID))).toEqual({
       status: 'invalid',
       reason: 'target.invalid',
     });

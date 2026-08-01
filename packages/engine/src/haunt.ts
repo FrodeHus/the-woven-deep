@@ -99,6 +99,11 @@ export function resolveOffer(
     x: actor.x,
     y: actor.y,
   });
+  // Unreachable by construction, and kept as the invariant it states. A population mints this id
+  // space exactly once: appeasement requires a haunt that is neither defeated nor already appeased,
+  // the decision is latched `appeased` below, and the defeat path is latched out by the same
+  // reward flag -- so no second drop can collide. Offering a piece BACK to a haunt cannot recreate
+  // one either: `validatePlayerAction` refuses any item carrying heirloom provenance.
   for (const piece of pieces) {
     if (state.items.some((item) => item.itemId === piece.item.itemId)) {
       throw new Error(`Haunt drop ${piece.item.itemId} exists without reward state`);

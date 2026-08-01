@@ -15,6 +15,7 @@ import {
   normalizeFallenHero,
   placeFallenHeroEncounters,
   resolveCommand,
+  validatePlayerAction,
   resolveOffer,
   validateContentBoundRun,
   type ActiveRun,
@@ -577,5 +578,205 @@ describe('resolveOffer', () => {
       { content: pack },
     );
     expect(second.result.status).toBe('applied');
+  });
+});
+
+describe('offering a haunt piece', () => {
+  const ECHO_ACTOR_ID = 'actor.population.haunt-echo.001';
+  const ECHO_POPULATION_ID = 'population.haunt-echo';
+  const ECHO_RECORD_ID = 'hall.appease-echo';
+
+  /**
+   * The hero at (1, 1) with a Champion at (2, 1) and an Echo at (1, 2), both retained, living and
+   * encountered. The Champion's death inventory is a single SCROLL, so the piece it releases is
+   * squarely inside the Echo's need -- otherwise a refusal would prove nothing but a category miss.
+   */
+  function heroBetweenTwoHaunts(): ActiveRun {
+    const championStanding: FallenHeroStandingSnapshot = {
+      ...standing(1, [scrollDefinition.id], 1),
+      hallRecordId: CHAMPION_RECORD_ID,
+      heroName: 'Kaelen',
+    };
+    const rebound = championStanding.deathInventory.map((piece) => ({
+      ...piece,
+      originatingHallRecordId: CHAMPION_RECORD_ID,
+    }));
+    const champion: FallenHeroStandingSnapshot = {
+      ...championStanding,
+      heirloom: rebound[0]!,
+      deathInventory: rebound,
+    };
+    const echo: FallenHeroStandingSnapshot = {
+      ...standing(1, [scrollDefinition.id], 2),
+      hallRecordId: ECHO_RECORD_ID,
+      heroName: 'Mira',
+    };
+    const echoRebound = echo.deathInventory.map((piece) => ({
+      ...piece,
+      originatingHallRecordId: ECHO_RECORD_ID,
+    }));
+    const echoStanding: FallenHeroStandingSnapshot = {
+      ...echo,
+      heirloom: echoRebound[0]!,
+      deathInventory: echoRebound,
+    };
+    const base = createDemoRun();
+    const hero = base.actors[0]!;
+    const normalizedChampion = normalizeFallenHero({
+      standing: champion,
+      template,
+      content: pack,
+      role: 'champion',
+    });
+    const normalizedEcho = normalizeFallenHero({
+      standing: echoStanding,
+      template,
+      content: pack,
+      role: 'echo',
+    });
+    const actorFor = (
+      actorId: string,
+      populationId: string,
+      normalized: ReturnType<typeof normalizeFallenHero>,
+      x: number,
+      y: number,
+    ): ActorState => ({
+      ...hero,
+      actorId,
+      contentId: normalized.monsterId,
+      playerControlled: false,
+      x,
+      y,
+      health: normalized.health,
+      maxHealth: normalized.health,
+      disposition: 'hostile',
+      populationId,
+      populationPresentation: {
+        name: normalized.displayName,
+        glyph: normalized.glyph,
+        color: normalized.color,
+        leader: false,
+      },
+    });
+    return {
+      ...base,
+      contentHash: pack.hash,
+      actors: [
+        hero,
+        actorFor(HAUNT_ACTOR_ID, POPULATION_ID, normalizedChampion, HAUNT_X, HAUNT_Y),
+        actorFor(ECHO_ACTOR_ID, ECHO_POPULATION_ID, normalizedEcho, 1, 2),
+      ].sort((left, right) => (left.actorId < right.actorId ? -1 : 1)),
+      items: [offerItem(1)],
+      populations: [
+        {
+          model: 'champion',
+          populationId: POPULATION_ID,
+          encounterId: template.id,
+          floorId: hero.floorId,
+          createdAt: 0,
+          livingMemberIds: [HAUNT_ACTOR_ID],
+          formerMemberIds: [],
+          actorId: HAUNT_ACTOR_ID,
+          hallRecordId: CHAMPION_RECORD_ID,
+          rank: 1,
+          defeated: false,
+          rewardCreated: false,
+          equipmentContentIds: normalizedChampion.equipmentContentIds,
+          abilityIds: normalizedChampion.abilityIds,
+        },
+        {
+          model: 'echo',
+          populationId: ECHO_POPULATION_ID,
+          encounterId: template.id,
+          floorId: hero.floorId,
+          createdAt: 0,
+          livingMemberIds: [ECHO_ACTOR_ID],
+          formerMemberIds: [],
+          actorId: ECHO_ACTOR_ID,
+          hallRecordId: ECHO_RECORD_ID,
+          rank: 2,
+          defeated: false,
+          lootCreated: false,
+          equipmentContentIds: normalizedEcho.equipmentContentIds,
+          abilityIds: normalizedEcho.abilityIds,
+        },
+      ].sort((left, right) => (left.populationId < right.populationId ? -1 : 1)),
+      fallenHeroStandings: [champion, echoStanding],
+      fallenHeroDecisions: [
+        {
+          hallRecordId: CHAMPION_RECORD_ID,
+          rank: 1,
+          role: 'champion',
+          gateRoll: null,
+          retained: true,
+          encountered: true,
+          defeated: false,
+          appeased: false,
+        },
+        {
+          hallRecordId: ECHO_RECORD_ID,
+          rank: 2,
+          role: 'echo',
+          gateRoll: 1,
+          retained: true,
+          encountered: true,
+          defeated: false,
+          appeased: false,
+        },
+      ],
+    };
+  }
+
+  it('refuses a piece another haunt released, and the run still persists', () => {
+    // The save tier requires every owed piece to exist for as long as its haunt does. Consuming one
+    // as an offering would delete it and make the run un-persistable from that command onward.
+    const appeased = resolveOffer({
+      state: heroBetweenTwoHaunts(),
+      content: pack,
+      action: offerAction(),
+      eventId: 'e1',
+    }).state;
+    const pieceId = `${PIECE_PREFIX}.0000`;
+    expect(appeased.items.find((item) => item.itemId === pieceId)).toBeDefined();
+    // The hero picks the released piece up: an ordinary floor item, freely carried.
+    const carried: ActiveRun = {
+      ...appeased,
+      items: appeased.items.map((item) =>
+        item.itemId === pieceId
+          ? { ...item, location: { type: 'backpack' as const, actorId: HERO_ID } }
+          : item,
+      ),
+    };
+    expect(
+      validatePlayerAction({
+        state: carried,
+        command: {
+          type: 'offer',
+          commandId: 'command.offer-piece',
+          expectedRevision: carried.revision,
+          itemId: pieceId,
+          targetActorId: ECHO_ACTOR_ID,
+        },
+        context: { content: pack },
+      }),
+    ).toEqual({ status: 'invalid', reason: 'offer.refused' });
+    expect(() => encodeActiveRun(carried)).not.toThrow();
+  });
+
+  it('still accepts an ordinary offering of the same category', () => {
+    const carried = heroBetweenTwoHaunts();
+    expect(
+      validatePlayerAction({
+        state: carried,
+        command: {
+          type: 'offer',
+          commandId: 'command.offer-plain',
+          expectedRevision: carried.revision,
+          itemId: OFFERED_ITEM_ID,
+          targetActorId: ECHO_ACTOR_ID,
+        },
+        context: { content: pack },
+      }),
+    ).toMatchObject({ type: 'offer', itemId: OFFERED_ITEM_ID });
   });
 });

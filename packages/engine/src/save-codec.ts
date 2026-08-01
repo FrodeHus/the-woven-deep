@@ -1,5 +1,7 @@
 import type { CompiledContentPack } from '@woven-deep/content';
+import { hauntDropItemIdPrefix, hauntPieceItemId } from './haunt-rewards.js';
 import { validateRequiredFloorLootTables } from './loot-placement.js';
+import { compareCodeUnits } from './stable-json.js';
 import type { ActiveRun } from './model.js';
 import { SaveLoadError } from './save-error.js';
 import {
@@ -167,9 +169,51 @@ function migrateV14ToV15(input: unknown): unknown {
 // Decisions gain `appeased: false`: nothing recorded before this bump was ever offered to.
 function migrateV15ToV16(input: unknown): unknown {
   const v15 = legacyActiveRunV15Schema.parse(input);
+  // A haunt put down BEFORE this bump owes pieces under a scheme that did not exist when it died.
+  // Two shapes, both of which the v16 rules reject untouched -- a save that decodes into either is
+  // discarded by the host as corrupt, which is the whole run gone:
+  //
+  //   - a rewarded champion dropped exactly one item, `item.heirloom.${populationId}`. Its migrated
+  //     `deathInventory` is exactly `[heirloom]`, so index zero IS that heirloom: renaming the item
+  //     to `hauntPieceItemId(prefix, 0)` turns it into a complete, correct death-inventory drop.
+  //     `originatingRank` is already the literal 1 in both schemas, so nothing is re-stamped.
+  //   - a rewarded echo dropped NO piece at all (only ordinary spoils). Nothing can be renamed, and
+  //     the migration cannot mint one -- migrations never read content, and a piece needs its item
+  //     definition. That population is marked `preHauntReward`, which excuses it from the
+  //     piece-existence rule and nothing else.
+  const renames = new Map<string, string>();
+  const populations = v15.populations.map((population) => {
+    if (population.model !== 'champion' && population.model !== 'echo') return population;
+    const rewarded =
+      population.model === 'champion' ? population.rewardCreated : population.lootCreated;
+    if (!rewarded) return population;
+    const pieceId = hauntPieceItemId(hauntDropItemIdPrefix(population.populationId), 0);
+    const legacyRewardId = `item.heirloom.${population.populationId}`;
+    if (
+      population.model === 'champion' &&
+      v15.items.some((item) => item.itemId === legacyRewardId)
+    ) {
+      renames.set(legacyRewardId, pieceId);
+      return population;
+    }
+    return { ...population, preHauntReward: true as const };
+  });
+  const items =
+    renames.size === 0
+      ? v15.items
+      : [...v15.items]
+          .map((item) => {
+            const renamed = renames.get(item.itemId);
+            return renamed === undefined ? item : { ...item, itemId: renamed };
+          })
+          // `item.haunt.` sorts before `item.heirloom.`, so a rename moves the piece within the
+          // strictly ascending item order the save schema requires.
+          .sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
   return {
     ...v15,
     schemaVersion: 16,
+    items,
+    populations,
     fallenHeroStandings: v15.fallenHeroStandings.map((standing) => ({
       ...standing,
       cause: null,

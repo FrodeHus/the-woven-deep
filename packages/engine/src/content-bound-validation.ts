@@ -544,9 +544,15 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       // bought off. So the owed set is keyed on appeasement first, and only a defeated echo falls
       // through to the one-piece membership rule below.
       const owed = matching[0];
-      const appeasedSet = decision.appeased && owed !== undefined;
+      // A haunt rewarded before the death-inventory drop existed owes no pieces at all -- the
+      // migration renamed a champion's single legacy reward into piece zero, and a legacy echo
+      // surrendered nothing. Neither owed set applies to it.
+      const preHaunt =
+        (owed?.model === 'champion' || owed?.model === 'echo') && owed.preHauntReward === true;
+      const appeasedSet = decision.appeased && owed !== undefined && !preHaunt;
       if (
         owed !== undefined &&
+        !preHaunt &&
         (appeasedSet || (owed.model === 'champion' && owed.rewardCreated))
       ) {
         const standing = run.fallenHeroStandings.find(
@@ -579,7 +585,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           }
         }
       }
-      if (!appeasedSet && matching[0]?.model === 'echo' && matching[0].lootCreated) {
+      if (!appeasedSet && !preHaunt && matching[0]?.model === 'echo' && matching[0].lootCreated) {
         const standing = run.fallenHeroStandings.find(
           (entry) => entry.hallRecordId === decision.hallRecordId,
         )!;

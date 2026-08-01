@@ -107,6 +107,9 @@ export interface ChampionPopulation extends PopulationBase {
   readonly rank: 1;
   readonly defeated: boolean;
   readonly rewardCreated: boolean;
+  /** Set only by `migrateV15ToV16` on a haunt rewarded before death inventories existed; such a
+   * haunt owes no drop pieces. The engine never writes it. */
+  readonly preHauntReward?: true;
   readonly equipmentContentIds: readonly OpaqueId[];
   readonly abilityIds: readonly OpaqueId[];
 }
@@ -117,6 +120,9 @@ export interface EchoPopulation extends PopulationBase {
   readonly rank: number;
   readonly defeated: boolean;
   readonly lootCreated: boolean;
+  /** Set only by `migrateV15ToV16` on a haunt rewarded before death inventories existed; such a
+   * haunt owes no drop pieces. The engine never writes it. */
+  readonly preHauntReward?: true;
   readonly equipmentContentIds: readonly OpaqueId[];
   readonly abilityIds: readonly OpaqueId[];
 }

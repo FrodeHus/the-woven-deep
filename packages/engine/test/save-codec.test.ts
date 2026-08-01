@@ -951,6 +951,207 @@ describe('active-run save codec', () => {
     }
   });
 
+  /**
+   * A genuine pre-haunt (v15) blob carrying a haunt that was already PUT DOWN before the death
+   * inventory drop existed: a champion whose single reward is `item.heirloom.${populationId}`, and
+   * an echo that surrendered no piece at all (it only ever dropped spoils). Both are states the
+   * v16 rules would otherwise reject outright, bricking the save.
+   */
+  function v15WithDefeatedHaunts(): Record<string, unknown> {
+    const base: any = structuredClone(createDemoRun());
+    const hero = base.actors[0];
+    const championPopulationId = 'population.fallen-champion.hall-a';
+    const echoPopulationId = 'population.fallen-echo-2.hall-b';
+    const championActorId = 'actor.fallen-champion.001';
+    const echoActorId = 'actor.fallen-echo.001';
+    const corpse = (actorId: string, populationId: string, x: number) => ({
+      ...structuredClone(hero),
+      actorId,
+      contentId: 'monster.champion-fallback',
+      playerControlled: false,
+      x,
+      y: 1,
+      health: 0,
+      disposition: 'hostile',
+      populationId,
+      populationPresentation: { name: 'Fallen', glyph: '@', color: '#ffffff', leader: false },
+    });
+    const snapshot = (recordId: string, contentId: string) => ({
+      contentId,
+      sourceItemId: `item.recorded.${recordId}`,
+      enchantment: null,
+      condition: 90,
+      charges: null,
+      fuel: null,
+      curse: null,
+      qualityRank: 0,
+      displayName: 'Old Iron Sword',
+      glyph: ')',
+      color: '#c0c0c0',
+      originatingHallRecordId: recordId,
+    });
+    const championHeirloom = snapshot('hall.a', 'item.iron-sword');
+    const echoHeirloom = snapshot('hall.b', 'item.iron-sword');
+    return {
+      ...base,
+      schemaVersion: 15,
+      actors: [
+        hero,
+        corpse(championActorId, championPopulationId, 2),
+        corpse(echoActorId, echoPopulationId, 3),
+      ].sort((left: any, right: any) => (left.actorId < right.actorId ? -1 : 1)),
+      items: [
+        {
+          itemId: `item.heirloom.${championPopulationId}`,
+          contentId: 'item.iron-sword',
+          quantity: 1,
+          condition: 90,
+          enchantment: null,
+          identified: true,
+          charges: null,
+          fuel: null,
+          enabled: null,
+          location: { type: 'floor', floorId: hero.floorId, x: 2, y: 1 },
+          heirloom: {
+            displayName: 'Old Iron Sword',
+            glyph: ')',
+            color: '#c0c0c0',
+            originatingHallRecordId: 'hall.a',
+            originatingRank: 1,
+            sourceItemId: championHeirloom.sourceItemId,
+          },
+        },
+      ],
+      populations: [
+        {
+          populationId: championPopulationId,
+          encounterId: 'fallen-champion-template.core',
+          floorId: hero.floorId,
+          createdAt: 0,
+          model: 'champion',
+          livingMemberIds: [],
+          formerMemberIds: [championActorId],
+          actorId: championActorId,
+          hallRecordId: 'hall.a',
+          rank: 1,
+          defeated: true,
+          rewardCreated: true,
+          equipmentContentIds: [],
+          abilityIds: [],
+        },
+        {
+          populationId: echoPopulationId,
+          encounterId: 'fallen-champion-template.core',
+          floorId: hero.floorId,
+          createdAt: 0,
+          model: 'echo',
+          livingMemberIds: [],
+          formerMemberIds: [echoActorId],
+          actorId: echoActorId,
+          hallRecordId: 'hall.b',
+          rank: 2,
+          defeated: true,
+          lootCreated: true,
+          equipmentContentIds: [],
+          abilityIds: [],
+        },
+      ].sort((left: any, right: any) => (left.populationId < right.populationId ? -1 : 1)),
+      fallenHeroStandings: [
+        {
+          rank: 1,
+          hallRecordId: 'hall.a',
+          heroName: 'Kaelen',
+          portraitGlyph: '@',
+          classTags: ['fighter'],
+          attributes: hero.attributes,
+          equippedItemContentIds: ['item.iron-sword'],
+          signatureAbilityIds: [],
+          deathDepth: 4,
+          sourceContentHash: base.contentHash,
+          heirloom: championHeirloom,
+        },
+        {
+          rank: 2,
+          hallRecordId: 'hall.b',
+          heroName: 'Mira',
+          portraitGlyph: '@',
+          classTags: ['scout'],
+          attributes: hero.attributes,
+          equippedItemContentIds: ['item.iron-sword'],
+          signatureAbilityIds: [],
+          deathDepth: 3,
+          sourceContentHash: base.contentHash,
+          heirloom: echoHeirloom,
+        },
+      ],
+      fallenHeroDecisions: [
+        {
+          hallRecordId: 'hall.a',
+          rank: 1,
+          role: 'champion',
+          gateRoll: null,
+          retained: true,
+          encountered: true,
+          defeated: true,
+        },
+        {
+          hallRecordId: 'hall.b',
+          rank: 2,
+          role: 'echo',
+          gateRoll: 1,
+          retained: true,
+          encountered: true,
+          defeated: true,
+        },
+      ],
+    };
+  }
+
+  it('migrates a v15 save whose champion was already defeated, renaming its reward to a death-inventory piece', () => {
+    const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()));
+    expect(decoded.schemaVersion).toBe(16);
+    const champion = decoded.populations.find(
+      (population) => population.model === 'champion',
+    ) as Extract<(typeof decoded.populations)[number], { model: 'champion' }>;
+    const pieceId = `item.haunt.${champion.populationId}.0000`;
+    expect(decoded.items.map((item) => item.itemId)).toContain(pieceId);
+    expect(decoded.items.some((item) => item.itemId.startsWith('item.heirloom.'))).toBe(false);
+    expect(decoded.items.find((item) => item.itemId === pieceId)!.heirloom).toMatchObject({
+      originatingHallRecordId: 'hall.a',
+      originatingRank: 1,
+    });
+    const encoded = encodeActiveRun(decoded);
+    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
+  });
+
+  it('migrates a v15 save whose echo was already defeated and never surrendered a piece', () => {
+    const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()));
+    const echo = decoded.populations.find((population) => population.model === 'echo')!;
+    expect(
+      decoded.items.some((item) => item.itemId.startsWith(`item.haunt.${echo.populationId}.`)),
+    ).toBe(false);
+    const encoded = encodeActiveRun(decoded);
+    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
+  });
+
+  it('refuses a pre-haunt reward marker that would excuse a partially deleted drop', () => {
+    // The marker is the one mechanism that lets a rewarded haunt owe no pieces. It must never be
+    // usable to explain away a v16 drop with items removed from it.
+    const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()));
+    const champion = decoded.populations.find((population) => population.model === 'champion')!;
+    const forged = {
+      ...decoded,
+      populations: decoded.populations.map((population) =>
+        population.populationId === champion.populationId
+          ? { ...population, preHauntReward: true as const }
+          : population,
+      ),
+    };
+    expect(() => encodeActiveRun(forged)).toThrow(
+      /pre-haunt reward cannot coexist with death-inventory pieces/i,
+    );
+  });
+
   it('migrates every legacy entry version through the frozen pre-haunt standing schema', () => {
     for (const version of [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] as const) {
       const decoded = decodeActiveRun(
