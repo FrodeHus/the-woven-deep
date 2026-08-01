@@ -273,6 +273,13 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
   rest: () => {
     throw new Error('internal invariant: rest must be expanded into world steps');
   },
+  // Placeholder seam for the offer resolver. `ActionDispatchRegistry` is exhaustive over
+  // `GameAction['type']`, so the entry has to exist the moment `OfferAction` joins the union --
+  // and registering it here is what keeps a validated offer off `applyAction`'s bump-attack
+  // fallback, which would otherwise turn an accepted offering into an attack on the haunt. Until
+  // the acceptance resolver lands, an accepted offer costs the turn and changes nothing: the
+  // offering stays in the pack, the haunt is untouched, and no stream is drawn from.
+  offer: ({ state }) => ({ state, chargeEnergy: true }),
   'swarm-spawn': ({ state, actor, content, eventId, events }) => {
     const result = resolveSwarmSpawnAction({
       state,

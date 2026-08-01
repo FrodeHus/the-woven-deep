@@ -66,6 +66,12 @@ export const commandBaseOptions = [
   }),
   z.strictObject({
     ...commandBase,
+    type: z.literal('offer'),
+    itemId: identifier,
+    targetActorId: identifier,
+  }),
+  z.strictObject({
+    ...commandBase,
     type: z.literal('split-stack'),
     itemId: identifier,
     quantity: positiveQuantity,

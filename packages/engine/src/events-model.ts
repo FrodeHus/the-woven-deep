@@ -153,6 +153,7 @@ export interface ActorTurnCompletedEvent {
     | 'search'
     | 'disarm'
     | 'pick-lock'
+    | 'offer'
     | 'swarm-spawn';
 }
 export interface ActorMovedEvent {

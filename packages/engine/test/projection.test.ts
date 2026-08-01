@@ -16,7 +16,12 @@ import {
   type FallenHeroStandingSnapshot,
   type RecordedHeirloomSnapshot,
 } from '../src/index.js';
-import type { MonsterContentEntry, SpellContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack,
+  FallenChampionTemplateContentEntry,
+  MonsterContentEntry,
+  SpellContentEntry,
+} from '@woven-deep/content';
 
 const width = 9;
 const height = 7;
@@ -1102,7 +1107,41 @@ describe('gameplay projection', () => {
 });
 
 describe('haunt projection', () => {
-  const pack = createDemoContentPack();
+  // A haunt run always comes from a pack that authored the champion template: the decisions in
+  // these fixtures cannot exist without one, and `needCategories` is derived from its
+  // `appeasement` block.
+  const template: FallenChampionTemplateContentEntry = {
+    kind: 'fallen-champion-template',
+    id: 'fallen-champion-template.core',
+    name: "The Deep's Champion",
+    tags: ['champion'],
+    fallbackMonsterId: 'monster.champion-fallback',
+    fallbackItemId: 'item.fallback',
+    minimumHealth: 30,
+    maximumHealth: 100,
+    attributeMaximum: 20,
+    damageMaximum: 24,
+    abilityLimit: 2,
+    echoAppearanceChance: 0.5,
+    maximumEchoesPerRun: 2,
+    echoHealthPercent: 65,
+    echoDamagePercent: 70,
+    echoDefensePercent: 80,
+    echoAbilityLimit: 1,
+    echoLootTableId: 'loot-table.echo-remnant',
+    heirloomSelection: {
+      rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 },
+      qualityRankBonus: 2,
+    },
+    appeasement: {
+      classFavors: { loomcaller: ['scroll', 'potion'] },
+      causelessCategories: ['light'],
+      defaultCategories: ['food', 'potion'],
+    },
+  };
+
+  const base = createDemoContentPack();
+  const pack: CompiledContentPack = { ...base, entries: [...base.entries, template] };
 
   function heirloom(hallRecordId: string): RecordedHeirloomSnapshot {
     return {
@@ -1276,7 +1315,12 @@ describe('haunt projection', () => {
       killerContentId: 'monster.bone-gnawer',
       causeDepth: 7,
       appeased: false,
+      // No class tags and a named killer: the template defaults, which is the same derivation
+      // offer validation enforces.
+      needCategories: ['food', 'potion'],
     });
+    // Mira's record names no killer, so the causeless category joins her need.
+    expect(projection.haunts[1]!.needCategories).toEqual(['light']);
   });
 
   it('omits unretained decisions', () => {

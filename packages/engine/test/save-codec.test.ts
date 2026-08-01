@@ -1644,6 +1644,61 @@ describe('active-run save codec', () => {
     },
   );
 
+  it('round-trips a recorded offer command', () => {
+    const state = createDemoRun();
+    const command = {
+      type: 'offer' as const,
+      commandId: 'command.guest-000001',
+      expectedRevision: 0,
+      itemId: 'item.scroll.0001',
+      targetActorId: 'actor.population.fallen-echo-2.record.b.001',
+    };
+    const result = {
+      status: 'invalid' as const,
+      commandId: command.commandId,
+      revision: 0,
+      turn: 0,
+      reason: 'offer.refused' as const,
+    };
+    const invalidEvent = {
+      type: 'action.invalid' as const,
+      eventId: command.commandId,
+      commandId: command.commandId,
+      reason: result.reason,
+    };
+    const withHistory = {
+      ...state,
+      recentCommands: [{ command, result, events: [invalidEvent], publicEvents: [] }],
+    };
+    const encoded = encodeActiveRun(withHistory);
+    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
+    expect(decodeActiveRun(encoded)).toEqual(withHistory);
+  });
+
+  it('rejects an offer.refused reason attached to a non-offer command', () => {
+    const state = createDemoRun();
+    const command = { type: 'wait' as const, commandId: 'command.wait-offer', expectedRevision: 0 };
+    const result = {
+      status: 'invalid' as const,
+      commandId: command.commandId,
+      revision: 0,
+      turn: 0,
+      reason: 'offer.refused' as const,
+    };
+    const invalidEvent = {
+      type: 'action.invalid' as const,
+      eventId: command.commandId,
+      commandId: command.commandId,
+      reason: result.reason,
+    };
+    expect(() =>
+      encodeActiveRun({
+        ...state,
+        recentCommands: [{ command, result, events: [invalidEvent], publicEvents: [] }],
+      }),
+    ).toThrow(/offer/i);
+  });
+
   it('rejects a house.full reason attached to a non-house command', () => {
     const state = createDemoRun();
     const command = { type: 'wait' as const, commandId: 'command.wait-house', expectedRevision: 0 };

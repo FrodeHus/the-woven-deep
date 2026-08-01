@@ -3,7 +3,6 @@ import type {
   AchievementCriteria,
   CompiledContentPack,
   EncounterContentEntry,
-  FallenChampionTemplateContentEntry,
 } from '@woven-deep/content';
 import { heroActor } from './actor-model.js';
 import type {
@@ -31,17 +30,8 @@ import {
   selectRecordHeirloom,
 } from './heirloom-selection.js';
 import type { ArtifactDeltas, ArtifactStint } from './artifact-ledger.js';
+import { fallenChampionTemplate } from './haunt-need.js';
 import { compareCodeUnits } from './stable-json.js';
-
-function fallenChampionTemplate(content: CompiledContentPack): FallenChampionTemplateContentEntry {
-  const template = content.entries.find(
-    (entry): entry is FallenChampionTemplateContentEntry =>
-      entry.kind === 'fallen-champion-template',
-  );
-  if (!template)
-    throw new Error('internal invariant: content pack is missing a fallen-champion-template entry');
-  return template;
-}
 
 function buildSnapshot(run: ActiveRun): FallenHeroBuildSnapshot {
   const hero = heroActor(run);

@@ -45,6 +45,7 @@ import type { RunConclusion } from './run-conclusion.js';
 import type { RunMetrics } from './run-metrics.js';
 import { deriveHallRecordId, type AchievementGrant, type HallRecord } from './run-records-model.js';
 import type { ScoreBreakdown } from './score-run.js';
+import { fallenChampionTemplate, hauntNeed } from './haunt-need.js';
 import { compareCodeUnits } from './stable-json.js';
 import { tileDefinition } from './terrain.js';
 import {
@@ -1018,6 +1019,11 @@ export function projectGameplayState(
     input.state.returnAnchorFloorId === undefined
       ? undefined
       : input.state.floors.find((floor) => floor.floorId === input.state.returnAnchorFloorId);
+  // Looked up once for the whole list: every haunt derives its need from the same template, and
+  // the lookup is a pack scan. Skipped entirely for a run with no fallen-hero decisions -- a pack
+  // that never authored a template must still project.
+  const championTemplate =
+    input.state.fallenHeroDecisions.length === 0 ? null : fallenChampionTemplate(input.content);
   // Player-known data by construction: these are the player's OWN Hall records, already visible in
   // the Hall screen. Nothing hidden (gate rolls, unretained candidates) crosses this boundary.
   const haunts: readonly HauntView[] = input.state.fallenHeroDecisions
@@ -1050,7 +1056,8 @@ export function projectGameplayState(
           encountered: decision.encountered,
           appeased: decision.appeased,
           actorId,
-          needCategories: [], // Task 7 replaces this with `hauntNeed({ standing, template })`
+          needCategories:
+            championTemplate === null ? [] : hauntNeed({ standing, template: championTemplate }),
         },
       ];
     })

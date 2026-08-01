@@ -138,6 +138,13 @@ const template: FallenChampionTemplateContentEntry = {
     rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 },
     qualityRankBonus: 2,
   },
+  // Required since content v13: the haunt need derivation reads it, and the gameplay projection
+  // derives `needCategories` from it for every projected haunt.
+  appeasement: {
+    classFavors: { loomcaller: ['scroll', 'potion'] },
+    causelessCategories: ['light'],
+    defaultCategories: ['food', 'potion'],
+  },
 };
 
 function pack(): CompiledContentPack {

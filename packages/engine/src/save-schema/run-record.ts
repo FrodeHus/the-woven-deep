@@ -2099,11 +2099,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           recordValue.result.reason === 'inventory.full' ||
           recordValue.result.reason.startsWith('item.');
         const targetReason = recordValue.result.reason.startsWith('target.');
+        // `offer` names both an actor and an item, so it is legitimately rejected on either axis:
+        // `target.invalid` for anything that is not an adjacent offerable haunt, and the item
+        // reasons for a pack the offering is not in.
+        const offerCommand = recordValue.command.type === 'offer';
         const targetingCommand =
           recordValue.command.type === 'fire' ||
           recordValue.command.type === 'cast' ||
           recordValue.command.type === 'throw-item' ||
-          recordValue.command.type === 'use-item';
+          recordValue.command.type === 'use-item' ||
+          offerCommand;
         const tradeReason =
           recordValue.result.reason.startsWith('trade.') ||
           recordValue.result.reason.startsWith('merchant.');
@@ -2121,6 +2126,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         const recallReason = recordValue.result.reason === 'recall.already-town';
         const castReason = recordValue.result.reason.startsWith('cast.');
         const learnReason = recordValue.result.reason.startsWith('learn.');
+        const offerReason = recordValue.result.reason === 'offer.refused';
         const dialogueCommand = recordValue.command.type === 'dialogue-consequence';
         const dialogueReason = recordValue.result.reason.startsWith('dialogue.');
         if (dialogueReason && !dialogueCommand) {
@@ -2140,7 +2146,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
             recordValue.command.type !== 'throw-item' &&
             recordValue.command.type !== 'use-item' &&
             recordValue.command.type !== 'trade-buy' &&
-            recordValue.command.type !== 'trade-sell'
+            recordValue.command.type !== 'trade-sell' &&
+            !offerCommand
           ) {
             fail(`${path}.result.reason`, 'inventory reasons require an item command');
           }
@@ -2159,6 +2166,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           fail(`${path}.result.reason`, 'cast reason requires a cast command');
         if (learnReason && recordValue.command.type !== 'use-item')
           fail(`${path}.result.reason`, 'learn reason requires a use-item command');
+        if (offerReason && !offerCommand)
+          fail(`${path}.result.reason`, 'offer reason requires an offer command');
         if (
           !inventoryReason &&
           !targetReason &&
@@ -2170,6 +2179,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           !castReason &&
           !learnReason &&
           !dialogueReason &&
+          !offerReason &&
           recordValue.result.reason !== 'action.unavailable' &&
           recordValue.result.reason !== 'run.concluded'
         ) {
