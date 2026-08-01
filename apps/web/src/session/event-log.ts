@@ -11,8 +11,8 @@ export interface LogLine {
 export const LOG_CAPACITY = 200;
 
 /** The projection data a haunt's spoken record line reads from -- optional so every existing
- * caller with no projection at hand (or an event stream with no haunt encounters in it) keeps
- * working unchanged; only `champion.encountered`/`echo.encountered` consult it. */
+ * caller with no projection at hand (or an event stream with no haunt sightings in it) keeps
+ * working unchanged; only `haunt.sighted` consults it. */
 export interface LogContext {
   readonly haunts: readonly HauntView[];
   readonly pack: CompiledContentPack;
@@ -121,13 +121,13 @@ function renderEvent(event: PublicEvent, context: LogContext | undefined): Rende
     // than falling to `default` keeps this switch's coverage of `PublicEvent` honest.
     case 'floor.entered':
       return null;
-    case 'champion.encountered':
-    case 'echo.encountered': {
+    case 'haunt.sighted': {
       // Silent without context: the line is record prose the engine deliberately does not carry,
       // so a caller with no projection at hand renders nothing rather than something wrong.
       if (!context) return null;
       const haunt = context.haunts.find(
-        (candidate) => candidate.hallRecordId === event.hallRecordId,
+        (candidate) =>
+          candidate.hallRecordId === event.hallRecordId && candidate.role === event.role,
       );
       return haunt ? { text: hauntEncounterLine(haunt, context.pack), tone: 'curse' } : null;
     }

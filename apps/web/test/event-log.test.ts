@@ -61,12 +61,13 @@ function hauntView(overrides: Partial<HauntView> = {}): HauntView {
   };
 }
 
-function championEncountered(hallRecordId: string): PublicEvent {
+function hauntSighted(hallRecordId: string, role: HauntView['role'] = 'champion'): PublicEvent {
   return {
-    type: 'champion.encountered',
+    type: 'haunt.sighted',
     eventId: 'e1',
     actorId: 'a1',
     hallRecordId,
+    role,
   };
 }
 
@@ -266,7 +267,7 @@ describe('foldEventsIntoLog', () => {
       ],
       pack,
     };
-    const { log } = foldEventsIntoLog([], [championEncountered('record.a')], 0, context);
+    const { log } = foldEventsIntoLog([], [hauntSighted('record.a')], 0, context);
     expect(log[0]).toMatchObject({
       text: "Kaelen, the Deep's Champion — fell to a bone-gnawer at depth 7. The Deep remembers.",
       tone: 'curse',
@@ -274,12 +275,12 @@ describe('foldEventsIntoLog', () => {
   });
 
   it('stays silent when no context is supplied', () => {
-    const { log } = foldEventsIntoLog([], [championEncountered('record.a')], 0);
+    const { log } = foldEventsIntoLog([], [hauntSighted('record.a')], 0);
     expect(log).toEqual([]);
   });
 
   it('stays silent for a haunt the context does not know', () => {
-    const { log } = foldEventsIntoLog([], [championEncountered('record.missing')], 0, {
+    const { log } = foldEventsIntoLog([], [hauntSighted('record.missing')], 0, {
       haunts: [],
       pack,
     });

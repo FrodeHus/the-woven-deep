@@ -630,6 +630,9 @@ export interface PopulationNoticePublicEvent {
     | 'boss-recovery'
     | 'boss-defeated'
     | 'boss-reward'
+    // `champion-encountered`/`echo-encountered` are unreachable from `event-projection.ts` (that
+    // moment now emits `HauntSightedEvent` instead) -- kept so an already-persisted old save's
+    // stored `population.notice` history still decodes.
     | 'champion-encountered'
     | 'champion-defeated'
     | 'champion-heirloom'
@@ -856,26 +859,25 @@ export type DomainEvent =
   | RunRecordDomainEvent;
 
 /**
- * The public-facing shape of `champion.encountered`/`echo.encountered`: the haunt's spoken record
- * line is host-rendered client prose (`hauntEncounterLine`) read from the `GameplayProjection.haunts`
- * block, joined here by `hallRecordId` -- widening the domain event itself would drag the frozen
- * legacy event schemas into a save-schema-adjacent bump for no gain. Deliberately narrower than
- * `ChampionEncounteredEvent`/`EchoEncounteredEvent`: `populationId` and `rank` are authoritative
+ * The public-facing signal that a haunt (a champion or echo population, joined by `hallRecordId`)
+ * has been sighted: the haunt's spoken record line is host-rendered client prose
+ * (`hauntEncounterLine`) read from the `GameplayProjection.haunts` block -- widening the domain
+ * `champion.encountered`/`echo.encountered` events themselves would drag the frozen legacy event
+ * schemas into a save-schema-adjacent bump for no gain. A single new type literal, distinct from
+ * both domain events it can represent (`role` disambiguates), rather than two narrower shapes that
+ * collided with the persisted `champion.encountered`/`echo.encountered` domain strictObjects'
+ * discriminator literals (a save-schema zod discriminated union cannot carry two differently-shaped
+ * schemas under the same `type` value). Deliberately omits `populationId`/`rank`: authoritative
  * bookkeeping the client never needs and must not see (same redaction posture as every other
  * population lifecycle event, which folds into `PopulationNoticePublicEvent` instead of passing
  * through raw).
  */
-export interface ChampionEncounteredPublicEvent {
-  readonly type: 'champion.encountered';
+export interface HauntSightedEvent {
+  readonly type: 'haunt.sighted';
   readonly eventId: OpaqueId;
   readonly actorId: OpaqueId;
   readonly hallRecordId: OpaqueId;
-}
-export interface EchoEncounteredPublicEvent {
-  readonly type: 'echo.encountered';
-  readonly eventId: OpaqueId;
-  readonly actorId: OpaqueId;
-  readonly hallRecordId: OpaqueId;
+  readonly role: 'champion' | 'echo';
 }
 
 export type PublicEvent =
@@ -891,5 +893,4 @@ export type PublicEvent =
   | ActorDamageObservedPublicEvent
   | ActorDeathObservedPublicEvent
   | PopulationNoticePublicEvent
-  | ChampionEncounteredPublicEvent
-  | EchoEncounteredPublicEvent;
+  | HauntSightedEvent;

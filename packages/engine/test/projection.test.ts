@@ -1196,9 +1196,25 @@ describe('haunt projection', () => {
       ...base,
       fallenHeroStandings: [championStanding, echoStanding],
       fallenHeroDecisions: [
-        fallenDecision('hall.a-kaelen', 'champion'),
-        fallenDecision('hall.b-mira', 'echo'),
+        fallenDecision('hall.a-kaelen', 'champion', { encountered: true }),
+        fallenDecision('hall.b-mira', 'echo', { encountered: true }),
       ],
+    };
+  }
+
+  const dormantId = 'hall.dormant-echo';
+
+  /** Retained, but never placed and never seen -- the state a hidden gate roll alone produces.
+   * Neither `encountered` nor a placed `actorId` is true, so this must stay invisible: `retained`
+   * is the outcome of a hidden roll (`decision.gateRoll`), and leaking it would tell the player a
+   * fallen hero's eligibility before the world ever surfaces it. */
+  function runWithDormantHaunt(): ActiveRun {
+    const base = createDemoRun();
+    const standing = fallenStanding(dormantId, { heroName: 'Dormant' });
+    return {
+      ...base,
+      fallenHeroStandings: [standing],
+      fallenHeroDecisions: [fallenDecision(dormantId, 'echo')],
     };
   }
 
@@ -1220,7 +1236,7 @@ describe('haunt projection', () => {
     return {
       ...base,
       fallenHeroStandings: [legacyStanding],
-      fallenHeroDecisions: [fallenDecision('hall.legacy', 'champion')],
+      fallenHeroDecisions: [fallenDecision('hall.legacy', 'champion', { encountered: true })],
     };
   }
 
@@ -1231,7 +1247,7 @@ describe('haunt projection', () => {
     return {
       ...base,
       fallenHeroStandings: [standing],
-      fallenHeroDecisions: [fallenDecision(hallRecordId, 'champion')],
+      fallenHeroDecisions: [fallenDecision(hallRecordId, 'champion', { encountered: true })],
       populations: [
         championPopulation(hallRecordId, {
           actorId: 'actor.population.fallen-champion.record.a.001',
@@ -1266,6 +1282,12 @@ describe('haunt projection', () => {
   it('omits unretained decisions', () => {
     const projection = projectGameplayState({ state: runWithUnretainedEcho(), content: pack });
     expect(projection.haunts.some((haunt) => haunt.hallRecordId === unretainedId)).toBe(false);
+  });
+
+  it('omits a retained decision that is neither encountered nor placed -- the hidden gate roll never leaks', () => {
+    const projection = projectGameplayState({ state: runWithDormantHaunt(), content: pack });
+    expect(projection.haunts.some((haunt) => haunt.hallRecordId === dormantId)).toBe(false);
+    expect(projection.haunts).toEqual([]);
   });
 
   it('projects a null killer for a legacy cause-less standing', () => {

@@ -659,6 +659,13 @@ export const populationNoticePublicEvent = z.strictObject({
   presentation: z.string().min(1).max(120),
   displayName: z.string().min(1).max(120).optional(),
 });
+export const hauntSightedEvent = z.strictObject({
+  type: z.literal('haunt.sighted'),
+  eventId: identifier,
+  actorId: identifier,
+  hallRecordId: identifier,
+  role: z.enum(['champion', 'echo']),
+});
 export const reputationChangedEvent = z.strictObject({
   type: z.literal('reputation.changed'),
   eventId: identifier,
@@ -871,6 +878,7 @@ export const eventOptions = [
   actorDamageObservedPublicEvent,
   actorDeathObservedPublicEvent,
   populationNoticePublicEvent,
+  hauntSightedEvent,
   restCompletedEvent,
 ] as const;
 export const event = z.discriminatedUnion('type', [
@@ -931,6 +939,7 @@ export const publicOnlyEventTypes = new Set([
   'actor.damage-observed',
   'actor.death-observed',
   'population.notice',
+  'haunt.sighted',
 ]);
 export const authoritativeEvent = event.refine(
   (value) => !publicOnlyEventTypes.has(value.type),
@@ -1001,6 +1010,7 @@ import type {
   GroupLeaderCreatedEvent,
   GroupLeaderDefeatedEvent,
   GroupOutcomeAppliedEvent,
+  HauntSightedEvent,
   HeroDamagedPublicEvent,
   HeroMovedEvent,
   HeroRecalledEvent,
@@ -1256,6 +1266,9 @@ type _ActorDeathObservedPublicDrift = Expect<
 >;
 type _PopulationNoticePublicDrift = Expect<
   SchemaMatches<z.infer<typeof populationNoticePublicEvent>, PopulationNoticePublicEvent>
+>;
+type _HauntSightedDrift = Expect<
+  SchemaMatches<z.infer<typeof hauntSightedEvent>, HauntSightedEvent>
 >;
 type _ReputationChangedDrift = Expect<
   SchemaMatches<z.infer<typeof reputationChangedEvent>, ReputationChangedEvent>

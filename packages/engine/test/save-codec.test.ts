@@ -2203,6 +2203,65 @@ describe('active-run save codec', () => {
     expect(duplicate.events).toEqual(publicEvents);
   });
 
+  it('round-trips a haunt sighting retained in command history (byte-identity)', () => {
+    // The exact hole a narrower, schema-less PublicEvent shape left uncovered: `events` (the
+    // authoritative domain history) keeps the FULL `champion.encountered` domain event
+    // (populationId/rank included), while `publicEvents` (what a duplicate-command replay hands
+    // back to the client, and what persists across reload) carries the derived, player-facing
+    // `haunt.sighted` event instead -- never the raw domain shape.
+    const state = createDemoRun();
+    const command = {
+      type: 'wait' as const,
+      commandId: 'command.haunt-sighted',
+      expectedRevision: 0,
+    };
+    const result = {
+      status: 'applied' as const,
+      commandId: command.commandId,
+      revision: 1,
+      turn: 1,
+    };
+    const events = [
+      {
+        type: 'hero.waited' as const,
+        eventId: command.commandId,
+        heroId: state.hero.actorId,
+        x: 1,
+        y: 1,
+      },
+      {
+        type: 'champion.encountered' as const,
+        eventId: command.commandId,
+        populationId: 'population.champion',
+        actorId: 'actor.champion',
+        hallRecordId: 'hall.champion',
+        rank: 1 as const,
+      },
+    ];
+    const publicEvents = [
+      {
+        type: 'haunt.sighted' as const,
+        eventId: command.commandId,
+        actorId: 'actor.champion',
+        hallRecordId: 'hall.champion',
+        role: 'champion' as const,
+      },
+    ];
+    const withHistory = {
+      ...state,
+      revision: 1,
+      turn: 1,
+      recentCommands: [{ command, result, events, publicEvents }],
+    };
+    const encoded = encodeActiveRun(withHistory);
+    const decoded = decodeActiveRun(encoded);
+    // Byte-identity: encoding the decoded run must reproduce the exact same bytes -- the
+    // regression this test exists to catch is a `haunt.sighted` value that either fails to parse
+    // at all (SaveLoadError out of decode) or silently loses/reshapes a field on the round trip.
+    expect(encodeActiveRun(decoded)).toBe(encoded);
+    expect(decoded.recentCommands[0]?.publicEvents).toEqual(publicEvents);
+  });
+
   it('rejects authoritative population details stored as public events', () => {
     const state = createDemoRun();
     const command = {

@@ -1033,6 +1033,12 @@ export function projectGameplayState(
           candidate.hallRecordId === decision.hallRecordId,
       );
       const actorId = population?.livingMemberIds[0] ?? null;
+      // `retained` alone would leak the outcome of the hidden gate roll: a retained-but-dormant
+      // decision the world has never placed or the hero has never crossed paths with. Gating on
+      // `encountered || actorId !== null` keeps that internal bookkeeping invisible until the
+      // haunt is actually placed on a floor or has been seen -- `encountered` sticks true forever
+      // once set, so a later fade/appeasement (which clears `actorId`) never re-hides it.
+      if (!decision.encountered && actorId === null) return [];
       return [
         {
           hallRecordId: decision.hallRecordId,

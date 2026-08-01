@@ -470,16 +470,17 @@ describe('public event projection', () => {
     ];
     const output = projectDomainEvents({ ...visible, events, heroId: visible.state.hero.actorId });
     expect(events.map(exhaustPopulationEvent)).toHaveLength(21);
-    // `champion.encountered`/`echo.encountered` pass through raw rather than redacting into a
-    // `population.notice` -- the haunt's spoken record line (Task 4, `hauntEncounterLine`) is
-    // host-rendered client prose keyed off the event's own `hallRecordId`, so nothing hides it. All
-    // other champion/echo lifecycle events (defeated, heirloom, loot) still redact to a notice.
+    // `champion.encountered`/`echo.encountered` synthesize a `haunt.sighted` public event rather
+    // than redacting into a `population.notice` -- the haunt's spoken record line (Task 4,
+    // `hauntEncounterLine`) is host-rendered client prose keyed off `hallRecordId`/`role`, so the
+    // hall record id is never hidden there. All other champion/echo lifecycle events (defeated,
+    // heirloom, loot) still redact to a notice.
     expect(output.map((event) => event.type)).toEqual([
       ...Array(13).fill('population.notice'),
-      'champion.encountered',
+      'haunt.sighted',
       'population.notice',
       'population.notice',
-      'echo.encountered',
+      'haunt.sighted',
       'population.notice',
       'population.notice',
     ]);
@@ -499,9 +500,14 @@ describe('public event projection', () => {
       'health',
     ])
       expect(json).not.toContain(secret);
-    // `hall.secret` DOES appear now -- it's the `hallRecordId` on the two raw pass-through events,
-    // and a hall record id is never hidden state (it names the player's OWN Hall record).
-    expect(json).toContain('hall.secret');
+    // `hall.secret` (the `hallRecordId`) must never leak through a `population.notice` -- every
+    // OTHER champion/echo lifecycle event (defeated, heirloom-created, loot-created) still redacts
+    // it exactly as before. Only the two `haunt.sighted` events legitimately carry it: a hall
+    // record id names the player's OWN Hall record, never hidden state.
+    const noticeJson = stableJson(output.filter((event) => event.type === 'population.notice'));
+    expect(noticeJson).not.toContain('hall.secret');
+    const hauntJson = stableJson(output.filter((event) => event.type === 'haunt.sighted'));
+    expect(hauntJson).toContain('hall.secret');
     expect(json).toContain('Observed heirloom');
   });
 

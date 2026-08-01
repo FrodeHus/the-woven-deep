@@ -507,8 +507,8 @@ export function projectDomainEvents(
         }
         break;
       // A haunt's first-sight line is host-rendered client prose (`hauntEncounterLine`), keyed off
-      // `hallRecordId` against the projection's `haunts` block -- so these two pass through as the
-      // narrow `ChampionEncounteredPublicEvent`/`EchoEncounteredPublicEvent` shape rather than
+      // `hallRecordId` against the projection's `haunts` block -- so these two emit a single,
+      // distinct `haunt.sighted` public event (its `role` disambiguating champion/echo) rather than
       // folding into the generic `population.notice` presentation string every other champion/echo
       // lifecycle event below still uses. `populationId`/`rank` stay unpublished, same redaction
       // posture as every other population bookkeeping id.
@@ -516,10 +516,11 @@ export function projectDomainEvents(
       case 'echo.encountered':
         if (actorVisible(event.actorId))
           output.push({
-            type: event.type,
+            type: 'haunt.sighted',
             eventId: event.eventId,
             actorId: event.actorId,
             hallRecordId: event.hallRecordId,
+            role: event.type === 'champion.encountered' ? 'champion' : 'echo',
           });
         break;
       case 'champion.defeated':
