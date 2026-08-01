@@ -83,6 +83,30 @@ function wandererDeathStorage(seed: Uint32State = SEED): ReturnType<typeof fakeS
   return storage;
 }
 
+/** A Wanderer run concluded by VICTORY (breaking the cycle), beside a live checkpoint -- only a
+ * Wanderer DEATH is the player's decision; every other conclusion, this one included, still
+ * finalizes and navigates on sight. */
+function wandererVictoryStorage(seed: Uint32State = SEED): ReturnType<typeof fakeStorage> {
+  const fresh: ActiveRun = createNewRun({
+    pack,
+    seed,
+    hero: DEFAULT_GUEST_HERO,
+    mode: 'wanderer',
+  });
+  const won: ActiveRun = {
+    ...fresh,
+    conclusion: {
+      completionType: 'broke-cycle',
+      cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+      concludedAtRevision: fresh.revision,
+      finalized: false,
+    },
+  };
+  const storage = fakeStorage(encodeActiveRun(won));
+  storage.set(CHECKPOINT_KEY, encodeActiveRun(fresh));
+  return storage;
+}
+
 /** A run already concluded by hero death -- mirrors `app-boot.test.tsx`'s `deadRunSave` fixture. */
 function deadRunSave(seed: Uint32State = SEED): string {
   const fresh: ActiveRun = createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO });
@@ -263,6 +287,21 @@ describe('Death overlay gates conclusion navigation (App integration)', () => {
 
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
     expect(createSessionRunRecordRepository(storage).records()).toHaveLength(1);
+    expect(storage.peek(CHECKPOINT_KEY)).toBeNull();
+  });
+
+  it('a wanderer VICTORY still finalizes and navigates immediately, with no choice offered', async () => {
+    const user = userEvent.setup();
+    const storage = wandererVictoryStorage();
+
+    render(<App fetcher={packFetcher()} storage={storage} />);
+    await user.click(await screen.findByRole('option', { name: /continue/i }));
+
+    expect(await screen.findByText(/you have broken the cycle/i)).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /rise again/i })).not.toBeInTheDocument();
+    expect(createSessionRunRecordRepository(storage).records()).toHaveLength(1);
+    // The run is over for good, so its rewind point is retired with it.
     expect(storage.peek(CHECKPOINT_KEY)).toBeNull();
   });
 

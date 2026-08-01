@@ -2,9 +2,10 @@ import { useRef, type JSX } from 'react';
 import { useDialogFocusTrap } from './focus-trap.js';
 
 export interface DeathOverlayProps {
-  /** Called exactly once, whether acknowledged by clicking anywhere on the overlay or pressing
-   * Enter -- guarded internally so a stray double-fire (both handlers landing near-simultaneously,
-   * or a held/repeated Enter) never invokes it twice. */
+  /** Called exactly once: in Classic by clicking anywhere on the overlay or pressing Enter, in
+   * Wanderer (`onRise` given) only by the Accept death button. Guarded internally so a stray
+   * double-fire -- two handlers landing near-simultaneously, a held/repeated Enter, or a click on
+   * BOTH actions -- never invokes it, or `onRise`, twice. */
   readonly onAcknowledge: () => void;
   /** Wanderer only. When present the overlay offers two actions -- Rise again (default focus) and
    * Accept death -- instead of the single click/Enter acknowledgment. */
@@ -13,18 +14,22 @@ export interface DeathOverlayProps {
 
 /**
  * The full-bleed death beat shown the instant a run concludes by hero death, before the
- * conclusion screen. `GameRoot` still finalizes the run (the Hall write) immediately in its
- * conclusion effect exactly as for any other completion; this overlay only gates the *navigation*
+ * conclusion screen.
+ *
+ * In Classic (no `onRise`) `GameRoot` has already finalized the run (the Hall write) in its
+ * conclusion effect, exactly as for any other completion; this overlay only gates the *navigation*
  * to the conclusion screen behind the player's acknowledgment, so the death always gets its own
- * beat instead of cutting straight to the ledger.
+ * beat instead of cutting straight to the ledger. A click anywhere, or Enter, acknowledges.
  *
- * In Wanderer (`onRise` given) the beat becomes a choice instead: the run is NOT finalized yet,
- * and the player picks between rising at the floor's mouth and letting the death stand. Nothing
- * else about the overlay changes.
+ * In Wanderer (`onRise` given) the beat is a choice, and nothing has been finalized yet: the
+ * player picks between rising at the floor's mouth and letting the death stand. Because that
+ * decision is irreversible either way, the container's own click/Enter acknowledgment is dropped
+ * -- only the two buttons act.
  *
- * Reuses `useDialogFocusTrap` (the same hand-rolled trap `DecisionPrompt` uses) purely for its
- * focus-on-mount/restore-on-unmount behavior -- there is nothing tabbable inside, so the trap's
- * Tab-wrapping never has anything to do.
+ * Reuses `useDialogFocusTrap` (the same hand-rolled trap `DecisionPrompt` uses): in Classic purely
+ * for its focus-on-mount/restore-on-unmount behavior (nothing inside is tabbable), and in Wanderer
+ * also to focus Rise again -- the trap focuses the first focusable child -- and to keep Tab from
+ * leaving the two actions.
  */
 export function DeathOverlay({ onAcknowledge, onRise }: DeathOverlayProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);

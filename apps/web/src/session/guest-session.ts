@@ -495,6 +495,13 @@ export class GuestSession implements RunSession {
       return this.refuseRise();
     }
     if (restored.contentHash !== this.pack.hash) return this.refuseRise();
+    // A checkpoint belongs to exactly ONE run. A blob left by a different run of the same content
+    // pack decodes perfectly and would swap the player into a run they never played -- and a
+    // later accept-death would then write ITS Hall record. The run seed is the run's identity
+    // (`deriveHallRecordId` is derived from it), so it is what has to match.
+    if (restored.runSeed.some((word, index) => word !== this.run.runSeed[index])) {
+      return this.refuseRise();
+    }
     this.run = restored;
     this.pendingDecision = null;
     this.lastEvents = [];

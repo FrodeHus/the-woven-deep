@@ -160,7 +160,11 @@ interface GameRootProps {
  * Once the snapshot's `conclusion` first becomes non-null (the hero died, or a save restored an
  * already-concluded run), this finalizes the run into the Hall exactly once — `finalizeRun`'s own
  * `finalized` flag makes a repeat call safe, but `finalizedRef` also stops this component from
- * calling it again on every subsequent render before `onConcluded` swaps the screen away. */
+ * calling it again on every subsequent render before `onConcluded` swaps the screen away.
+ *
+ * The single exception is a Wanderer DEATH (`wandererDeath` below): that conclusion may still be
+ * undone by the player, so nothing is finalized until they accept it. Every other conclusion,
+ * a Wanderer victory included, finalizes on sight exactly as described above. */
 function GameRoot({
   session,
   pack,
@@ -184,11 +188,12 @@ function GameRoot({
   const [dismissedNotice, setDismissedNotice] = useState<SessionNotice | null>(null);
   const dismissed = notice !== null && dismissedNotice === notice;
   const finalizedRef = useRef(false);
-  /** Set the instant a DEATH conclusion finalizes, holding the exact `onConcluded` arguments until
-   * the player acknowledges the `DeathOverlay` -- the run is already finalized (the Hall write
-   * above has already happened) the moment this is set; only the navigation is deferred. A
-   * non-death conclusion never touches this state -- `onConcluded` still fires immediately for
-   * those, unchanged. */
+  /** Set the instant a CLASSIC death conclusion finalizes, holding the exact `onConcluded`
+   * arguments until the player acknowledges the `DeathOverlay` -- the run is already finalized (the
+   * Hall write above has already happened) the moment this is set; only the navigation is deferred.
+   * A non-death conclusion never touches this state -- `onConcluded` still fires immediately for
+   * those, unchanged. A Wanderer death never touches it either: it has not been finalized yet, so
+   * there is no projection to hold, and its overlay is driven by `wandererDeath` instead. */
   const [pendingDeathConclusion, setPendingDeathConclusion] = useState<{
     projection: RunConclusionProjection;
     logTail: readonly LogLine[];

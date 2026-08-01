@@ -1451,6 +1451,43 @@ describe('GuestSession', () => {
       );
     });
 
+    it('rises twice from the same floor-entry checkpoint', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      const atFloorEntry = storage.get(CHECKPOINT_KEY)!;
+
+      expect(killHero(storage).riseAgain()).toBe(true);
+      // A rise consumes nothing: the rewind point stands until the next floor entry rewrites it,
+      // so dying again on the same floor can rise again.
+      expect(storage.get(CHECKPOINT_KEY)).toBe(atFloorEntry);
+
+      const second = killHero(storage);
+      expect(second.riseAgain()).toBe(true);
+      expect(second.getSnapshot().projection.conclusion).toBeNull();
+      expect(storage.get(SAVE_KEY)).toBe(atFloorEntry);
+    });
+
+    it('refuses a checkpoint belonging to a different run', () => {
+      const storage = memoryStorage();
+      walkAndDescend(wandererSession(storage));
+      // Same content pack, same mode, decodes cleanly -- but a different run's seed. Swapping it
+      // in would drop the player into a run they never played, and a later accept-death would
+      // write a Hall record for it.
+      storage.set(
+        CHECKPOINT_KEY,
+        encodeActiveRun(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO })),
+      );
+
+      const session = killHero(storage);
+
+      expect(session.riseAgain()).toBe(false);
+      expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
+      expect(session.getSnapshot().log.at(-1)?.text).toBe(
+        'The Deep offers no way back. This death stands.',
+      );
+      expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
     it('keeps advancing the command sequence across a rise, so no commandId repeats', () => {
       const storage = memoryStorage();
       walkAndDescend(wandererSession(storage));
