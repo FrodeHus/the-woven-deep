@@ -9,6 +9,7 @@ import {
   projectGameplayState,
   newRunRecords,
   projectRunConclusion,
+  SaveLoadError,
   DEFAULT_GUEST_HERO,
   type ActiveRun,
   type AchievementGrant,
@@ -339,6 +340,66 @@ export class ServerPlaySession {
   }
 
   /**
+   * Rewinds a concluded Wanderer run to its floor-entry checkpoint. The client's cached
+   * `revision` is HIGHER than the restored run's, so the returned `state` message is treated as
+   * an authoritative snapshot push (identical in shape to the reconnect push) and the client
+   * re-syncs from it -- the client's own command-sequence counter keeps climbing, so no
+   * post-rise `commandId` can collide with one the pre-death life already used.
+   *
+   * `finalizeRun` is never called for this death: no record, no heirloom roll, no lifetime or
+   * artifact deltas, no unlocks, no achievements. Any checkpoint that cannot be trusted -- absent,
+   * corrupt, from another content pack, or from another RUN -- falls through to `acceptDeath()`,
+   * so the death simply stands. The rewind point itself is left in place: it belongs to the floor,
+   * not to one death, so a second death on the same floor can rise from it again.
+   */
+  riseAgain(): ApplyOutcome {
+    if (this.run.mode !== 'wanderer' || this.run.conclusion === null || this.isFinalized()) {
+      return { kind: 'state', snapshot: this.snapshot() };
+    }
+    const stored = this.repo.get(this.profileId);
+    const blob = stored?.checkpointBlob ?? null;
+    if (blob === null) return this.acceptDeath();
+    let restored: ActiveRun;
+    try {
+      restored = decodeActiveRun(blob, this.pack);
+    } catch (error) {
+      if (!(error instanceof SaveLoadError)) throw error;
+      return this.acceptDeath();
+    }
+    if (restored.contentHash !== this.pack.hash) return this.acceptDeath();
+    // A checkpoint belongs to exactly ONE run. A blob from a different run of the same pack
+    // decodes perfectly and would hand this profile a run it never played (its Hall identity,
+    // `deriveHallRecordId`, is derived from the run seed), so the seed is what has to match.
+    if (restored.runSeed.some((word, index) => word !== this.run.runSeed[index])) {
+      return this.acceptDeath();
+    }
+    this.run = restored;
+    this.pendingDecision = null;
+    this.lastEvents = [];
+    this.checkpointBlob = blob;
+    this.persist();
+    return { kind: 'state', snapshot: this.snapshot() };
+  }
+
+  /**
+   * Ends a concluded Wanderer run with no Hall write at all: the active-run row (and with it the
+   * checkpoint) is cleared in one transaction, and the concluded run stays in memory only so the
+   * client can render its conclusion screen. A no-op returning the current snapshot for a Classic
+   * or unconcluded run.
+   */
+  acceptDeath(): ApplyOutcome {
+    if (this.run.mode !== 'wanderer' || this.run.conclusion === null) {
+      return { kind: 'state', snapshot: this.snapshot() };
+    }
+    this.database.transaction(() => {
+      this.repo.clear(this.profileId);
+    })();
+    this.checkpointBlob = null;
+    this.dirty = false;
+    return { kind: 'state', snapshot: this.snapshot() };
+  }
+
+  /**
    * Finalizes this session's concluded run into the profile's Hall exactly once, mirroring the
    * guest's `finalizeConcludedRun` (see `apps/web/src/session/guest-session.ts`): `finalizeRun`
    * (pure, unchanged engine code) produces the Hall record + lifetime deltas from the server's
@@ -347,7 +408,9 @@ export class ServerPlaySession {
    * lifetime and persisted, this run's achievement grants folded into the lifetime-accumulated
    * set, and the now-finished active run row cleared so the profile can start a new one. A no-op
    * when the run has not concluded, or has already been finalized -- the double-finalize guard
-   * that keeps a resend/reconnect from appending a second, colliding Hall record.
+   * that keeps a resend/reconnect from appending a second, colliding Hall record. Everything
+   * described here is CLASSIC-only; a Wanderer conclusion never reaches the Hall at all (see the
+   * mode gate at the top of the body).
    *
    * Crash-atomicity: every WRITE below (the Hall append, the lifetime/unlocks/achievements
    * updates, and clearing the `active_runs` row) runs inside a single better-sqlite3 transaction
@@ -370,6 +433,21 @@ export class ServerPlaySession {
    */
   private maybeFinalize(): void {
     if (this.run.conclusion === null || this.run.conclusion.finalized) return;
+    // The Hall is 100% Classic (spec §5). A Wanderer conclusion -- death or victory -- writes
+    // NOTHING: no record, no lifetime/artifact deltas, no unlock re-evaluation, no achievements,
+    // and no heirloom roll (so the `run-records` stream is never advanced). `finalizeRun` is not
+    // called, so `conclusion.finalized` stays false and the snapshot projects a record-null
+    // conclusion, which is what the client renders.
+    //
+    // A Wanderer DEATH additionally stays UNDECIDED here: clearing the row would take its
+    // checkpoint with it, and `riseAgain` would then have nothing left to restore. The row (and
+    // its rewind point) survives until the client answers with `rise-again` or `accept-death` --
+    // a reconnect in between re-offers the same choice. Every other Wanderer conclusion is final
+    // the moment it happens, so it clears immediately.
+    if (this.run.mode === 'wanderer') {
+      if (this.run.conclusion.completionType !== 'died') this.acceptDeath();
+      return;
+    }
 
     const finalized = finalizeRun({
       run: this.run,

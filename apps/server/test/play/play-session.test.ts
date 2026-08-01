@@ -214,6 +214,80 @@ describe('ServerPlaySession', () => {
     repo = new ActiveRunRepository(database);
   });
 
+  /** Teleports the hero onto the active floor's stair-down (same trick as
+   * `stageOnStairs`/`onStairDown` above), writes it straight to `active_runs`, reloads it into
+   * THIS session via a second `open()` (so the session's own `applyIntent` below dispatches
+   * against the staged position), and descends -- one real, legal floor-entry transition without
+   * walking the generated floor. */
+  function descendOnce(session: ServerPlaySession): void {
+    const stored = repo.get(PROFILE)!;
+    const run = decodeActiveRun(stored.runBlob, pack);
+    const staged = onStairDown(run);
+    repo.upsert({
+      profileId: PROFILE,
+      runBlob: encodeActiveRun(staged),
+      revision: staged.revision,
+      contentHash: pack.hash,
+      updatedAt: FIXED_CLOCK(),
+      checkpointBlob: stored.checkpointBlob,
+    });
+    session.open({ seed: SEED, mode: run.mode });
+    const outcome = session.applyIntent({
+      commandId: `command.descend-${String(staged.revision)}`,
+      expectedRevision: staged.revision,
+      intent: { type: 'descend' },
+    });
+    if (outcome.kind !== 'state') {
+      throw new Error(`expected descend to transition, got ${outcome.kind}`);
+    }
+  }
+
+  function revisionOf(session: ServerPlaySession): number {
+    return session.getSnapshot().revision;
+  }
+
+  /**
+   * Kills the hero for real, through the engine. This pack's hunger reserve is thousands of
+   * world-time units deep and no scripted walk reliably reaches a lethal encounter, so the stored
+   * run is rewritten one hit from starvation and reloaded into the session (a plain rehydrating
+   * `open()`, which preserves the row's checkpoint) -- the `wait` that follows is a genuine
+   * `resolveCommand` death, finalize path and all.
+   */
+  function killHero(session: ServerPlaySession): void {
+    const stored = repo.get(PROFILE)!;
+    const run = decodeActiveRun(stored.runBlob, pack);
+    const hero = heroActor(run);
+    const doomed: ActiveRun = {
+      ...run,
+      actors: run.actors.map((actor) =>
+        actor.actorId === hero.actorId ? { ...actor, health: 1 } : actor,
+      ),
+      survival: {
+        ...run.survival,
+        hungerReserve: 0,
+        hungerStage: 'starving',
+        nextStarvationAt: run.worldTime,
+      },
+    };
+    repo.upsert({
+      profileId: PROFILE,
+      runBlob: encodeActiveRun(doomed),
+      revision: doomed.revision,
+      contentHash: pack.hash,
+      updatedAt: FIXED_CLOCK(),
+      checkpointBlob: stored.checkpointBlob,
+    });
+    session.open({ seed: SEED, mode: run.mode });
+    session.applyIntent({
+      commandId: `command.kill-${String(doomed.revision)}`,
+      expectedRevision: doomed.revision,
+      intent: { type: 'wait' },
+    });
+    if (session.getSnapshot().projection.conclusion === null) {
+      throw new Error('test setup failure: the hero survived the killing wait');
+    }
+  }
+
   describe('hall records seeding', () => {
     /** Teleports the hero onto the active floor's stair-down and writes the run back to
      * `active_runs`, so the next session's descend intent is legal without walking the floor. */
@@ -623,38 +697,6 @@ describe('ServerPlaySession', () => {
   });
 
   describe('wanderer checkpoints (Task 7)', () => {
-    /** Teleports the hero onto the active floor's stair-down (same trick as
-     * `stageOnStairs`/`onStairDown` above), writes it straight to `active_runs`, reloads it into
-     * THIS session via a second `open()` (so the session's own `applyIntent` below dispatches
-     * against the staged position), and descends -- one real, legal floor-entry transition without
-     * walking the generated floor. */
-    function descendOnce(session: ServerPlaySession): void {
-      const stored = repo.get(PROFILE)!;
-      const run = decodeActiveRun(stored.runBlob, pack);
-      const staged = onStairDown(run);
-      repo.upsert({
-        profileId: PROFILE,
-        runBlob: encodeActiveRun(staged),
-        revision: staged.revision,
-        contentHash: pack.hash,
-        updatedAt: FIXED_CLOCK(),
-        checkpointBlob: stored.checkpointBlob,
-      });
-      session.open({ seed: SEED, mode: run.mode });
-      const outcome = session.applyIntent({
-        commandId: `command.descend-${String(staged.revision)}`,
-        expectedRevision: staged.revision,
-        intent: { type: 'descend' },
-      });
-      if (outcome.kind !== 'state') {
-        throw new Error(`expected descend to transition, got ${outcome.kind}`);
-      }
-    }
-
-    function revisionOf(session: ServerPlaySession): number {
-      return session.getSnapshot().revision;
-    }
-
     it('writes a checkpoint on a wanderer floor transition', { timeout: 30_000 }, () => {
       const session = newSession(database, { repo });
       session.open({ seed: SEED, mode: 'wanderer' });
@@ -692,6 +734,211 @@ describe('ServerPlaySession', () => {
     it('opens a classic run by default', () => {
       const session = newSession(database, { repo });
       expect(session.open({ seed: SEED }).projection.mode).toBe('classic');
+    });
+  });
+
+  describe('wanderer rise and accept (Task 8)', () => {
+    /** A concluded Wanderer run stored straight into `active_runs`, beside the floor-entry
+     * checkpoint it can rise from -- the shape a real Wanderer conclusion leaves behind, without
+     * driving the run there. `withCheckpoint: false` models a conclusion whose checkpoint was
+     * never written (a death before any floor entry). */
+    function storeConcludedWanderer(
+      completionType: 'died' | 'broke-cycle',
+      options: Readonly<{ withCheckpoint?: boolean }> = {},
+    ): ActiveRun {
+      const base = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, mode: 'wanderer' });
+      const hero = heroActor(base);
+      const concluded: ActiveRun = {
+        ...base,
+        actors:
+          completionType === 'died'
+            ? base.actors.map((actor) =>
+                actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+              )
+            : base.actors,
+        conclusion: {
+          completionType,
+          cause: {
+            killerContentId: null,
+            depth: base.metrics.deepestDepth,
+            turn: base.turn,
+            worldTime: base.worldTime,
+          },
+          concludedAtRevision: base.revision,
+          finalized: false,
+        },
+      };
+      repo.upsert({
+        profileId: PROFILE,
+        runBlob: encodeActiveRun(concluded),
+        revision: concluded.revision,
+        contentHash: pack.hash,
+        updatedAt: FIXED_CLOCK(),
+        checkpointBlob: options.withCheckpoint === false ? null : encodeActiveRun(base),
+      });
+      return base;
+    }
+
+    it(
+      'produces no record, unlocks, or achievements when a wanderer run dies',
+      { timeout: 30_000 },
+      () => {
+        const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+        const baselineUnlocks = hallRepo.unlocks();
+        const session = newSession(database, { repo, hallRepo });
+        session.open({ seed: SEED, mode: 'wanderer' });
+        descendOnce(session);
+        killHero(session);
+
+        session.acceptDeath();
+
+        expect(hallRepo.records()).toEqual([]);
+        expect(hallRepo.unlocks()).toEqual(baselineUnlocks);
+        expect(hallRepo.achievements()).toEqual([]);
+        expect(repo.get(PROFILE)).toBeUndefined();
+      },
+    );
+
+    it('produces no record when a wanderer run WINS', { timeout: 30_000 }, () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      storeConcludedWanderer('broke-cycle');
+
+      const snapshot = newSession(database, { repo, hallRepo }).open({ seed: SEED });
+
+      // A victory is not the player's to reconsider: it clears the run row (checkpoint included)
+      // on sight, and still writes nothing to the Hall.
+      expect(hallRepo.records()).toEqual([]);
+      expect(hallRepo.achievements()).toEqual([]);
+      expect(repo.get(PROFILE)).toBeUndefined();
+      expect(snapshot.conclusion?.finalized).toBe(false);
+      expect(snapshot.conclusion?.score).toBeNull();
+    });
+
+    it('still records a classic death', { timeout: 30_000 }, () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const session = newSession(database, { repo, hallRepo });
+      session.open({ seed: SEED });
+      descendOnce(session);
+      killHero(session);
+
+      expect(hallRepo.records()).toHaveLength(1);
+      expect(repo.get(PROFILE)).toBeUndefined();
+    });
+
+    it('rises again and pushes the floor-entry snapshot', { timeout: 30_000 }, () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const session = newSession(database, { repo, hallRepo });
+      session.open({ seed: SEED, mode: 'wanderer' });
+      descendOnce(session);
+      const atFloorEntry = repo.get(PROFILE)!.runBlob;
+      const revisionAtEntry = revisionOf(session);
+      killHero(session);
+
+      const outcome = session.riseAgain();
+
+      expect(outcome.kind).toBe('state');
+      expect(outcome.snapshot.projection.conclusion).toBeNull();
+      expect(outcome.snapshot.revision).toBe(revisionAtEntry);
+      expect(repo.get(PROFILE)!.runBlob).toBe(atFloorEntry);
+      // The rewind point survives the rise, so dying again on this floor can rise again.
+      expect(repo.get(PROFILE)!.checkpointBlob).toBe(atFloorEntry);
+      expect(hallRepo.records()).toEqual([]);
+    });
+
+    it('accepts death when the stored checkpoint is corrupt', { timeout: 30_000 }, () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const session = newSession(database, { repo, hallRepo });
+      session.open({ seed: SEED, mode: 'wanderer' });
+      descendOnce(session);
+      const row = repo.get(PROFILE)!;
+      repo.upsert({ ...row, checkpointBlob: '{"schemaVersion":15,"nonsense":true}' });
+      killHero(session);
+
+      const outcome = session.riseAgain();
+
+      expect(outcome.kind).toBe('state');
+      expect(outcome.snapshot.projection.conclusion?.completionType).toBe('died');
+      expect(repo.get(PROFILE)).toBeUndefined();
+      expect(hallRepo.records()).toEqual([]);
+    });
+
+    it('accepts death when no checkpoint was ever written', { timeout: 30_000 }, () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      storeConcludedWanderer('died', { withCheckpoint: false });
+      const session = newSession(database, { repo, hallRepo });
+      session.open({ seed: SEED });
+
+      const outcome = session.riseAgain();
+
+      expect(outcome.snapshot.projection.conclusion?.completionType).toBe('died');
+      expect(repo.get(PROFILE)).toBeUndefined();
+      expect(hallRepo.records()).toEqual([]);
+    });
+
+    it('refuses a checkpoint belonging to a different run', { timeout: 30_000 }, () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      storeConcludedWanderer('died');
+      const row = repo.get(PROFILE)!;
+      // Decodes cleanly, same pack, same mode -- but another run's seed. Swapping it in would
+      // hand the profile a run it never played.
+      repo.upsert({
+        ...row,
+        checkpointBlob: encodeActiveRun(
+          createNewRun({
+            pack,
+            seed: [1, 2, 3, 4] as unknown as Uint32State,
+            hero: DEFAULT_GUEST_HERO,
+            mode: 'wanderer',
+          }),
+        ),
+      });
+      const session = newSession(database, { repo, hallRepo });
+      session.open({ seed: SEED });
+
+      const outcome = session.riseAgain();
+
+      expect(outcome.snapshot.projection.conclusion?.completionType).toBe('died');
+      expect(repo.get(PROFILE)).toBeUndefined();
+      expect(hallRepo.records()).toEqual([]);
+    });
+
+    it('refuses to rise a classic run', { timeout: 30_000 }, () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const session = newSession(database, { repo, hallRepo });
+      session.open({ seed: SEED });
+      descendOnce(session);
+      killHero(session);
+
+      expect(session.riseAgain().snapshot.projection.conclusion?.completionType).toBe('died');
+      // The classic death was finalized on sight, exactly as before.
+      expect(hallRepo.records()).toHaveLength(1);
+    });
+
+    it('leaves a wanderer death undecided until the client answers', { timeout: 30_000 }, () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const session = newSession(database, { repo, hallRepo });
+      session.open({ seed: SEED, mode: 'wanderer' });
+      descendOnce(session);
+      killHero(session);
+
+      // Nothing is cleared and nothing is written while the choice is still open -- otherwise
+      // `riseAgain` could never find the checkpoint it exists to restore.
+      const row = repo.get(PROFILE);
+      expect(row).toBeDefined();
+      expect(row!.checkpointBlob).not.toBeNull();
+      expect(hallRepo.records()).toEqual([]);
+    });
+
+    it('acceptDeath is a no-op for a classic run', { timeout: 30_000 }, () => {
+      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+      const session = newSession(database, { repo, hallRepo });
+      session.open({ seed: SEED });
+
+      const outcome = session.acceptDeath();
+
+      expect(outcome.kind).toBe('state');
+      expect(outcome.snapshot.projection.conclusion).toBeNull();
+      expect(repo.get(PROFILE)).toBeDefined();
     });
   });
 });

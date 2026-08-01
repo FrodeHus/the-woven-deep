@@ -1003,4 +1003,48 @@ describe('App identity/account — ProfileSession routing', () => {
     expect(document.querySelector('[role="img"]')).not.toBeNull();
     expect(screen.queryByRole('option', { name: /enter the deep/i })).not.toBeInTheDocument();
   });
+
+  it('a signed-in wanderer death offers the choice over the socket, and a refused rise still lets the player accept', async () => {
+    const user = userEvent.setup();
+    const { createSocket, sockets } = profileSocketFactory();
+
+    render(
+      <App
+        fetcher={packFetcher()}
+        storage={fakeStorage()}
+        accountOverride={SIGNED_IN_ACCOUNT}
+        createSocket={createSocket}
+      />,
+    );
+
+    await waitFor(() => expect(sockets.length).toBe(1));
+    const socket = sockets[0]!;
+    const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, mode: 'wanderer' });
+    const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+    const dead: ActiveRun = {
+      ...fresh,
+      actors: fresh.actors.map((actor) =>
+        actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+      ),
+      conclusion: {
+        completionType: 'died',
+        cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+        concludedAtRevision: fresh.revision,
+        finalized: false,
+      },
+    };
+    socket.emit(HELLO);
+    socket.emit({ type: 'state', snapshot: serverSnapshotOf(dead) });
+
+    await user.click(await screen.findByRole('button', { name: /rise again/i }));
+    expect(JSON.parse(socket.rawSent.at(-1)!)).toMatchObject({ type: 'rise-again' });
+
+    // The server found no usable checkpoint, so it answers with the SAME concluded snapshot. The
+    // choice must still be live -- a refused rise may never strand the player under the overlay.
+    socket.emit({ type: 'state', snapshot: serverSnapshotOf(dead) });
+
+    await user.click(await screen.findByRole('button', { name: /accept death/i }));
+    expect(JSON.parse(socket.rawSent.at(-1)!)).toMatchObject({ type: 'accept-death' });
+    expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
+  });
 });

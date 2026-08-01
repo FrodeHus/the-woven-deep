@@ -396,6 +396,120 @@ describe('ProfileSession', () => {
     expect(projection.heirloom).toEqual(finalized.record.heirloom);
   });
 
+  describe('wanderer rise and accept (Task 8)', () => {
+    /** A connected session sitting on a concluded (died) run of the given mode -- the state the
+     * client's death overlay is rendered from. */
+    async function sessionAtDeath(mode: 'classic' | 'wanderer'): Promise<{
+      session: ProfileSession;
+      socket: () => FakeSocket;
+    }> {
+      const { socket, connectPromise } = harness();
+      const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, mode });
+      const hero = fresh.actors.find((actor) => actor.playerControlled)!;
+      const dead: ActiveRun = {
+        ...fresh,
+        actors: fresh.actors.map((actor) =>
+          actor.actorId === hero.actorId ? { ...actor, health: 0 } : actor,
+        ),
+        conclusion: {
+          completionType: 'died',
+          cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+          concludedAtRevision: fresh.revision,
+          finalized: false,
+        },
+      };
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(dead) });
+      return { session: await connectPromise, socket };
+    }
+
+    it('sends rise-again and adopts the pushed snapshot', async () => {
+      const { session, socket } = await sessionAtDeath('wanderer');
+
+      expect(session.riseAgain()).toBe(true);
+      expect(socket().sentMessages.at(-1)).toMatchObject({
+        type: 'rise-again',
+        commandId: expect.any(String),
+      });
+
+      // The authoritative answer is the ordinary `state` push, which the message handler adopts
+      // like any other -- the rewind lowers the revision, and the client re-syncs to it.
+      const restored = createNewRun({
+        pack,
+        seed: SEED,
+        hero: DEFAULT_GUEST_HERO,
+        mode: 'wanderer',
+      });
+      socket().emit({ type: 'state', snapshot: snapshotOf(restored) });
+      expect(session.getSnapshot().conclusion).toBeNull();
+    });
+
+    it('does not send rise-again for a classic run', async () => {
+      const { session, socket } = await sessionAtDeath('classic');
+
+      expect(session.riseAgain()).toBe(false);
+      expect(socket().sentMessages).toEqual([]);
+    });
+
+    it('does not send rise-again for a run still in progress', async () => {
+      const { socket, connectPromise } = harness();
+      socket().emit(HELLO);
+      socket().emit({
+        type: 'state',
+        snapshot: snapshotOf(
+          createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, mode: 'wanderer' }),
+        ),
+      });
+      const session = await connectPromise;
+
+      expect(session.riseAgain()).toBe(false);
+      expect(socket().sentMessages).toEqual([]);
+    });
+
+    it('tells the server when a wanderer death is accepted', async () => {
+      const { session, socket } = await sessionAtDeath('wanderer');
+
+      session.finalizeConcludedRun({} as never, {} as never);
+
+      expect(socket().sentMessages.at(-1)).toMatchObject({ type: 'accept-death' });
+    });
+
+    it('sends nothing extra when a classic death is finalized', async () => {
+      const { session, socket } = await sessionAtDeath('classic');
+
+      session.finalizeConcludedRun({} as never, {} as never);
+
+      expect(socket().sentMessages).toEqual([]);
+    });
+
+    it('sends nothing when a wanderer VICTORY is finalized', async () => {
+      const { socket, connectPromise } = harness();
+      const fresh = createNewRun({
+        pack,
+        seed: SEED,
+        hero: DEFAULT_GUEST_HERO,
+        mode: 'wanderer',
+      });
+      const won: ActiveRun = {
+        ...fresh,
+        conclusion: {
+          completionType: 'broke-cycle',
+          cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+          concludedAtRevision: fresh.revision,
+          finalized: false,
+        },
+      };
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(won) });
+      const session = await connectPromise;
+
+      session.finalizeConcludedRun({} as never, {} as never);
+
+      // The server clears a Wanderer victory the moment it happens -- there is nothing to accept.
+      expect(socket().sentMessages).toEqual([]);
+    });
+  });
+
   describe('revealLore (Task 3, dialogue reveal-lore consequence)', () => {
     it('inserts the content id into sightings and appends exactly one reveal line, and is idempotent on a repeat reveal', async () => {
       const { socket, connectPromise } = harness();

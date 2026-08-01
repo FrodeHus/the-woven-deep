@@ -201,6 +201,12 @@ function GameRoot({
   /** A Wanderer run concluded by hero death: the one conclusion this component does not finalize
    * on sight, because the player still gets to decide whether it stands (see the effect below). */
   const wandererDeath = snapshot.projection.mode === 'wanderer' && concludedByDeath(snapshot);
+  /** Bumped on every Rise again click, purely to REMOUNT the overlay: its one-shot guard is
+   * per-mount, and a profile's rise is answered asynchronously by the server -- when the server
+   * finds no usable checkpoint it pushes back the same concluded snapshot, leaving this overlay on
+   * screen with a spent guard and a dead Accept death button. A guest's refusal is synchronous and
+   * never gets this far (it falls through to Accept death inside the same click). */
+  const [riseAttempts, setRiseAttempts] = useState(0);
 
   // `set-state-in-effect` is disabled for this effect alone: finalizing is an imperative, exactly-
   // once side effect (it writes the Hall record through the repository), and the death branch has to
@@ -340,12 +346,16 @@ function GameRoot({
       />
       {(pendingDeathConclusion || wandererDeath) && (
         <DeathOverlay
+          key={riseAttempts}
           {...(wandererDeath
             ? {
                 onRise: () => {
                   // A successful rise leaves the next snapshot unconcluded, so the effect's own
                   // guard re-arms naturally and this overlay unmounts; `finalizedRef` was never
-                  // set on that path. No usable checkpoint means the death stands after all.
+                  // set on that path. A guest that cannot rise says so immediately, and the death
+                  // stands here; a profile answers over the socket, which is what `riseAttempts`
+                  // above keeps the overlay usable for.
+                  setRiseAttempts((attempts) => attempts + 1);
                   if (session.riseAgain()) return;
                   acceptWandererDeath();
                 },

@@ -89,6 +89,14 @@ export function handleMessage(session: ServerPlaySession, raw: unknown): readonl
     ];
   }
 
+  if (message.type === 'rise-again') {
+    return [outcomeToMessage(session.riseAgain())];
+  }
+
+  if (message.type === 'accept-death') {
+    return [outcomeToMessage(session.acceptDeath())];
+  }
+
   // message.type === 'final-chamber-choice'
   return [
     outcomeToMessage(
