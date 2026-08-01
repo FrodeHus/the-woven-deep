@@ -582,6 +582,15 @@ export const echoLootCreatedEvent = z.strictObject({
   rank: z.number().int().min(2).max(10),
   itemIds: z.array(identifier).readonly(),
 });
+export const echoDeathInventoryCreatedEvent = z.strictObject({
+  type: z.literal('echo.death-inventory-created'),
+  eventId: identifier,
+  populationId: identifier,
+  actorId: identifier,
+  hallRecordId: identifier,
+  rank: z.number().int().min(2).max(10),
+  itemId: identifier,
+});
 export const soundHeardEvent = z.strictObject({
   type: z.literal('sound.heard'),
   category: z.enum(['combat', 'movement', 'mechanism']),
@@ -657,6 +666,7 @@ export const populationNoticePublicEvent = z.strictObject({
     'echo-encountered',
     'echo-defeated',
     'echo-loot',
+    'echo-death-inventory',
     'merchant-departure-warning',
     'merchant-departed',
     'merchant-provoked',
@@ -881,6 +891,7 @@ export const eventOptions = [
   echoEncounteredEvent,
   echoDefeatedEvent,
   echoLootCreatedEvent,
+  echoDeathInventoryCreatedEvent,
   soundHeardEvent,
   heroDamagedPublicEvent,
   combatObservedPublicEvent,
@@ -935,6 +946,7 @@ export const hiddenPublicEventTypes = new Set([
   'echo.encountered',
   'echo.defeated',
   'echo.loot-created',
+  'echo.death-inventory-created',
   'merchant.departure-warning',
   'merchant.departed',
   'merchant.provoked',
@@ -1011,6 +1023,7 @@ import type {
   CurrencyCollectedEvent,
   CurseRemovedEvent,
   CurseRevealedEvent,
+  EchoDeathInventoryCreatedEvent,
   EchoDefeatedEvent,
   EchoEncounteredEvent,
   EchoLootCreatedEvent,
@@ -1265,6 +1278,9 @@ type _EchoDefeatedDrift = Expect<
 >;
 type _EchoLootCreatedDrift = Expect<
   SchemaMatches<z.infer<typeof echoLootCreatedEvent>, EchoLootCreatedEvent>
+>;
+type _EchoDeathInventoryCreatedDrift = Expect<
+  SchemaMatches<z.infer<typeof echoDeathInventoryCreatedEvent>, EchoDeathInventoryCreatedEvent>
 >;
 type _SoundHeardDrift = Expect<SchemaMatches<z.infer<typeof soundHeardEvent>, SoundHeardEvent>>;
 type _HeroDamagedPublicDrift = Expect<

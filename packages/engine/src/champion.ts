@@ -30,7 +30,7 @@ import type {
 } from './population-model.js';
 import { emptyActorBehaviorState } from './population-model.js';
 import { replacePopulationList, sortedPopulations } from './population-runtime.js';
-import { isNonZeroState, nextUint32 } from './random.js';
+import { isNonZeroState, nextUint32, rollDie } from './random.js';
 import { compareCodeUnits } from './stable-json.js';
 import { boundedPrefixedDisplay, boundedSuffixedDisplay } from './display-text.js';
 
@@ -660,6 +660,45 @@ export function advanceFallenHeroEncounters(
         recordedHeirloomContentId: standing.heirloom.contentId,
       });
       const floor = state.floors.find((candidate) => candidate.floorId === population.floorId)!;
+      // An echo guarded only a fragment of what it was, so it surrenders ONE piece of the recorded
+      // inventory, picked first, and the spoils table rolls after. Both draw the `loot` stream, so
+      // this ordering is load-bearing: swapping it silently reshuffles every later loot draw in the
+      // run. A one-item inventory takes NO draw -- a 1-sided roll decides nothing and would shift
+      // the stream for free.
+      const inventory = hauntDropSnapshots(standing).snapshots;
+      let lootState = state.rng.loot;
+      let pickIndex = 0;
+      if (inventory.length > 1) {
+        const pick = rollDie(lootState, inventory.length);
+        pickIndex = pick.value - 1;
+        lootState = pick.state;
+      }
+      const picked = inventory[pickIndex];
+      if (picked === undefined) {
+        throw new Error(`Echo ${population.populationId} has an empty death inventory`);
+      }
+      state = { ...state, rng: { ...state.rng, loot: lootState } };
+      const pieces = materializeDeathInventory({
+        content: input.content,
+        snapshots: [picked],
+        equippedItemContentIds: standing.equippedItemContentIds,
+        fallbackItemId: definition.fallbackItemId,
+        itemIdPrefix: hauntDropItemIdPrefix(population.populationId),
+        floorId: population.floorId,
+        x: actor.x,
+        y: actor.y,
+      });
+      for (const piece of pieces) {
+        if (state.items.some((item) => item.itemId === piece.item.itemId)) {
+          throw new Error(`Haunt drop ${piece.item.itemId} exists without reward state`);
+        }
+      }
+      state = {
+        ...state,
+        items: [...state.items, ...pieces.map((piece) => piece.item)].sort((left, right) =>
+          compareCodeUnits(left.itemId, right.itemId),
+        ),
+      };
       const loot = createPopulationLoot({
         content: input.content,
         state,
@@ -670,7 +709,17 @@ export function advanceFallenHeroEncounters(
         y: actor.y,
         depth: floor.depth,
       });
-      if (loot.createdItems.some((item) => item.contentId === standing.heirloom.contentId)) {
+      // The recorded heirloom may now legitimately be on the ground -- it is the piece this haunt
+      // guarded and just surrendered. What must still never happen is the ordinary SPOILS TABLE
+      // producing it, which `validateEchoLootGraph` above already forbids at the content level, so
+      // this runtime guard now only has to exclude the piece we deliberately materialized.
+      const droppedPieceIds = new Set(pieces.map((piece) => piece.item.itemId));
+      if (
+        loot.createdItems.some(
+          (item) =>
+            !droppedPieceIds.has(item.itemId) && item.contentId === standing.heirloom.contentId,
+        )
+      ) {
         throw new Error('Echo ordinary loot must not create its recorded heirloom');
       }
       population = { ...population, lootCreated: true };
@@ -683,6 +732,15 @@ export function advanceFallenHeroEncounters(
           actorId: actor.actorId,
           hallRecordId: standing.hallRecordId,
           rank: standing.rank,
+        },
+        {
+          type: 'echo.death-inventory-created',
+          eventId: input.eventId,
+          populationId: population.populationId,
+          actorId: actor.actorId,
+          hallRecordId: standing.hallRecordId,
+          rank: standing.rank,
+          itemId: pieces[0]!.item.itemId,
         },
         {
           type: 'echo.loot-created',

@@ -9,6 +9,7 @@ import { artifactItemIds } from './commerce.js';
 import { validateContentBoundRun } from './content-bound-validation.js';
 import { preservesRequiredRoutes } from './connectivity.js';
 import { createDemoRun } from './fixture.js';
+import { hauntDropItemIdPrefix, hauntDropSnapshots } from './haunt-rewards.js';
 import { createUnknownKnowledge } from './knowledge.js';
 import { allocateIdentificationMap } from './identification.js';
 import type {
@@ -477,18 +478,54 @@ export function validatePopulationInvariants(run: ActiveRun, pack: CompiledConte
     .map((population) => population.hallRecordId);
   if (new Set(echoRecords).size !== echoRecords.length)
     throw new Error('population invariant: Echo record repeated');
-  if (run.items.filter((item) => item.heirloom !== undefined).length > 1)
-    throw new Error('population invariant: heirloom repeated');
+  // A defeated haunt hands back a SET now -- a champion its whole recorded death inventory, an echo
+  // exactly one piece of it -- so "at most one heirloom item in the run" is no longer the rule.
+  // What must still hold, and is checked here instead, is that every heirloom-bearing item belongs
+  // to a haunt population that has actually rewarded and that each haunt dropped exactly what it
+  // owes: nothing minted, nothing duplicated.
+  let owedHeirloomItems = 0;
+  for (const population of run.populations) {
+    if (population.model !== 'champion' && population.model !== 'echo') continue;
+    const rewarded =
+      population.model === 'champion' ? population.rewardCreated : population.lootCreated;
+    const standing = run.fallenHeroStandings.find(
+      (entry) => entry.hallRecordId === population.hallRecordId,
+    );
+    const owed =
+      !rewarded || !standing
+        ? 0
+        : population.model === 'champion'
+          ? hauntDropSnapshots(standing).snapshots.length
+          : 1;
+    const dropped = run.items.filter((item) =>
+      item.itemId.startsWith(`${hauntDropItemIdPrefix(population.populationId)}.`),
+    );
+    if (dropped.length !== owed)
+      throw new Error('population invariant: haunt drop is not the surrendered set');
+    if (dropped.some((item) => item.heirloom === undefined))
+      throw new Error('population invariant: haunt drop lacks provenance');
+    owedHeirloomItems += owed;
+  }
+  if (run.items.filter((item) => item.heirloom !== undefined).length !== owedHeirloomItems)
+    throw new Error('population invariant: heirloom provenance outside a haunt drop');
   const template = pack.entries.find((entry) => entry.kind === 'fallen-champion-template');
   if (template && echoRecords.length > template.maximumEchoesPerRun)
     throw new Error('population invariant: Echo run cap exceeded');
+  // An echo MAY now surrender the recorded heirloom -- it is one piece of what it guarded. What it
+  // must never do is produce one from its ordinary spoils table, which is the rule this always
+  // meant and `validateEchoLootGraph` enforces at the content level.
   if (
     run.items.some(
       (item) =>
-        item.heirloom !== undefined && echoRecords.includes(item.heirloom.originatingHallRecordId),
+        item.heirloom !== undefined &&
+        run.populations.some(
+          (population) =>
+            population.model === 'echo' &&
+            item.itemId.startsWith(`item.echo-loot.${population.populationId}.`),
+        ),
     )
   ) {
-    throw new Error('population invariant: Echo owns an heirloom');
+    throw new Error('population invariant: Echo spoils carry heirloom provenance');
   }
   for (const population of run.populations.filter(
     (candidate) => candidate.model === 'boss' && candidate.rewardCreated,

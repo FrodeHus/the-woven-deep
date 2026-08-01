@@ -548,6 +548,16 @@ export interface EchoLootCreatedEvent {
   readonly rank: number;
   readonly itemIds: readonly OpaqueId[];
 }
+export interface EchoDeathInventoryCreatedEvent {
+  readonly type: 'echo.death-inventory-created';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly hallRecordId: OpaqueId;
+  readonly rank: number;
+  /** Singular: an echo surrenders exactly one piece of what it guarded. */
+  readonly itemId: OpaqueId;
+}
 export type PopulationDomainEvent =
   | PopulationCreatedEvent
   | PopulationEncounteredEvent
@@ -571,7 +581,8 @@ export type PopulationDomainEvent =
   | ChampionDeathInventoryCreatedEvent
   | EchoEncounteredEvent
   | EchoDefeatedEvent
-  | EchoLootCreatedEvent;
+  | EchoLootCreatedEvent
+  | EchoDeathInventoryCreatedEvent;
 export interface SoundHeardEvent {
   readonly type: 'sound.heard';
   readonly category: 'combat' | 'movement' | 'mechanism';
@@ -649,6 +660,7 @@ export interface PopulationNoticePublicEvent {
     | 'echo-encountered'
     | 'echo-defeated'
     | 'echo-loot'
+    | 'echo-death-inventory'
     | 'merchant-departure-warning'
     | 'merchant-departed'
     | 'merchant-provoked'

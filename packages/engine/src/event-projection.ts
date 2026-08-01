@@ -528,6 +528,7 @@ export function projectDomainEvents(
       case 'champion.death-inventory-created':
       case 'echo.defeated':
       case 'echo.loot-created':
+      case 'echo.death-inventory-created':
         if (actorVisible(event.actorId))
           output.push(
             notice(
@@ -540,7 +541,9 @@ export function projectDomainEvents(
                     ? 'champion-death-inventory'
                     : event.type === 'echo.defeated'
                       ? 'echo-defeated'
-                      : 'echo-loot',
+                      : event.type === 'echo.loot-created'
+                        ? 'echo-loot'
+                        : 'echo-death-inventory',
               event.actorId,
               event.type,
               event.type === 'champion.heirloom-created'

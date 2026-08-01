@@ -21,9 +21,10 @@ import { bossUniqueDropId } from './commerce.js';
 import {
   hauntDropItemIdPrefix,
   hauntDropSnapshots,
+  hauntPieceItemId,
   materializeDeathInventory,
 } from './haunt-rewards.js';
-import type { HeirloomItemMetadata } from './item-model.js';
+import type { HeirloomItemMetadata, ItemInstance } from './item-model.js';
 import { createPopulationLoot } from './inventory.js';
 import { stableJson } from './stable-json.js';
 
@@ -40,6 +41,20 @@ function itemDefinition(
     throw new Error(`content-bound validation: item ${contentId} definition does not exist`);
   }
   return definition;
+}
+
+/** Is `actual` the item `expected` materialization would produce, ignoring where it now sits?
+ * `location` is deliberately absent: a dropped piece may since have been picked up or moved. */
+function materializedPieceMatches(actual: ItemInstance, expected: ItemInstance): boolean {
+  return (
+    actual.contentId === expected.contentId &&
+    actual.quantity === 1 &&
+    actual.condition === expected.condition &&
+    actual.charges === expected.charges &&
+    actual.fuel === expected.fuel &&
+    stableJson(actual.enchantment) === stableJson(expected.enchantment) &&
+    stableJson(actual.heirloom) === stableJson(expected.heirloom)
+  );
 }
 
 export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPack): void {
@@ -536,19 +551,39 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           const rewardId = piece.item.itemId;
           const reward = run.items.find((item) => item.itemId === rewardId);
           expectedHeirlooms.set(rewardId, piece.item.heirloom!);
-          if (
-            !reward ||
-            reward.contentId !== piece.item.contentId ||
-            reward.quantity !== 1 ||
-            reward.condition !== piece.item.condition ||
-            reward.charges !== piece.item.charges ||
-            reward.fuel !== piece.item.fuel ||
-            stableJson(reward.enchantment) !== stableJson(piece.item.enchantment) ||
-            stableJson(reward.heirloom) !== stableJson(piece.item.heirloom)
-          ) {
+          if (!reward || !materializedPieceMatches(reward, piece.item)) {
             throw new Error(`content-bound validation: Champion reward ${rewardId} is invalid`);
           }
         }
+      }
+      if (matching[0]?.model === 'echo' && matching[0].lootCreated) {
+        const standing = run.fallenHeroStandings.find(
+          (entry) => entry.hallRecordId === decision.hallRecordId,
+        )!;
+        // An echo surrenders exactly ONE piece of what it guarded, chosen by a `loot` draw this
+        // check cannot replay. So the rule is membership rather than identity: the item at index
+        // zero must be exactly what materializing SOME piece of the record's drop set produces.
+        const prefix = hauntDropItemIdPrefix(matching[0].populationId);
+        const rewardId = hauntPieceItemId(prefix, 0);
+        const reward = run.items.find((item) => item.itemId === rewardId);
+        const candidates = materializeDeathInventory({
+          content: pack,
+          snapshots: hauntDropSnapshots(standing).snapshots,
+          equippedItemContentIds: standing.equippedItemContentIds,
+          fallbackItemId: championTemplate.fallbackItemId,
+          itemIdPrefix: prefix,
+          floorId: run.activeFloorId,
+          x: 0,
+          y: 0,
+        });
+        const matched =
+          reward === undefined
+            ? undefined
+            : candidates.find((candidate) => materializedPieceMatches(reward, candidate.item));
+        if (!reward || !matched) {
+          throw new Error(`content-bound validation: Echo reward ${rewardId} is invalid`);
+        }
+        expectedHeirlooms.set(rewardId, matched.item.heirloom!);
       }
     }
   }

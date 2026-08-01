@@ -1211,36 +1211,51 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
   // a piece still has nowhere to live.
   for (const [itemIndex, itemValue] of run.items.entries()) {
     if (itemValue.heirloom === undefined) continue;
-    const champion = run.populations.find(
-      (population) =>
-        population.model === 'champion' &&
-        population.rewardCreated &&
+    const owner = run.populations.find(
+      (population): population is Extract<typeof population, { model: 'champion' | 'echo' }> =>
+        (population.model === 'champion'
+          ? population.rewardCreated
+          : population.model === 'echo' && population.lootCreated) &&
         itemValue.itemId.startsWith(`${hauntDropItemIdPrefix(population.populationId)}.`),
     );
     const standing =
-      champion?.model === 'champion'
-        ? run.fallenHeroStandings.find((entry) => entry.hallRecordId === champion.hallRecordId)
-        : undefined;
-    const piece =
-      champion === undefined || standing === undefined
+      owner === undefined
         ? undefined
-        : hauntDropSnapshots(standing).snapshots.find(
-            (_, index) =>
-              hauntPieceItemId(hauntDropItemIdPrefix(champion.populationId), index) ===
-              itemValue.itemId,
-          );
+        : run.fallenHeroStandings.find((entry) => entry.hallRecordId === owner.hallRecordId);
+    const snapshots = standing === undefined ? [] : hauntDropSnapshots(standing).snapshots;
+    // A champion's id encodes WHICH piece it is, so the snapshot is pinned exactly. An echo
+    // surrenders a single piece at index zero, drawn from the `loot` stream -- a draw this
+    // content-free tier cannot replay -- so the rule there is membership: the provenance must
+    // belong to some piece of that record's drop set.
+    const piece =
+      owner === undefined
+        ? undefined
+        : owner.model === 'echo'
+          ? itemValue.itemId === hauntPieceItemId(hauntDropItemIdPrefix(owner.populationId), 0)
+            ? snapshots.find(
+                (snapshot) => snapshot.sourceItemId === itemValue.heirloom!.sourceItemId,
+              )
+            : undefined
+          : snapshots.find(
+              (_, index) =>
+                hauntPieceItemId(hauntDropItemIdPrefix(owner.populationId), index) ===
+                itemValue.itemId,
+            );
     if (
-      !champion ||
+      !owner ||
       !standing ||
       !piece ||
       itemValue.quantity !== 1 ||
       itemValue.heirloom.originatingHallRecordId !== standing.hallRecordId ||
-      itemValue.heirloom.originatingRank !== standing.rank ||
+      // Materialization always stamps rank one (see `HeirloomItemMetadata.originatingRank`). For a
+      // champion that is the standing's own rank, and checking it against the standing keeps the
+      // pre-haunt strictness; an echo's standing is rank two or lower, so the stamp is the rule.
+      itemValue.heirloom.originatingRank !== (owner.model === 'champion' ? standing.rank : 1) ||
       itemValue.heirloom.sourceItemId !== piece.sourceItemId
     ) {
       fail(
         `items.${itemIndex}.heirloom`,
-        'heirloom provenance must match a piece of its reward-created Champion death inventory',
+        'heirloom provenance must match a piece of its haunt population death inventory',
       );
     }
   }
@@ -1273,23 +1288,31 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         );
       }
     }
-    if (populationValue.model !== 'champion' || !populationValue.rewardCreated) continue;
+    if (populationValue.model !== 'champion' && populationValue.model !== 'echo') continue;
+    const rewarded =
+      populationValue.model === 'champion'
+        ? populationValue.rewardCreated
+        : populationValue.lootCreated;
+    if (!rewarded) continue;
     const standing = run.fallenHeroStandings.find(
       (entry) => entry.hallRecordId === populationValue.hallRecordId,
     );
     if (!standing) {
       fail(
         `populations.${populationIndex}.rewardCreated`,
-        'reward-created Champion requires its Hall standing',
+        'a rewarded haunt requires its Hall standing',
       );
     }
     const prefix = hauntDropItemIdPrefix(populationValue.populationId);
-    for (const index of hauntDropSnapshots(standing).snapshots.keys()) {
+    // A champion hands back every piece; an echo hands back exactly one, always at index zero.
+    const required =
+      populationValue.model === 'champion' ? hauntDropSnapshots(standing).snapshots.length : 1;
+    for (let index = 0; index < required; index += 1) {
       const expected = items.get(hauntPieceItemId(prefix, index));
       if (expected?.heirloom === undefined) {
         fail(
           `populations.${populationIndex}.rewardCreated`,
-          'reward-created Champion requires every piece of its death inventory',
+          'a rewarded haunt requires every piece of the death inventory it surrendered',
         );
       }
     }
