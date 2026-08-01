@@ -399,8 +399,13 @@ describe('createNewRun records input', () => {
     // `fallenHeroStandings`/`fallenHeroDecisions` are both empty (no records input), so no
     // standing/decision content is affected -- the digest moves purely from the schema literal.
     // This is the expected save-schema bump, not an engine regression.
+    // Re-pinned again for content schema v13 (the haunt `appeasement` block on
+    // `fallen-champion-template`): the block is inert schema -- no generation, RNG stream, or
+    // loot/merchant logic reads it yet -- so the digest moves purely because `contentHash` covers
+    // the whole compiled pack and the template entry grew a field. This is expected
+    // content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '5f7df2df7675668e0ea47e0c71d8f51b5640da150c99cc8d87849f4e3c02c3bb',
+      '4529a80dabaee02ef4948b557598bb9001bcc8c59b102b6794fc635bd6042bbf',
     );
   });
 

@@ -12,6 +12,11 @@ function championTemplateIssues(
 ): ContentCompileIssue[] {
   if (located.length === 0) return [];
   const issues: ContentCompileIssue[] = [];
+  // No cross-entry rule is required for `appeasement`: its category values are a closed
+  // vocabulary already enforced by the Zod schema (`categoryList` in `schema/champion.ts`), and
+  // its `classFavors` keys are free-form class tags by design -- an unlisted tag legally falls
+  // through to `defaultCategories`, and a key matching no class is merely dead authoring, not an
+  // error. Do not go looking for a missing validator here.
   if (located.length > 1) {
     issues.push(
       issue(

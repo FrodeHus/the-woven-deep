@@ -5,7 +5,7 @@ import { encounterModels } from '../src/compiler/schema.js';
 describe('parseContentFile', () => {
   it('publishes and parses strict schema-v4 NPC content', () => {
     expect(encounterModels).toContain('merchant');
-    const validNpcYaml = `schemaVersion: 12
+    const validNpcYaml = `schemaVersion: 13
 entries:
   - kind: npc
     id: npc.travelling-lampwright
@@ -63,7 +63,7 @@ entries:
   it('rejects superseded schema v4 as an unsupported envelope version', () => {
     expect(() =>
       parseContentFile({ path: 'legacy.yaml', source: 'schemaVersion: 4\nentries: []\n' }),
-    ).toThrow(/expected 12/i);
+    ).toThrow(/expected 13/i);
   });
   it('rejects source schema v2 with a stable version diagnostic', () => {
     expect(() =>
@@ -71,7 +71,7 @@ entries:
         path: 'legacy.yaml',
         source: 'schemaVersion: 2\nentries: []\n',
       }),
-    ).toThrow(/legacy\.yaml.*schemaVersion.*expected 12/i);
+    ).toThrow(/legacy\.yaml.*schemaVersion.*expected 13/i);
   });
   it('rejects superseded schema v5 as an unsupported envelope version', () => {
     expect(() =>
@@ -90,7 +90,7 @@ entries:
   });
 
   it('publishes and parses strict schema-v7 achievement content', () => {
-    const validAchievementYaml = `schemaVersion: 12
+    const validAchievementYaml = `schemaVersion: 13
 entries:
   - kind: achievement
     id: achievement.defeated-the-deeps-champion
@@ -156,7 +156,7 @@ entries:
   it('compiles a currency-category item', () => {
     const pack = parseContentFile({
       path: 'items/test-gold.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - kind: item
     id: item.test-gold
@@ -185,7 +185,7 @@ entries:
   });
 
   it('parses strict score coefficients on the balance entry', () => {
-    const validBalanceYaml = `schemaVersion: 12
+    const validBalanceYaml = `schemaVersion: 13
 entries:
   - { kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 5000, hungerThresholds: { hungry: 1500, weak: 500, starving: 0 }, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, weaveRegenAmount: 2, restMaximumDuration: 5000, recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }, hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} }, formulas: { health: { base: 8, vitality: 2 } }, actionCosts: { action.move: 100 }, score: { depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200 }, pointBuy: { budget: 1, costs: [{value: 0, cost: 0}, {value: 1, cost: 0}, {value: 2, cost: 0}, {value: 3, cost: 0}, {value: 4, cost: 0}, {value: 5, cost: 0}, {value: 6, cost: 0}, {value: 7, cost: 0}, {value: 8, cost: 0}, {value: 9, cost: 0}, {value: 10, cost: 0}, {value: 11, cost: 0}, {value: 12, cost: 0}, {value: 13, cost: 0}, {value: 14, cost: 0}, {value: 15, cost: 0}, {value: 16, cost: 0}, {value: 17, cost: 0}, {value: 18, cost: 0}, {value: 19, cost: 0}, {value: 20, cost: 0}, {value: 21, cost: 0}, {value: 22, cost: 0}, {value: 23, cost: 0}, {value: 24, cost: 0}, {value: 25, cost: 0}, {value: 26, cost: 0}, {value: 27, cost: 0}, {value: 28, cost: 0}, {value: 29, cost: 0}, {value: 30, cost: 0}] }, restockMilestones: [5, 10, 15, 20], house: { baseCapacity: 6, strongboxIncrement: 4 }, encounterDensity: { monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 }, attemptCap: 16 }, curses: { chanceBps: { shallow: 1000, mid: 2000, deep: 3500 }, enchantedMultiplierBps: 20000, capBps: 5000 }, fragmentSpawnRollDenominator: 40, generation: {doorTilePercent: 35, artifactOfferPercent: 12}, floorLoot: { scatterCount: { minimum: 2, maximum: 4 }, chestCount: { minimum: 0, maximum: 2 }, lockedChestPercent: 50, lockedDoorPercent: 15, minimumAnchorDistance: 8, minimumSpreadDistance: 6, depthBands: { shallowMaxDepth: 6, midMaxDepth: 13 }, chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 } } }
 `;
@@ -235,7 +235,7 @@ entries:
   it('parses the point-buy attribute table on the balance entry', () => {
     const pointBuyCosts =
       '[{value: 0, cost: 0}, {value: 1, cost: 0}, {value: 2, cost: 0}, {value: 3, cost: 0}, {value: 4, cost: 0}, {value: 5, cost: 0}, {value: 6, cost: 1}, {value: 7, cost: 2}, {value: 8, cost: 3}, {value: 9, cost: 4}, {value: 10, cost: 5}, {value: 11, cost: 6}, {value: 12, cost: 7}, {value: 13, cost: 8}, {value: 14, cost: 9}, {value: 15, cost: 10}, {value: 16, cost: 11}, {value: 17, cost: 12}, {value: 18, cost: 13}, {value: 19, cost: 14}, {value: 20, cost: 15}, {value: 21, cost: 16}, {value: 22, cost: 17}, {value: 23, cost: 18}, {value: 24, cost: 19}, {value: 25, cost: 20}, {value: 26, cost: 21}, {value: 27, cost: 22}, {value: 28, cost: 23}, {value: 29, cost: 24}, {value: 30, cost: 25}]';
-    const validBalanceWithPointBuy = `schemaVersion: 12
+    const validBalanceWithPointBuy = `schemaVersion: 13
 entries:
   - { kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 5000, hungerThresholds: { hungry: 1500, weak: 500, starving: 0 }, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, weaveRegenAmount: 2, restMaximumDuration: 5000, recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }, hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} }, formulas: { health: { base: 8, vitality: 2 } }, actionCosts: { action.move: 100 }, score: { depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200 }, pointBuy: { budget: 30, costs: ${pointBuyCosts} }, restockMilestones: [5, 10, 15, 20], house: { baseCapacity: 6, strongboxIncrement: 4 }, encounterDensity: { monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 }, attemptCap: 16 }, curses: { chanceBps: { shallow: 1000, mid: 2000, deep: 3500 }, enchantedMultiplierBps: 20000, capBps: 5000 }, fragmentSpawnRollDenominator: 40, generation: {doorTilePercent: 35, artifactOfferPercent: 12}, floorLoot: { scatterCount: { minimum: 2, maximum: 4 }, chestCount: { minimum: 0, maximum: 2 }, lockedChestPercent: 50, lockedDoorPercent: 15, minimumAnchorDistance: 8, minimumSpreadDistance: 6, depthBands: { shallowMaxDepth: 6, midMaxDepth: 13 }, chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 } } }
 `;
@@ -262,7 +262,7 @@ entries:
   });
 
   it('requires restockMilestones to be strictly increasing positive integers', () => {
-    const validBalanceYaml = `schemaVersion: 12
+    const validBalanceYaml = `schemaVersion: 13
 entries:
   - { kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 0, hungerMaximum: 5000, hungerThresholds: { hungry: 1500, weak: 500, starving: 0 }, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, weaveRegenAmount: 2, restMaximumDuration: 5000, recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }, hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} }, formulas: { health: { base: 8, vitality: 2 } }, actionCosts: { action.move: 100 }, score: { depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200 }, pointBuy: { budget: 1, costs: [{value: 0, cost: 0}] }, restockMilestones: [5, 10, 15, 20], house: { baseCapacity: 6, strongboxIncrement: 4 }, encounterDensity: { monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 }, attemptCap: 16 }, curses: { chanceBps: { shallow: 1000, mid: 2000, deep: 3500 }, enchantedMultiplierBps: 20000, capBps: 5000 }, fragmentSpawnRollDenominator: 40, generation: {doorTilePercent: 35, artifactOfferPercent: 12}, floorLoot: { scatterCount: { minimum: 2, maximum: 4 }, chestCount: { minimum: 0, maximum: 2 }, lockedChestPercent: 50, lockedDoorPercent: 15, minimumAnchorDistance: 8, minimumSpreadDistance: 6, depthBands: { shallowMaxDepth: 6, midMaxDepth: 13 }, chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 } } }
 `;
@@ -312,7 +312,7 @@ entries:
   });
 
   it('accepts the floorLoot block and rejects inverted ranges', () => {
-    const validBalanceYaml = `schemaVersion: 12
+    const validBalanceYaml = `schemaVersion: 13
 entries:
   - { kind: balance, startingCurrency: 40, id: balance.core, name: Core, tags: [], readinessThreshold: 100, normalActionCost: 100, speedMinimum: 25, speedMaximum: 400, energyMinimum: -10000, energyMaximum: 10000, attributeMinimum: 0, attributeMaximum: 30, hungerMaximum: 5000, hungerThresholds: { hungry: 1500, weak: 500, starving: 0 }, starvationInterval: 500, starvationDamage: 1, recoveryInterval: 500, recoveryAmount: 1, weaveRegenAmount: 2, restMaximumDuration: 5000, recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }, hungerStageModifiers: { sated: {}, hungry: {}, weak: {}, starving: {} }, formulas: { health: { base: 8, vitality: 2 } }, actionCosts: { action.move: 100 }, score: { depthCoefficient: 100, bossDefeatCoefficient: 250, threatCoefficient: 5, discoveryCoefficient: 25, completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }, turnEfficiencyBudget: 500, turnEfficiencyDecayInterval: 200 }, pointBuy: { budget: 1, costs: [{value: 0, cost: 0}, {value: 1, cost: 0}, {value: 2, cost: 0}, {value: 3, cost: 0}, {value: 4, cost: 0}, {value: 5, cost: 0}, {value: 6, cost: 0}, {value: 7, cost: 0}, {value: 8, cost: 0}, {value: 9, cost: 0}, {value: 10, cost: 0}, {value: 11, cost: 0}, {value: 12, cost: 0}, {value: 13, cost: 0}, {value: 14, cost: 0}, {value: 15, cost: 0}, {value: 16, cost: 0}, {value: 17, cost: 0}, {value: 18, cost: 0}, {value: 19, cost: 0}, {value: 20, cost: 0}, {value: 21, cost: 0}, {value: 22, cost: 0}, {value: 23, cost: 0}, {value: 24, cost: 0}, {value: 25, cost: 0}, {value: 26, cost: 0}, {value: 27, cost: 0}, {value: 28, cost: 0}, {value: 29, cost: 0}, {value: 30, cost: 0}] }, restockMilestones: [5, 10, 15, 20], house: { baseCapacity: 6, strongboxIncrement: 4 }, encounterDensity: { monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 }, attemptCap: 16 }, curses: { chanceBps: { shallow: 1000, mid: 2000, deep: 3500 }, enchantedMultiplierBps: 20000, capBps: 5000 }, fragmentSpawnRollDenominator: 40, generation: {doorTilePercent: 35, artifactOfferPercent: 12}, floorLoot: { scatterCount: { minimum: 2, maximum: 4 }, chestCount: { minimum: 0, maximum: 2 }, lockedChestPercent: 50, lockedDoorPercent: 15, minimumAnchorDistance: 8, minimumSpreadDistance: 6, depthBands: { shallowMaxDepth: 6, midMaxDepth: 13 }, chestLockDifficulty: { shallow: 10, mid: 13, deep: 16 } } }
 `;
@@ -341,7 +341,7 @@ entries:
   it('cross-validates permanent merchants against lifetime fields', () => {
     const baseDefinition =
       'npcId: npc.town-provisioner, stockLootTableId: loot-table.town-provisioner, minimumStockRolls: 1, maximumStockRolls: 1, merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [food], services: []';
-    const encounterYaml = (definition: string) => `schemaVersion: 12
+    const encounterYaml = (definition: string) => `schemaVersion: 13
 entries:
   - { kind: encounter, id: encounter.town-provisioner, name: Provisioner, tags: [], model: merchant, minDepth: 1, maxDepth: 1, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: common, runAppearanceChance: 1, maximumInstancesPerRun: 1, placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }, intentPresentation: { visible: true }, definition: { ${definition} } }
 `;
@@ -381,7 +381,7 @@ entries:
   it('requires the strongbox service to declare exactly one minimum and maximum use', () => {
     const service = (minimumUses: number, maximumUses: number) =>
       `{ serviceId: merchant-service.strongbox, basePrice: 120, minimumUses: ${minimumUses}, maximumUses: ${maximumUses}, tierIds: [neutral] }`;
-    const encounterYaml = (servicesEntry: string) => `schemaVersion: 12
+    const encounterYaml = (servicesEntry: string) => `schemaVersion: 13
 entries:
   - { kind: encounter, id: encounter.town-provisioner, name: Provisioner, tags: [], model: merchant, minDepth: 1, maxDepth: 1, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: common, runAppearanceChance: 1, maximumInstancesPerRun: 1, placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }, intentPresentation: { visible: true }, definition: { npcId: npc.town-provisioner, stockLootTableId: loot-table.town-provisioner, minimumStockRolls: 1, maximumStockRolls: 1, merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [food], services: [${servicesEntry}], permanent: true, aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0 } }
 `;
@@ -403,7 +403,7 @@ entries:
   it('rejects the remove-curse service authored with zero maximum uses', () => {
     const service = (maximumUses: number) =>
       `{ serviceId: merchant-service.remove-curse, basePrice: 30, minimumUses: 0, maximumUses: ${maximumUses}, tierIds: [neutral] }`;
-    const encounterYaml = (servicesEntry: string) => `schemaVersion: 12
+    const encounterYaml = (servicesEntry: string) => `schemaVersion: 13
 entries:
   - { kind: encounter, id: encounter.town-provisioner, name: Provisioner, tags: [], model: merchant, minDepth: 1, maxDepth: 1, environmentTags: [], requiredVaultTags: [], weight: 1, rarity: common, runAppearanceChance: 1, maximumInstancesPerRun: 1, placement: { minimumStairDistance: 0, minimumObjectiveDistance: 0, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }, intentPresentation: { visible: true }, definition: { npcId: npc.town-provisioner, stockLootTableId: loot-table.town-provisioner, minimumStockRolls: 1, maximumStockRolls: 1, merchantSaleBps: 12000, merchantPurchaseBps: 6000, acceptedCategories: [food], services: [${servicesEntry}], permanent: true, aggressionResponse: flee, commerceReputationDelta: 0, aggressionReputationDelta: 0, deathReputationDelta: 0, stockDropFraction: 0 } }
 `;
@@ -420,7 +420,7 @@ entries:
   });
 
   it('publishes and parses strict schema-v6 class content', () => {
-    const validClassYaml = `schemaVersion: 12
+    const validClassYaml = `schemaVersion: 13
 entries:
   - kind: class
     id: class.wayfarer
@@ -470,7 +470,7 @@ entries:
   });
 
   it('rejects a trait declaring more than one modifier', () => {
-    const traitWithTwoModifiers = `schemaVersion: 12
+    const traitWithTwoModifiers = `schemaVersion: 13
 entries:
   - kind: trait
     id: trait.keen-eyed
@@ -496,7 +496,7 @@ entries:
   });
 
   it('rejects a background declaring an unknown derived stat modifier', () => {
-    const backgroundWithUnknownStat = `schemaVersion: 12
+    const backgroundWithUnknownStat = `schemaVersion: 13
 entries:
   - kind: background
     id: background.caravan-guard
@@ -523,7 +523,7 @@ entries:
   });
 
   it('requires a non-negative safe-integer threat on every monster', () => {
-    const validMonsterYaml = `schemaVersion: 12
+    const validMonsterYaml = `schemaVersion: 13
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -567,7 +567,7 @@ entries:
   });
 
   it('keeps appearance probability on encounters and rejects it on reusable monsters', () => {
-    const source = `schemaVersion: 12
+    const source = `schemaVersion: 13
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -623,12 +623,12 @@ entries:
   });
 
   it('parses strict group, swarm, boss, and champion-template definitions', () => {
-    const source = `schemaVersion: 12
+    const source = `schemaVersion: 13
 entries:
   - { kind: encounter, id: encounter.patrol, name: Patrol, tags: [], model: group, minDepth: 1, maxDepth: 4, environmentTags: [], requiredVaultTags: [], weight: 5, rarity: uncommon, runAppearanceChance: 0.5, discoveryProtectionIncrement: 0.1, discoveryProtectionCap: 0.8, maximumInstancesPerRun: 2, placement: { minimumStairDistance: 3, minimumObjectiveDistance: 3, maximumMemberDistance: 4, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }, intentPresentation: { visible: true }, definition: { roles: [{ roleId: guard, monsterId: monster.guard, minimumQuantity: 2, maximumQuantity: 3, formationPreference: front, behaviorParameters: {} }], formation: line, communicationRadius: 4, leaderChance: 0.5, leaderRoleId: guard, leaderAccentColor: '#ffcc44', leaderAlternateGlyph: null, coordinationModifiers: { accuracy: 1, defense: 1, damage: 0 }, leaderDeathResponse: weaken, responseParameters: {}, supernaturalBond: false, collapseRewards: none } }
   - { kind: encounter, id: encounter.nest, name: Nest, tags: [], model: swarm, minDepth: 1, maxDepth: 6, environmentTags: [], requiredVaultTags: [], weight: 4, rarity: uncommon, runAppearanceChance: 0.4, discoveryProtectionIncrement: 0.1, discoveryProtectionCap: 0.8, maximumInstancesPerRun: 2, placement: { minimumStairDistance: 4, minimumObjectiveDistance: 4, maximumMemberDistance: 3, allowedTerrainTags: [floor], requiresVaultSlot: false, failureMode: optional }, intentPresentation: { visible: true }, definition: { sourceMonsterId: monster.nest, spawnRoles: [{ roleId: rat, monsterId: monster.rat, weight: 1 }], spawnInterval: 200, minimumSpawnQuantity: 1, maximumSpawnQuantity: 2, placementRadius: 3, allowedTerrainTags: [floor], maximumLivingChildren: 8, maximumLivingMembers: 9, maximumFloorActors: 20, sourceDestructionResponse: flee, responseParameters: {} } }
   - { kind: encounter, id: encounter.warden, name: Warden, tags: [], model: boss, minDepth: 5, maxDepth: 5, environmentTags: [], requiredVaultTags: [boss-arena], weight: 1, rarity: legendary, runAppearanceChance: 0.08, discoveryProtectionIncrement: 0.03, discoveryProtectionCap: 0.35, maximumInstancesPerRun: 1, placement: { minimumStairDistance: 5, minimumObjectiveDistance: 5, maximumMemberDistance: 0, allowedTerrainTags: [floor], requiresVaultSlot: true, failureMode: required }, intentPresentation: { visible: true }, definition: { monsterId: monster.warden, phases: [{ phaseId: enraged, healthThresholdPercent: 50, behaviorId: behavior.approach-and-attack, behaviorParameters: {}, modifiers: { accuracy: 2, defense: 0, damage: 2 }, effects: [] }], recoveryPerWorldTime: 0.01, recoveryCapPercent: 25, uniqueItemId: item.warden-key, enhancedLootTableId: loot-table.warden, vaultTags: [boss-arena] } }
-  - { kind: fallen-champion-template, id: fallen-champion-template.core, name: Deep's Champion, tags: [], fallbackMonsterId: monster.guard, fallbackItemId: item.fallback-relic, minimumHealth: 10, maximumHealth: 200, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 3, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 2, echoLootTableId: loot-table.echo, heirloomSelection: { rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }, qualityRankBonus: 2 } }
+  - { kind: fallen-champion-template, id: fallen-champion-template.core, name: Deep's Champion, tags: [], fallbackMonsterId: monster.guard, fallbackItemId: item.fallback-relic, minimumHealth: 10, maximumHealth: 200, attributeMaximum: 30, damageMaximum: 30, abilityLimit: 3, echoAppearanceChance: 0.08, maximumEchoesPerRun: 2, echoHealthPercent: 65, echoDamagePercent: 70, echoDefensePercent: 80, echoAbilityLimit: 2, echoLootTableId: loot-table.echo, heirloomSelection: { rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }, qualityRankBonus: 2 }, appeasement: { classFavors: {}, causelessCategories: [], defaultCategories: [food] } }
 `;
     expect(
       parseContentFile({ path: 'population.yaml', source }).map((entry) => entry.kind),
@@ -638,7 +638,7 @@ entries:
   it('applies defaults to a strict monster entry', () => {
     const [entry] = parseContentFile({
       path: 'monsters/rat.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -674,7 +674,7 @@ entries:
   it('parses a monster loot table and drop chance', () => {
     const [entry] = parseContentFile({
       path: 'monsters/rat.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -709,7 +709,7 @@ entries:
   });
 
   it('rejects a monster dropChance outside 0..1', () => {
-    const source = `schemaVersion: 12
+    const source = `schemaVersion: 13
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -740,7 +740,7 @@ entries:
   it('parses strict timed and permanent condition definitions', () => {
     const entries = parseContentFile({
       path: 'conditions/control.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - kind: condition
     id: condition.stunned
@@ -776,7 +776,7 @@ entries:
   it('parses an optional condition mitigation block (armor and per-damage-type resistance)', () => {
     const entries = parseContentFile({
       path: 'conditions/ward.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - kind: condition
     id: condition.shielded
@@ -815,7 +815,7 @@ entries:
       /mitigation\.resistancePerStack\.fire/i,
     ],
   ])('rejects condition mitigation with %s', (_label, replacement, message) => {
-    const source = `schemaVersion: 12
+    const source = `schemaVersion: 13
 entries:
   - kind: condition
     id: condition.shielded
@@ -835,7 +835,7 @@ entries:
   });
 
   it('rejects a negative armorPerStack mitigation value', () => {
-    const source = `schemaVersion: 12
+    const source = `schemaVersion: 13
 entries:
   - kind: condition
     id: condition.shielded
@@ -883,7 +883,7 @@ entries:
       /maximumStacks/i,
     ],
   ])('rejects condition with %s', (_label, replacement, message) => {
-    const base = `schemaVersion: 12
+    const base = `schemaVersion: 13
 entries:
   - kind: condition
     id: condition.stunned
@@ -909,7 +909,7 @@ entries:
   it('parses strict item, spell, trap, loot-table, and balance entries', () => {
     const entries = parseContentFile({
       path: 'gameplay.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, artifact: null, identification: { mode: known, poolId: null }, effects: [] }
   - { kind: spell, id: spell.mend, name: Mend, tags: [], targetingId: target.self, range: 0, actionCost: 100, weaveCost: 2, effects: [{ effectId: effect.heal, parameters: { dice: { count: 1, sides: 4, bonus: 0 } } }] }
@@ -932,7 +932,7 @@ entries:
   it('parses an optional item description, leaving it absent by default', () => {
     const withDescription = parseContentFile({
       path: 'gameplay.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", description: "A notched blade that has outlived several owners.", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, artifact: null, identification: { mode: known, poolId: null }, effects: [] }
 `,
@@ -943,7 +943,7 @@ entries:
 
     const withoutDescription = parseContentFile({
       path: 'gameplay.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, artifact: null, identification: { mode: known, poolId: null }, effects: [] }
 `,
@@ -953,7 +953,7 @@ entries:
 
   it('rejects an item description beyond the 300-character bound', () => {
     const overlong = 'x'.repeat(301);
-    const source = `schemaVersion: 12
+    const source = `schemaVersion: 13
 entries:
   - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", description: "${overlong}", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, artifact: null, identification: { mode: known, poolId: null }, effects: [] }
 `;
@@ -963,7 +963,7 @@ entries:
   it('parses an optional item lore, leaving it absent by default', () => {
     const withLore = parseContentFile({
       path: 'gameplay.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", lore: "Forged in a smithy long since swallowed by the Deep, this blade remembers hands that no longer live.", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, artifact: null, identification: { mode: known, poolId: null }, effects: [] }
 `,
@@ -974,7 +974,7 @@ entries:
 
     const withoutLore = parseContentFile({
       path: 'gameplay.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, artifact: null, identification: { mode: known, poolId: null }, effects: [] }
 `,
@@ -984,7 +984,7 @@ entries:
 
   it('rejects an item lore beyond the 1200-character bound', () => {
     const overlong = 'x'.repeat(1201);
-    const source = `schemaVersion: 12
+    const source = `schemaVersion: 13
 entries:
   - { kind: item, id: item.sword, name: Sword, glyph: "/", color: "#dddddd", lore: "${overlong}", tags: [], minDepth: 1, maxDepth: 20, category: weapon, stackLimit: 1, price: 20, rarity: common, actionCost: 100, equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }, combat: { accuracy: 1, defense: 0, armor: 0, damage: { count: 1, sides: 6, bonus: 0 }, range: 1, ammunitionTag: null }, light: null, artifact: null, identification: { mode: known, poolId: null }, effects: [] }
 `;
@@ -992,7 +992,7 @@ entries:
   });
 
   it('parses optional per-choice loot-table depth bands, leaving them absent by default', () => {
-    const source = `schemaVersion: 12
+    const source = `schemaVersion: 13
 entries:
   - { kind: loot-table, id: loot-table.banded, name: Banded loot, tags: [], rolls: 1, choices: [
       { contentId: item.sword, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 },
@@ -1010,7 +1010,7 @@ entries:
     ['negative minDepth', 'minDepth: -1, maxDepth: 10'],
     ['maxDepth beyond bound', 'minDepth: 0, maxDepth: 1000'],
   ])('rejects an out-of-range loot-table choice depth band (%s)', (_label, band) => {
-    const source = `schemaVersion: 12
+    const source = `schemaVersion: 13
 entries:
   - { kind: loot-table, id: loot-table.banded, name: Banded loot, tags: [], rolls: 1, choices: [
       { contentId: item.sword, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, ${band} }
@@ -1027,7 +1027,7 @@ entries:
     ],
     ['non-positive speed', 'speed: 100', /entries\.monster\.cave-rat\.speed/],
   ])('rejects invalid %s with a stable path', (_name, replacement, path) => {
-    const source = `schemaVersion: 12
+    const source = `schemaVersion: 13
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -1061,7 +1061,7 @@ entries:
       parseContentFile({
         path: 'spell.yaml',
         source:
-          'schemaVersion: 12\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.unknown, range: 1, actionCost: 100, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
+          'schemaVersion: 13\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.unknown, range: 1, actionCost: 100, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
       }),
     ).toThrow(/entries\.spell\.bad\.targetingId/);
   });
@@ -1071,7 +1071,7 @@ entries:
       parseContentFile({
         path: 'spell.yaml',
         source:
-          'schemaVersion: 12\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.self, range: 0, actionCost: -1, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
+          'schemaVersion: 13\nentries: [{kind: spell, id: spell.bad, name: Bad, tags: [], targetingId: target.self, range: 0, actionCost: -1, effects: [{effectId: effect.heal, parameters: {dice: {count: 1, sides: 4, bonus: 0}}}]}]\n',
       }),
     ).toThrow(/entries\.spell\.bad\.actionCost/);
   });
@@ -1079,7 +1079,7 @@ entries:
   it('materializes defaults and derived metadata for a strict vault entry', () => {
     const [entry] = parseContentFile({
       path: 'vaults/test-room.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - kind: vault
     id: vault.test-room
@@ -1123,7 +1123,7 @@ entries:
   it('materializes a locked door and locked chest slot', () => {
     const [entry] = parseContentFile({
       path: 'vaults/locked-room.yaml',
-      source: `schemaVersion: 12
+      source: `schemaVersion: 13
 entries:
   - kind: vault
     id: vault.locked-room
@@ -1191,7 +1191,7 @@ entries:
     expect(() =>
       parseContentFile({
         path: 'vaults/bad-difficulty.yaml',
-        source: `schemaVersion: 12
+        source: `schemaVersion: 13
 entries:
   - kind: vault
     id: vault.bad-difficulty
@@ -1224,7 +1224,7 @@ entries:
     expect(() =>
       parseContentFile({
         path: 'vaults/bad-difficulty-low.yaml',
-        source: `schemaVersion: 12
+        source: `schemaVersion: 13
 entries:
   - kind: vault
     id: vault.bad-difficulty-low
@@ -1257,7 +1257,7 @@ entries:
     expect(() =>
       parseContentFile({
         path: 'monsters/bad.yaml',
-        source: `schemaVersion: 12
+        source: `schemaVersion: 13
 entries:
   - kind: monster
     id: monster.bad
@@ -1290,7 +1290,7 @@ entries:
     try {
       parseContentFile({
         path: 'vaults/bad-room.yaml',
-        source: `schemaVersion: 12
+        source: `schemaVersion: 13
 entries:
   - kind: vault
     id: vault.bad-room
@@ -1342,7 +1342,7 @@ entries:
     try {
       parseContentFile({
         path: 'vaults/invalid-id.yaml',
-        source: `schemaVersion: 12
+        source: `schemaVersion: 13
 entries:
   - kind: vault
     id: "vault.Bad secret"
@@ -1374,7 +1374,7 @@ entries:
     expect(() =>
       parseContentFile({
         path: 'monsters/alias.yaml',
-        source: 'schemaVersion: 12\nentries: &entries [*entries]\n',
+        source: 'schemaVersion: 13\nentries: &entries [*entries]\n',
       }),
     ).toThrow(/alias|YAML/i);
   });
@@ -1384,7 +1384,7 @@ entries:
     try {
       parseContentFile({
         path: 'monsters/tagged.yaml',
-        source: `schemaVersion: 12
+        source: `schemaVersion: 13
 entries: !unsafe
   - kind: monster
     id: monster.tagged
@@ -1432,7 +1432,7 @@ describe('curse content kind', () => {
       overrides.trigger === null
         ? 'null'
         : `{ on: ${on}, chanceBps: ${overrides.chanceBps ?? 5000}, effect: { effectId: ${effectId}, parameters: { damageType: arcane, dice: { count: 1, sides: 3, bonus: 0 } } } }`;
-    return `schemaVersion: 12
+    return `schemaVersion: 13
 entries:
   - kind: curse
     id: curse.hungering-edge
@@ -1455,7 +1455,7 @@ entries:
       .map(([key, value]) => `${key}: ${value}`)
       .join(', ')} }`;
     const artifact = DEFAULT_ARTIFACT.replace('{DRAWBACKS}', drawbackModifiersYaml);
-    return `schemaVersion: 12
+    return `schemaVersion: 13
 entries:
   - kind: spell
     id: spell.test-signature
@@ -1556,5 +1556,95 @@ entries:
     await expect(
       compileSource(artifactSource({ drawbackModifiers: { luck: -1 } })),
     ).rejects.toThrow(/luck/);
+  });
+});
+
+describe('fallen-champion-template appeasement block', () => {
+  async function compileSource(source: string): Promise<{ entries: readonly unknown[] }> {
+    return { entries: parseContentFile({ path: 'champions/test.yaml', source }) };
+  }
+
+  function templateSource(overrides: {
+    readonly classFavors?: Record<string, readonly string[]>;
+    readonly causelessCategories?: readonly string[];
+    readonly defaultCategories?: readonly string[];
+  }): string {
+    const classFavors = overrides.classFavors ?? {
+      loomcaller: ['scroll', 'potion'],
+      lamplighter: ['light', 'fuel'],
+    };
+    const causelessCategories = overrides.causelessCategories ?? ['light'];
+    const defaultCategories = overrides.defaultCategories ?? ['food', 'potion'];
+    const list = (values: readonly string[]) => `[${values.join(', ')}]`;
+    const classFavorsYaml = Object.entries(classFavors)
+      .map(([classTag, categories]) => `        ${classTag}: ${list(categories)}`)
+      .join('\n');
+    return `schemaVersion: 13
+entries:
+  - kind: fallen-champion-template
+    id: fallen-champion-template.core
+    name: The Deep's Champion
+    tags: [boss, champion]
+    fallbackMonsterId: monster.ashen-warden
+    fallbackItemId: item.champion-fallback-relic
+    minimumHealth: 18
+    maximumHealth: 180
+    attributeMaximum: 30
+    damageMaximum: 30
+    abilityLimit: 3
+    echoAppearanceChance: 0.08
+    maximumEchoesPerRun: 2
+    echoHealthPercent: 65
+    echoDamagePercent: 70
+    echoDefensePercent: 80
+    echoAbilityLimit: 2
+    echoLootTableId: loot-table.echo-spoils
+    heirloomSelection:
+      rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }
+      qualityRankBonus: 2
+    appeasement:
+      classFavors:
+${classFavorsYaml || '        {}'}
+      causelessCategories: ${list(causelessCategories)}
+      defaultCategories: ${list(defaultCategories)}
+`;
+  }
+
+  it('compiles a champion template with an appeasement block', async () => {
+    const pack = await compileSource(templateSource({}));
+    const entry = pack.entries.find(
+      (candidate) => (candidate as { kind?: string }).kind === 'fallen-champion-template',
+    );
+    expect(entry).toMatchObject({
+      appeasement: {
+        classFavors: { loomcaller: ['scroll', 'potion'], lamplighter: ['light', 'fuel'] },
+        causelessCategories: ['light'],
+        defaultCategories: ['food', 'potion'],
+      },
+    });
+  });
+
+  it('rejects an unknown item category in classFavors', async () => {
+    await expect(
+      compileSource(templateSource({ classFavors: { loomcaller: ['sandwich'] } })),
+    ).rejects.toThrow(/sandwich/);
+  });
+
+  it('rejects an empty defaultCategories, which would make a haunt unappeasable', async () => {
+    await expect(compileSource(templateSource({ defaultCategories: [] }))).rejects.toThrow(
+      /defaultCategories/,
+    );
+  });
+
+  it('rejects a currency category, which is never a valid offering', async () => {
+    await expect(
+      compileSource(templateSource({ defaultCategories: ['currency'] })),
+    ).rejects.toThrow(/currency/);
+  });
+
+  it('rejects duplicate categories inside one favor list', async () => {
+    await expect(
+      compileSource(templateSource({ classFavors: { warden: ['light', 'light'] } })),
+    ).rejects.toThrow(/duplicate/);
   });
 });

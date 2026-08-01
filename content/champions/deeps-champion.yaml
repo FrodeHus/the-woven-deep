@@ -1,4 +1,4 @@
-schemaVersion: 12
+schemaVersion: 13
 entries:
   - kind: fallen-champion-template
     id: fallen-champion-template.core
@@ -21,3 +21,12 @@ entries:
     heirloomSelection:
       rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 }
       qualityRankBonus: 2
+    appeasement:
+      classFavors:
+        wayfarer: [food, fuel]
+        lamplighter: [light, fuel]
+        loomcaller: [scroll, potion]
+        archivist: [scroll, misc]
+        warden: [light, armor]
+      causelessCategories: [light]
+      defaultCategories: [food, potion]

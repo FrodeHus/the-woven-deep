@@ -129,6 +129,11 @@ const fallenChampionTemplate: FallenChampionTemplateContentEntry = {
     rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 },
     qualityRankBonus: 2,
   },
+  appeasement: {
+    classFavors: {},
+    causelessCategories: [],
+    defaultCategories: ['food'],
+  },
 };
 
 const fallbackItem: ItemContentEntry = {
