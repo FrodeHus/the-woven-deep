@@ -33,7 +33,8 @@ describe('STEP_LABELS', () => {
       4: 'Attributes',
       5: 'Origin',
       6: 'Traits',
-      7: 'Review',
+      7: 'Mode',
+      8: 'Review',
     });
   });
 });
@@ -45,7 +46,7 @@ describe('StepMenu', () => {
     for (const label of Object.values(STEP_LABELS)) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
-    expect(screen.getAllByRole('option')).toHaveLength(7);
+    expect(screen.getAllByRole('option')).toHaveLength(8);
   });
 
   it('marks the active step selected', () => {

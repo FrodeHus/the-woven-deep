@@ -13,7 +13,8 @@ export const STEP_LABELS: Readonly<Record<WizardState['step'], string>> = {
   4: 'Attributes',
   5: 'Origin',
   6: 'Traits',
-  7: 'Review',
+  7: 'Mode',
+  8: 'Review',
 };
 
 const METHOD_LABELS: Readonly<Record<string, string>> = {
@@ -21,13 +22,13 @@ const METHOD_LABELS: Readonly<Record<string, string>> = {
   roll: 'ROLL 3D6',
 };
 
-const STEPS: readonly WizardState['step'][] = [1, 2, 3, 4, 5, 6, 7];
+const STEPS: readonly WizardState['step'][] = [1, 2, 3, 4, 5, 6, 7, 8];
 
-/** Whether a given step's own field has been chosen -- drives that row's status dot. Step 7
+/** Whether a given step's own field has been chosen -- drives that row's status dot. Step 8
  * (Review) has no field of its own, so it reuses the "everything earlier is satisfied" check.
  * Delegates to the reducer's `stepIsSatisfied` so this stays in sync with `next`'s gating. */
 function stepIsSet(step: WizardState['step'], state: WizardState): boolean {
-  if (step === 7) return STEPS.slice(0, 6).every((earlier) => stepIsSet(earlier, state));
+  if (step === 8) return STEPS.slice(0, 7).every((earlier) => stepIsSet(earlier, state));
   return stepIsSatisfied(state, step);
 }
 
@@ -77,6 +78,8 @@ function currentValue(
     case 6:
       return `${state.traitIds.length}/2 traits`;
     case 7:
+      return state.mode === 'wanderer' ? 'Wanderer' : 'Classic';
+    case 8:
       return '—';
   }
 }

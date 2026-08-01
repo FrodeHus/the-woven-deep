@@ -31,9 +31,10 @@ function wayfarerKit(): { kitId: string; name: string } {
   return entry.kits[0]!;
 }
 
-/** Drives the full seven-step console via clicks, up to (but not including) the final Weave
- * click, so callers can assert on state before confirming. */
-async function driveToReview(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+/** Drives the console through Identity, Calling, Kit, Attributes, and Origin via clicks, then
+ * chooses a trait on the Traits step -- stopping there (step 6), so callers can assert on that
+ * state or advance (via their own NEXT click(s)) into Mode and/or Review. */
+async function completeThroughTraits(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await user.type(screen.getByLabelText('Name'), 'Rin');
   await user.click(screen.getByRole('button', { name: /NEXT/ }));
 
@@ -52,7 +53,14 @@ async function driveToReview(user: ReturnType<typeof userEvent.setup>): Promise<
   await user.click(screen.getByRole('button', { name: /NEXT/ }));
 
   await user.click(screen.getByRole('option', { name: /Keen-eyed/ }));
-  await user.click(screen.getByRole('button', { name: /NEXT/ }));
+}
+
+/** Drives the full eight-step console via clicks, up to (but not including) the final Weave
+ * click, so callers can assert on state before confirming. Leaves Mode at its default (Classic). */
+async function driveToReview(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  await completeThroughTraits(user);
+  await user.click(screen.getByRole('button', { name: /NEXT/ })); // Traits -> Mode
+  await user.click(screen.getByRole('button', { name: /NEXT/ })); // Mode -> Review
 }
 
 describe('ChargenScreen (console)', () => {
@@ -64,7 +72,7 @@ describe('ChargenScreen (console)', () => {
     expect(screen.getByRole('region', { name: 'Hero record' })).toBeInTheDocument();
   });
 
-  it('WEAVE is disabled until step 7 with valid choices, and enables once the console reaches Review', async () => {
+  it('WEAVE is disabled until step 8 with valid choices, and enables once the console reaches Review', async () => {
     const user = userEvent.setup();
     render(<ChargenScreen pack={pack} seed={SEED} onConfirm={vi.fn()} />);
 
@@ -73,7 +81,7 @@ describe('ChargenScreen (console)', () => {
 
     await driveToReview(user);
 
-    expect(screen.getByLabelText(/Step 7 of 7/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Step 8 of 8/)).toBeInTheDocument();
     expect(within(heroRecord).getByRole('button', { name: /WEAVE/ })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'WEAVE ▸' })).toBeEnabled();
   });
@@ -104,7 +112,7 @@ describe('ChargenScreen (console)', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it('clicking DESCEND calls onConfirm with the wizardChoices payload + portrait glyph', async () => {
+  it('clicking DESCEND calls onConfirm with the wizardChoices payload + portrait glyph + mode', async () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
     render(<ChargenScreen pack={pack} seed={SEED} onConfirm={onConfirm} />);
@@ -116,7 +124,7 @@ describe('ChargenScreen (console)', () => {
     await user.click(screen.getByRole('button', { name: 'DESCEND' }));
 
     expect(onConfirm).toHaveBeenCalledTimes(1);
-    const [payload, portraitGlyph] = onConfirm.mock.calls[0] as [HeroChoices, string];
+    const [payload, portraitGlyph, mode] = onConfirm.mock.calls[0] as [HeroChoices, string, string];
     expect(payload).toEqual({
       name: 'Rin',
       method: 'roll',
@@ -128,6 +136,54 @@ describe('ChargenScreen (console)', () => {
     });
     expect(typeof portraitGlyph).toBe('string');
     expect(portraitGlyph.length).toBeGreaterThan(0);
+    expect(mode).toBe('classic');
+  });
+
+  it('shows the Mode step between Traits and Review with Classic preselected', async () => {
+    const user = userEvent.setup();
+    render(<ChargenScreen pack={pack} seed={SEED} onConfirm={vi.fn()} />);
+
+    await completeThroughTraits(user);
+    await user.click(screen.getByRole('button', { name: /NEXT/ }));
+
+    expect(screen.getByRole('heading', { name: 'Mode' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Classic/ })).toBeChecked();
+    expect(
+      screen.getByText('The true Deep. Death is final. The Hall remembers.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Walk the Deep unbound. Death is a setback — rise again at the floor's mouth. The Hall does not watch.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('carries the chosen mode into onConfirm', async () => {
+    const user = userEvent.setup();
+    const onConfirm = vi.fn();
+    render(<ChargenScreen pack={pack} seed={SEED} onConfirm={onConfirm} />);
+
+    await completeThroughTraits(user);
+    await user.click(screen.getByRole('button', { name: /NEXT/ }));
+    await user.click(screen.getByRole('radio', { name: /Wanderer/ }));
+    await user.click(screen.getByRole('button', { name: /NEXT/ }));
+    await user.click(screen.getByRole('button', { name: 'WEAVE ▸' }));
+    await user.click(screen.getByRole('button', { name: 'DESCEND' }));
+
+    expect(onConfirm).toHaveBeenCalledWith(expect.any(Object), expect.any(String), 'wanderer');
+  });
+
+  it('summarises the mode on the review step', async () => {
+    const user = userEvent.setup();
+    render(<ChargenScreen pack={pack} seed={SEED} onConfirm={vi.fn()} />);
+
+    await completeThroughTraits(user);
+    await user.click(screen.getByRole('button', { name: /NEXT/ }));
+    await user.click(screen.getByRole('radio', { name: /Wanderer/ }));
+    await user.click(screen.getByRole('button', { name: /NEXT/ }));
+
+    const review = screen.getByRole('region', { name: 'Review' });
+    expect(within(review).getByText(/Wanderer/)).toBeInTheDocument();
   });
 
   it('Escape cancels THE LOOM ACCEPTS modal without calling onConfirm', async () => {

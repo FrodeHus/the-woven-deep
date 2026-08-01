@@ -13,6 +13,7 @@ import {
   type DerivedStatModifier,
   type HeroChoices,
   type OpaqueId,
+  type RunMode,
   type Uint32State,
 } from '@woven-deep/engine';
 import { backgroundById, balanceEntry, classById, traitById } from './pack-queries.js';
@@ -47,7 +48,7 @@ export function portraitGlyphColor(glyph: string): string {
 const MAX_TRAITS = 2;
 
 export interface WizardState {
-  readonly step: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+  readonly step: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
   readonly name: string;
   readonly portraitGlyph: string;
   readonly method: 'roll' | 'point-buy' | null;
@@ -63,6 +64,9 @@ export interface WizardState {
    * wizard itself, not read live from settings, so toggling it mid-wizard doesn't require a round
    * trip through `App`'s settings state. */
   readonly onboardingEnabled: boolean;
+  /** Run-scoped, so it is NOT part of `HeroChoices` -- it rides beside the choices at confirm,
+   * exactly like `portraitGlyph`. Defaults to Classic. */
+  readonly mode: RunMode;
 }
 
 export type WizardAction =
@@ -77,6 +81,7 @@ export type WizardAction =
   | { type: 'choose-background'; backgroundId: OpaqueId }
   | { type: 'toggle-trait'; traitId: OpaqueId }
   | { type: 'set-onboarding-enabled'; enabled: boolean }
+  | { type: 'choose-mode'; mode: RunMode }
   | { type: 'next' }
   | { type: 'back' };
 
@@ -106,6 +111,7 @@ export function initialWizardState(seed: Uint32State, onboardingEnabled = true):
     backgroundId: null,
     traitIds: [],
     onboardingEnabled,
+    mode: 'classic',
   };
 }
 
@@ -122,7 +128,7 @@ export function nameIsValid(name: string): boolean {
   );
 }
 
-/** Whether the given step's own field has been chosen. Step 7 (Review) has no field of its own
+/** Whether the given step's own field has been chosen. Step 8 (Review) has no field of its own
  * and is terminal, so `next` never advances past it -- this is the single source of truth for
  * both the reducer's `next` gating and any UI (e.g. `StepMenu`) that needs to know per-step
  * completion without re-implementing these rules. */
@@ -141,6 +147,8 @@ export function stepIsSatisfied(state: WizardState, step: WizardState['step']): 
     case 6:
       return true; // Traits (optional, capped in toggle-trait)
     case 7:
+      return true; // Mode (always satisfied -- Classic is preselected)
+    case 8:
       return false; // Review (terminal)
   }
 }
@@ -245,8 +253,11 @@ export function wizardReduce(
     case 'set-onboarding-enabled':
       return { ...state, onboardingEnabled: action.enabled };
 
+    case 'choose-mode':
+      return { ...state, mode: action.mode };
+
     case 'next': {
-      if (state.step >= 7 || !stepIsSatisfied(state, state.step)) return state;
+      if (state.step >= 8 || !stepIsSatisfied(state, state.step)) return state;
       return { ...state, step: (state.step + 1) as WizardState['step'] };
     }
 
@@ -259,7 +270,7 @@ export function wizardReduce(
 
 export function wizardChoices(state: WizardState): HeroChoices | null {
   if (
-    state.step !== 7 ||
+    state.step !== 8 ||
     !nameIsValid(state.name) ||
     state.method === null ||
     state.attributes === null ||
@@ -278,6 +289,12 @@ export function wizardChoices(state: WizardState): HeroChoices | null {
     backgroundId: state.backgroundId,
     traitIds: state.traitIds,
   };
+}
+
+/** The confirmed run mode, or `null` when the wizard is not on the terminal Review step -- the
+ * exact `wizardChoices` gating, so a caller can read both with one `null` check each. */
+export function wizardMode(state: WizardState): RunMode | null {
+  return wizardChoices(state) === null ? null : state.mode;
 }
 
 /** Live derived-stats preview: mirrors `heroFromChoices`'s modifier merge by handing

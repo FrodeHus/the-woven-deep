@@ -5,4 +5,5 @@ export { CallingStep } from './steps/CallingStep.js';
 export { KitStep } from './steps/KitStep.js';
 export { OriginStep } from './steps/OriginStep.js';
 export { TraitsStep } from './steps/TraitsStep.js';
+export { ModeStep } from './steps/ModeStep.js';
 export { ReviewStep } from './steps/ReviewStep.js';

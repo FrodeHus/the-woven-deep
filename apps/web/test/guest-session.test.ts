@@ -106,6 +106,33 @@ describe('GuestSession', () => {
     expect(session.getSnapshot().projection.hero.name).toBe(DEFAULT_GUEST_HERO.name);
   });
 
+  it('creates a wanderer run when constructed with that mode', () => {
+    const storage = fakeStorage();
+    const session = new GuestSession({
+      pack,
+      storage,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      startFresh: true,
+      mode: 'wanderer',
+    });
+
+    expect(session.getSnapshot().projection.mode).toBe('wanderer');
+  });
+
+  it('defaults to classic when no mode is given', () => {
+    const storage = fakeStorage();
+    const session = new GuestSession({
+      pack,
+      storage,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      startFresh: true,
+    });
+
+    expect(session.getSnapshot().projection.mode).toBe('classic');
+  });
+
   it('restores a stored run byte-for-byte', () => {
     const storage = fakeStorage();
     const first = new GuestSession({ pack, storage, seed: SEED });

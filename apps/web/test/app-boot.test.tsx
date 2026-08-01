@@ -261,9 +261,9 @@ function wayfarerKit(): { kitId: string; name: string } {
   return entry.kits[0]!;
 }
 
-/** Drives the full seven-step console via clicks, exactly like `chargen-screen.test.tsx`, up to
+/** Drives the full eight-step console via clicks, exactly like `chargen-screen.test.tsx`, up to
  * (but not including) the final Weave click, so callers can assert on the portrait choice or
- * intercept the Weave click themselves. */
+ * intercept the Weave click themselves. Leaves Mode at its default (Classic). */
 async function driveWizardToSummary(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await user.type(screen.getByLabelText('Name'), 'Rin');
   await user.click(screen.getByRole('button', { name: /NEXT/ }));
@@ -283,9 +283,10 @@ async function driveWizardToSummary(user: ReturnType<typeof userEvent.setup>): P
   await user.click(screen.getByRole('button', { name: /NEXT/ }));
 
   await user.click(screen.getByRole('option', { name: /Keen-eyed/ }));
-  await user.click(screen.getByRole('button', { name: /NEXT/ }));
+  await user.click(screen.getByRole('button', { name: /NEXT/ })); // Traits -> Mode
+  await user.click(screen.getByRole('button', { name: /NEXT/ })); // Mode -> Review
 
-  expect(screen.getByLabelText(/Step 7 of 7/)).toBeInTheDocument();
+  expect(screen.getByLabelText(/Step 8 of 8/)).toBeInTheDocument();
 }
 
 /** Clicks WEAVE, then confirms the character through the LOOM ACCEPTS modal's DESCEND button. */
@@ -517,7 +518,7 @@ describe('App boot flow', () => {
     render(<App fetcher={packFetcher()} storage={fakeStorage()} />);
 
     await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
-    expect(await screen.findByLabelText(/Step 1 of 7/)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Step 1 of 8/)).toBeInTheDocument();
   });
 
   it('completing the wizard constructs a GuestSession whose hero matches the choices', async () => {
@@ -526,7 +527,7 @@ describe('App boot flow', () => {
     render(<App fetcher={packFetcher()} storage={storage} />);
 
     await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
-    await screen.findByLabelText(/Step 1 of 7/);
+    await screen.findByLabelText(/Step 1 of 8/);
     await driveWizardToSummary(user);
     await weaveAndDescend(user);
 
@@ -550,7 +551,7 @@ describe('App boot flow', () => {
     render(<App fetcher={packFetcher()} storage={storage} />);
 
     await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
-    await screen.findByLabelText(/Step 1 of 7/);
+    await screen.findByLabelText(/Step 1 of 8/);
 
     // Pick a non-default portrait so persistence is actually exercised (not just a stale default).
     // The portrait buttons' visible glyph is `aria-hidden`, so they carry no accessible name —
@@ -588,7 +589,7 @@ describe('App boot flow', () => {
 
     render(<App fetcher={packFetcher()} storage={fakeStorage()} />);
     await user.click(await screen.findByRole('option', { name: /enter the deep/i }));
-    await screen.findByLabelText(/Step 1 of 7/);
+    await screen.findByLabelText(/Step 1 of 8/);
     await driveWizardToSummary(user);
     await weaveAndDescend(user);
 
@@ -692,7 +693,7 @@ describe('App finalize-once (concluded run)', () => {
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('option', { name: 'New Hero' }));
-    await screen.findByLabelText(/Step 1 of 7/);
+    await screen.findByLabelText(/Step 1 of 8/);
     await driveWizardToSummary(user);
     await weaveAndDescend(user);
 

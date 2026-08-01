@@ -1,6 +1,6 @@
 import { useMemo, useState, type JSX } from 'react';
 import type { CompiledContentPack } from '@woven-deep/content';
-import type { HeroChoices, Uint32State } from '@woven-deep/engine';
+import type { HeroChoices, RunMode, Uint32State } from '@woven-deep/engine';
 import { DEFAULT_SETTINGS, type Settings } from '../../session/settings.js';
 import {
   initialWizardState,
@@ -19,6 +19,7 @@ import {
   CallingStep,
   IdentityStep,
   KitStep,
+  ModeStep,
   OriginStep,
   ReviewStep,
   TraitsStep,
@@ -36,7 +37,7 @@ export interface ChargenScreenProps {
   readonly onChangeSettings?: (next: Settings) => void;
   /** The portrait glyph is client-only cosmetic state (never engine data — see `PORTRAIT_GLYPHS`),
    * so it rides beside `HeroChoices` here rather than inside it. */
-  readonly onConfirm: (choices: HeroChoices, portraitGlyph: string) => void;
+  readonly onConfirm: (choices: HeroChoices, portraitGlyph: string, mode: RunMode) => void;
   /** The profile's earned, content-locked class ids (`AccountState.unlockedClassIds`), threaded
    * into `CallingStep` so an unlocked class is selectable there. Optional/defaults to `[]` so
    * every pre-existing caller/test (guests, none of which unlock anything) keeps compiling. */
@@ -72,7 +73,7 @@ export function ChargenScreen({
 
   const canAdvance = wizardReduce(state, { type: 'next' }, context) !== state;
   const choices = wizardChoices(state);
-  const canWeave = state.step === 7 && choices !== null;
+  const canWeave = state.step === 8 && choices !== null;
 
   const weave = (): void => {
     if (!choices) return;
@@ -85,7 +86,7 @@ export function ChargenScreen({
       onChangeSettings({ ...settings, onboarding: state.onboardingEnabled ? 'on' : 'off' });
     }
     setLoomOpen(false);
-    onConfirm(choices, state.portraitGlyph);
+    onConfirm(choices, state.portraitGlyph, state.mode);
   };
 
   const onJump = (target: WizardState['step']): void => {
@@ -125,10 +126,10 @@ export function ChargenScreen({
         </div>
         <div className="flex min-h-0 flex-col gap-2 rounded-md border border-line bg-surface p-3">
           <div
-            aria-label={`Step ${state.step} of 7: ${STEP_LABELS[state.step]}`}
+            aria-label={`Step ${state.step} of 8: ${STEP_LABELS[state.step]}`}
             className="flex flex-col gap-1 border-b border-line pb-2"
           >
-            <span className="text-[10px] tracking-[2px] text-subtle">{`STEP ${state.step} OF 7`}</span>
+            <span className="text-[10px] tracking-[2px] text-subtle">{`STEP ${state.step} OF 8`}</span>
             <h1 className="m-0 font-serif text-xl text-fg-strong">{STEP_LABELS[state.step]}</h1>
             <span className="text-xs text-muted">{STEP_SUBTITLES[state.step]}</span>
           </div>
@@ -139,7 +140,8 @@ export function ChargenScreen({
             {state.step === 4 && <AttributesStep {...stepProps} />}
             {state.step === 5 && <OriginStep {...stepProps} />}
             {state.step === 6 && <TraitsStep {...stepProps} />}
-            {state.step === 7 && <ReviewStep {...stepProps} />}
+            {state.step === 7 && <ModeStep {...stepProps} />}
+            {state.step === 8 && <ReviewStep {...stepProps} />}
           </main>
           <nav className="flex items-center justify-between gap-2 border-t border-line pt-2">
             <Button
@@ -151,8 +153,8 @@ export function ChargenScreen({
             >
               {'◂ BACK'}
             </Button>
-            <span className="text-sm text-subtle">{`${state.step} / 7`}</span>
-            {state.step < 7 && (
+            <span className="text-sm text-subtle">{`${state.step} / 8`}</span>
+            {state.step < 8 && (
               <Button
                 type="button"
                 className="border border-accent bg-raised text-accent-strong hover:bg-accent hover:text-deep"
@@ -162,7 +164,7 @@ export function ChargenScreen({
                 {'NEXT ▸'}
               </Button>
             )}
-            {state.step === 7 && (
+            {state.step === 8 && (
               <Button
                 type="button"
                 className="border border-accent bg-raised text-accent-strong hover:bg-accent hover:text-deep"

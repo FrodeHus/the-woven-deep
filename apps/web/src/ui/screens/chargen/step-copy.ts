@@ -9,7 +9,8 @@ export const STEP_SUBTITLES: Readonly<Record<WizardState['step'], string>> = {
   4: 'Spend the budget, or let the Loom cast the dice.',
   5: 'Where you came from. It follows you down.',
   6: 'Up to two marks. Or none — purity is also a choice.',
-  7: 'Read the record. Then pull the thread.',
+  7: 'How the Deep will hold you. Locked once you descend.',
+  8: 'Read the record. Then pull the thread.',
 };
 
 /** The flavor lines under the left-rail step list, below a top-bordered spacer. */

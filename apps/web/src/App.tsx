@@ -5,6 +5,7 @@ import {
   newRunRecords,
   type HeroChoices,
   type RunConclusionProjection,
+  type RunMode,
   type RunRecordRepository,
   type Uint32State,
 } from '@woven-deep/engine';
@@ -726,7 +727,7 @@ export function App({
           settings={settings}
           onChangeSettings={handleSettingsChange}
           unlockedClassIds={account.unlockedClassIds}
-          onConfirm={(choices: HeroChoices, glyph: string) => {
+          onConfirm={(choices: HeroChoices, glyph: string, mode: RunMode) => {
             let hero: ReturnType<typeof heroFromChoices>;
             try {
               hero = heroFromChoices({ pack, choices });
@@ -754,6 +755,7 @@ export function App({
                 startFresh: true,
                 localStorage: localStorageInstance,
                 records: recordsFor(pack),
+                mode,
               }),
             );
             router.toPlay();

@@ -8,6 +8,7 @@ import {
   nameIsValid,
   stepIsSatisfied,
   wizardChoices,
+  wizardMode,
   wizardPreview,
   wizardReduce,
   type WizardAction,
@@ -51,6 +52,26 @@ function wayfarerKitId(): string {
     (candidate) => candidate.kind === 'class' && candidate.id === WAYFARER,
   );
   return (entry as { kits: readonly { kitId: string }[] }).kits[0]!.kitId;
+}
+
+/** A wizard state with every step through Traits (6) filled in, sitting at step 6 -- reused
+ * across tests that need a fully-fillable state without re-deriving the field/step sequence
+ * each time. `mode` stays at its default ('classic'); callers override via `{ ...state, mode }`. */
+function completeWizardState(): WizardState {
+  return dispatchAll(initialWizardState(SEED), [
+    { type: 'set-name', name: 'Rin' },
+    { type: 'next' },
+    { type: 'choose-class', classId: WAYFARER },
+    { type: 'next' },
+    { type: 'choose-kit', kitId: wayfarerKitId() },
+    { type: 'next' },
+    { type: 'choose-method', method: 'roll' },
+    { type: 'roll' },
+    { type: 'next' },
+    { type: 'choose-background', backgroundId: CARAVAN_GUARD },
+    { type: 'next' },
+    { type: 'toggle-trait', traitId: KEEN_EYED },
+  ]);
 }
 
 describe('wizardReduce', () => {
@@ -329,26 +350,17 @@ describe('wizardReduce', () => {
     expect(stillAtOne).toBe(beforeStart);
   });
 
-  it('produces null wizardChoices until step 7 is reached with every selection made, then matches the selections', () => {
-    const state = dispatchAll(initialWizardState(SEED), [
-      { type: 'set-name', name: 'Rin' },
-      { type: 'next' },
-      { type: 'choose-class', classId: WAYFARER },
-      { type: 'next' },
-      { type: 'choose-kit', kitId: wayfarerKitId() },
-      { type: 'next' },
-      { type: 'choose-method', method: 'roll' },
-      { type: 'roll' },
-      { type: 'next' },
-      { type: 'choose-background', backgroundId: CARAVAN_GUARD },
-      { type: 'next' },
-      { type: 'toggle-trait', traitId: KEEN_EYED },
-    ]);
+  it('produces null wizardChoices until step 8 is reached with every selection made, then matches the selections', () => {
+    const state = completeWizardState();
     expect(state.step).toBe(6);
     expect(wizardChoices(state)).toBeNull();
 
-    const atSummary = wizardReduce(state, { type: 'next' }, context());
-    expect(atSummary.step).toBe(7);
+    const atMode = wizardReduce(state, { type: 'next' }, context());
+    expect(atMode.step).toBe(7);
+    expect(wizardChoices(atMode)).toBeNull();
+
+    const atSummary = wizardReduce(atMode, { type: 'next' }, context());
+    expect(atSummary.step).toBe(8);
 
     const choices = wizardChoices(atSummary);
     expect(choices).not.toBeNull();
@@ -361,6 +373,53 @@ describe('wizardReduce', () => {
       backgroundId: CARAVAN_GUARD,
       traitIds: [KEEN_EYED],
     });
+  });
+
+  it('starts in classic mode', () => {
+    expect(initialWizardState(SEED).mode).toBe('classic');
+  });
+
+  it('chooses wanderer', () => {
+    const state = wizardReduce(
+      initialWizardState(SEED),
+      { type: 'choose-mode', mode: 'wanderer' },
+      context(),
+    );
+    expect(state.mode).toBe('wanderer');
+  });
+
+  it('treats the mode step as always satisfied, so next never blocks on it', () => {
+    expect(stepIsSatisfied({ ...initialWizardState(SEED), step: 7 }, 7)).toBe(true);
+  });
+
+  it('advances Traits -> Mode -> Review and stops at Review', () => {
+    const atTraits = { ...completeWizardState(), step: 6 as const };
+    const atMode = wizardReduce(atTraits, { type: 'next' }, context());
+    expect(atMode.step).toBe(7);
+    const atReview = wizardReduce(atMode, { type: 'next' }, context());
+    expect(atReview.step).toBe(8);
+    expect(wizardReduce(atReview, { type: 'next' }, context())).toBe(atReview);
+  });
+
+  it('goes back from Review to Mode', () => {
+    const atReview = { ...completeWizardState(), step: 8 as const };
+    expect(wizardReduce(atReview, { type: 'back' }, context()).step).toBe(7);
+  });
+
+  it('returns choices only on step 8', () => {
+    expect(wizardChoices({ ...completeWizardState(), step: 7 })).toBeNull();
+    expect(wizardChoices({ ...completeWizardState(), step: 8 })).not.toBeNull();
+  });
+
+  it('exposes the confirmed mode beside the choices', () => {
+    const state = { ...completeWizardState(), step: 8 as const, mode: 'wanderer' as const };
+    expect(wizardMode(state)).toBe('wanderer');
+    expect(wizardMode({ ...state, step: 7 })).toBeNull();
+  });
+
+  it('never leaks the mode into HeroChoices', () => {
+    const choices = wizardChoices({ ...completeWizardState(), step: 8, mode: 'wanderer' });
+    expect(choices).not.toHaveProperty('mode');
   });
 
   it('reflects background and trait modifiers in the live preview', () => {
@@ -392,7 +451,7 @@ describe('wizardReduce', () => {
     expect(wizardPreview(state, pack)).toBeNull();
   });
 
-  it('advances Identity(1) -> Calling(2) -> Kit(3) -> Attributes(4) -> Origin(5) -> Traits(6) -> Review(7)', () => {
+  it('advances Identity(1) -> Calling(2) -> Kit(3) -> Attributes(4) -> Origin(5) -> Traits(6) -> Mode(7) -> Review(8)', () => {
     let s = initialWizardState(SEED);
     expect(wizardReduce(s, { type: 'next' }, context())).toBe(s); // blocked: no name
 
@@ -424,6 +483,10 @@ describe('wizardReduce', () => {
     // traits optional -- step 6 advances with zero traits selected
     s = wizardReduce(s, { type: 'next' }, context());
     expect(s.step).toBe(7);
+
+    // mode is preselected (Classic) -- step 7 advances without an explicit choice
+    s = wizardReduce(s, { type: 'next' }, context());
+    expect(s.step).toBe(8);
 
     expect(wizardChoices(s)).toMatchObject({
       name: 'Ash',
@@ -516,13 +579,16 @@ describe('stepIsSatisfied', () => {
     expect(stepIsSatisfied(empty, 6)).toBe(true);
     expect(stepIsSatisfied({ ...empty, traitIds: [KEEN_EYED] }, 6)).toBe(true);
 
-    // Review (step 7) is terminal -- next never advances past it.
-    expect(stepIsSatisfied(empty, 7)).toBe(false);
+    // Mode (step 7) is preselected (Classic) -- always satisfied.
+    expect(stepIsSatisfied(empty, 7)).toBe(true);
+
+    // Review (step 8) is terminal -- next never advances past it.
+    expect(stepIsSatisfied(empty, 8)).toBe(false);
   });
 
   it('agrees with next-gating: next only advances a step when stepIsSatisfied is true', () => {
     let s = initialWizardState(SEED);
-    for (const step of [1, 2, 3, 4, 5, 6] as const) {
+    for (const step of [1, 2, 3, 4, 5, 6, 7] as const) {
       expect(wizardReduce(s, { type: 'next' }, context()) !== s).toBe(stepIsSatisfied(s, step));
       if (!stepIsSatisfied(s, step)) {
         // Fill in whatever this step needs, matching the full-flow test above.
@@ -542,6 +608,8 @@ describe('stepIsSatisfied', () => {
                 return [{ type: 'choose-background', backgroundId: CARAVAN_GUARD }] as const;
               case 6:
                 return [] as const;
+              case 7:
+                return [] as const;
             }
           })(),
         );
@@ -549,6 +617,6 @@ describe('stepIsSatisfied', () => {
       expect(stepIsSatisfied(s, step)).toBe(true);
       s = wizardReduce(s, { type: 'next' }, context());
     }
-    expect(s.step).toBe(7);
+    expect(s.step).toBe(8);
   });
 });

@@ -25,6 +25,7 @@ import {
   type PublicDecision,
   type PublicEvent,
   type RunConclusionProjection,
+  type RunMode,
   type RunRecordRepository,
   type StoredHallRecord,
   type Uint32State,
@@ -102,6 +103,7 @@ export class GuestSession implements RunSession {
   private readonly storage: SessionStorageLike;
   private readonly hero: NewRunHero;
   private readonly records: (() => NewRunRecordsInput) | undefined;
+  private readonly mode: RunMode;
   private run: ActiveRun;
   private commandSequence: number;
   private log: readonly LogLine[] = [];
@@ -147,6 +149,11 @@ export class GuestSession implements RunSession {
        * begun after this page life's own finalize inherits that finalize's record. Omitting it
        * creates history-free runs (the pre-records behaviour). */
       records?: () => NewRunRecordsInput;
+      /** The run mode to create a fresh run with -- defaults to `'classic'`, threaded into every
+       * `createNewRun` call inside `freshRun` (including the Hall-corruption retry, so it can't
+       * silently downgrade the mode). Restored runs keep whatever mode they were created with;
+       * this only affects fresh boots. */
+      mode?: RunMode;
     }>,
   ) {
     this.pack = input.pack;
@@ -156,6 +163,7 @@ export class GuestSession implements RunSession {
     this.onboarding = onboardingLoad.state;
     this.hero = input.hero ?? DEFAULT_GUEST_HERO;
     this.records = input.records;
+    this.mode = input.mode ?? 'classic';
     const booted = this.boot(input.seed, input.startFresh ?? false);
     this.run = booted.run;
     this.notice = booted.notice;
@@ -251,18 +259,24 @@ export class GuestSession implements RunSession {
     const runSeed = seed ?? randomSeed();
     const records = this.records?.();
     if (records === undefined) {
-      return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero });
+      return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero, mode: this.mode });
     }
     let historyFailure: unknown;
     try {
-      return createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero, records });
+      return createNewRun({
+        pack: this.pack,
+        seed: runSeed,
+        hero: this.hero,
+        mode: this.mode,
+        records,
+      });
     } catch (error) {
       if (!(error instanceof SaveLoadError || error instanceof RangeError)) throw error;
       historyFailure = error;
     }
     // Anything this retry throws propagates untouched and unlogged: a creation that fails with no
     // history in play was never about the Hall, so it must surface as itself.
-    const run = createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero });
+    const run = createNewRun({ pack: this.pack, seed: runSeed, hero: this.hero, mode: this.mode });
     console.error('Hall of Records could not seed this run; starting without it:', historyFailure);
     this.hallCorrupted = true;
     return run;
