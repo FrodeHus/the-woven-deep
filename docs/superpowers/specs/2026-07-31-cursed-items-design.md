@@ -131,3 +131,5 @@ Recorded where the implementation legitimately diverged from the text above. Eac
 10. **Merchant stock is never curse-rolled.** Merchants materialize stock through their own path, which does not call `applyCurseRolls`; nothing you buy is ever cursed at the point of sale. Merchants refuse to buy **revealed** cursed items only — an unrevealed cursed item sells normally, so the gamble cuts both ways.
 
 11. **`HALL_STORE_VERSION` bumped to 3.** Stored guest Hall heirlooms gain `curse: null`, which is a stored-shape change and therefore a store-version bump.
+
+12. **Scroll of sundering is not shuffled-pool.** The Content section calls it a "new shuffled-pool scroll", but `content/items/sundering-scroll.yaml` ships `identification: { mode: known, poolId: null }`. An unidentifiable curse-remover would stack a gamble on top of a gamble — the hero could not tell a working scroll of sundering from a dud without already having read it. `identification.ts` also filters `mode: known` items out of pool allocation entirely, so shuffling it would have been dead weight even if authored: there is no shuffle drift to reconcile.
