@@ -26,6 +26,7 @@ describe('bundled content', () => {
       'class',
       'background',
       'trait',
+      'curse',
     ] as const;
     expect(
       Object.fromEntries(
@@ -33,7 +34,7 @@ describe('bundled content', () => {
       ),
     ).toEqual({
       monster: 46,
-      item: 52,
+      item: 53,
       spell: 14,
       trap: 2,
       'loot-table': 28,
@@ -49,6 +50,7 @@ describe('bundled content', () => {
       class: 5,
       background: 3,
       trait: 8,
+      curse: 6,
     });
     expect(
       pack.entries.filter((entry) => entry.kind === 'class' && (entry as any).playable),
