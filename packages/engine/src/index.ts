@@ -78,6 +78,7 @@ export * from './item-model.js';
 export * from './inventory.js';
 export * from './content-bound-validation.js';
 export * from './curse.js';
+export * from './curse-triggers.js';
 export * from './equipment.js';
 export * from './identification.js';
 export * from './feature-model.js';

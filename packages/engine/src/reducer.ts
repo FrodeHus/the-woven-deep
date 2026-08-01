@@ -31,6 +31,7 @@ import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
 import { foldRunMetrics } from './run-metrics.js';
 import { concludeRunOnChoice, concludeRunOnHeroDeath } from './run-conclusion.js';
+import { applyCurseTriggers } from './curse-triggers.js';
 import { isTownFloorActive } from './town-floor.js';
 import { FINAL_CHAMBER_DEPTH } from './final-chamber.js';
 import { heroHoldsAllFragments } from './final-chamber-fragments.js';
@@ -408,13 +409,38 @@ export function resolveCommand(
           action: validation,
           eventId: command.commandId,
         });
+  // Curse triggers resolve inside this same transition, as a pure post-pass over the events the
+  // command just emitted, and BEFORE the conclusion boundary below -- a curse that lands the killing
+  // blow must conclude the run here rather than leaving a dead hero in an unconcluded state.
+  // `applyCurseTriggers` self-guards an already-concluded run and an already-dead hero, which is the
+  // spec's "concluded runs never trigger". The trade, dialogue, and house branches above are
+  // deliberately untouched: none of them emits any of the three matching event types. The
+  // on-floor-enter trigger does NOT ride this pass -- floor transitions bypass `resolveCommand`
+  // entirely, so `floor-transition.ts` fires the same resolver from each of its own entry paths.
+  const triggered = applyCurseTriggers({
+    state: world.state,
+    content: context.content,
+    events: world.events,
+    eventId: command.commandId,
+  });
+  const worldEvents =
+    triggered.events.length === 0 ? world.events : [...world.events, ...triggered.events];
+  const triggerPublicEvents =
+    triggered.events.length === 0
+      ? []
+      : projectDomainEvents({
+          state: triggered.state,
+          content: context.content,
+          heroId: triggered.state.hero.actorId,
+          events: triggered.events,
+        });
   // The conclusion boundary runs inside this same transition: a hero killed by the world branch
   // above is concluded here, before the command is recorded, so the recorded event stream and the
   // resulting state agree on whether (and how) the run ended.
   const concluded = concludeRunOnHeroDeath({
-    state: world.state,
+    state: triggered.state,
     content: context.content,
-    events: world.events,
+    events: worldEvents,
     revision: result.revision,
     turn: result.turn,
     eventId: command.commandId,
@@ -446,7 +472,7 @@ export function resolveCommand(
   const concludedEvents = chamberChoice
     ? [...concluded.events, ...chamberChoice.events]
     : concluded.events;
-  const conclusionEvents = concludedEvents.slice(world.events.length);
+  const conclusionEvents = concludedEvents.slice(worldEvents.length);
   const conclusionPublicEvents =
     conclusionEvents.length === 0
       ? []
@@ -456,10 +482,11 @@ export function resolveCommand(
           heroId: concludedState.hero.actorId,
           events: conclusionEvents,
         });
-  const worldPublicEvents =
-    conclusionPublicEvents.length === 0
-      ? world.publicEvents
-      : [...world.publicEvents, ...conclusionPublicEvents];
+  const worldPublicEvents = [
+    ...world.publicEvents,
+    ...triggerPublicEvents,
+    ...conclusionPublicEvents,
+  ];
   const events = preEvents.length === 0 ? concludedEvents : [...preEvents, ...concludedEvents];
   const publicEvents =
     prePublicEvents.length === 0 ? worldPublicEvents : [...prePublicEvents, ...worldPublicEvents];

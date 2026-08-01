@@ -7,7 +7,11 @@ import type { LightSource } from './light-model.js';
 import type { ActiveRun, OpaqueId } from './model.js';
 import { consumeItemQuantity, inventorySlotCount } from './inventory.js';
 
-const SLOT_ORDER: readonly EquipmentSlot[] = [
+/**
+ * The canonical slot iteration order. Every equipped-item walk that must be deterministic (stat
+ * modifiers, curse trigger rolls) uses it, so a replay visits equipment in the same sequence.
+ */
+export const EQUIPMENT_SLOT_ORDER: readonly EquipmentSlot[] = [
   'main-hand',
   'off-hand',
   'body',
@@ -39,7 +43,7 @@ export type EquipmentPlan =
     }>;
 
 function orderedSlots(slots: ReadonlySet<EquipmentSlot>): readonly EquipmentSlot[] {
-  return SLOT_ORDER.filter((slot) => slots.has(slot));
+  return EQUIPMENT_SLOT_ORDER.filter((slot) => slots.has(slot));
 }
 
 export function equipmentPlan(
@@ -190,7 +194,7 @@ export function equipmentModifiers(
   const actor = actorById(input.run, input.actorId);
   if (!actor) throw new Error(`internal invariant: actor ${input.actorId} does not exist`);
   const sources: EquipmentModifierSource[] = [];
-  for (const slot of SLOT_ORDER) {
+  for (const slot of EQUIPMENT_SLOT_ORDER) {
     const itemId = actor.equipment[slot];
     if (!itemId || sources.some((source) => source.itemId === itemId)) continue;
     const item = input.run.items.find((candidate) => candidate.itemId === itemId);
