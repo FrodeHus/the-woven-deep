@@ -875,6 +875,7 @@ export type DomainEvent =
   | TrapStateEvent
   | LockOutcomeEvent
   | PopulationDomainEvent
+  | HauntAppeasedEvent
   | ReputationChangedEvent
   | TradeDomainEvent
   | MerchantLifecycleDomainEvent
@@ -895,6 +896,26 @@ export type DomainEvent =
  * population lifecycle event, which folds into `PopulationNoticePublicEvent` instead of passing
  * through raw).
  */
+/**
+ * A haunt accepted an offering and faded. Authoritative and public alike: unlike the population
+ * lifecycle events (which redact through `population.notice`), this one passes through to the
+ * client, which resolves `hallRecordId` against the projection's `haunts` block to speak the
+ * farewell line -- the same lookup `haunt.sighted` drives. `itemIds` are the pieces now lying on
+ * the floor in plain view, and `populationId` follows the precedent the trade events already set
+ * for a population id the client is handed.
+ */
+export interface HauntAppeasedEvent {
+  readonly type: 'haunt.appeased';
+  readonly eventId: OpaqueId;
+  readonly populationId: OpaqueId;
+  readonly actorId: OpaqueId;
+  readonly hallRecordId: OpaqueId;
+  readonly role: 'champion' | 'echo';
+  /** The item given up. */
+  readonly offeredItemId: OpaqueId;
+  /** The pieces the haunt released, in materialization order. */
+  readonly itemIds: readonly OpaqueId[];
+}
 export interface HauntSightedEvent {
   readonly type: 'haunt.sighted';
   readonly eventId: OpaqueId;

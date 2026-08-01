@@ -121,15 +121,25 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         );
       }
       const actor = actors.get(population.actorId);
+      // An appeased haunt has no actor at all -- the offering faded it, unlike a defeat, which
+      // leaves a corpse behind. Its population still has to carry the normalized loadout it was
+      // built with, so only the actor half of the check is conditional.
+      const appeased = run.fallenHeroDecisions.some(
+        (decision) => decision.hallRecordId === population.hallRecordId && decision.appeased,
+      );
       const normalized =
-        actor && normalizeFallenHero({ standing, template, content: pack, role: population.model });
+        actor || appeased
+          ? normalizeFallenHero({ standing, template, content: pack, role: population.model })
+          : undefined;
       if (
-        !actor ||
-        actor.contentId !== normalized?.monsterId ||
-        actor.maxHealth !== normalized.health ||
-        actor.populationPresentation?.name !== normalized.displayName ||
-        actor.populationPresentation.glyph !== normalized.glyph ||
-        actor.populationPresentation.color !== normalized.color ||
+        (!appeased &&
+          (!actor ||
+            actor.contentId !== normalized?.monsterId ||
+            actor.maxHealth !== normalized.health ||
+            actor.populationPresentation?.name !== normalized.displayName ||
+            actor.populationPresentation.glyph !== normalized.glyph ||
+            actor.populationPresentation.color !== normalized.color)) ||
+        !normalized ||
         population.equipmentContentIds.length !== normalized.equipmentContentIds.length ||
         population.equipmentContentIds.some(
           (id, index) => id !== normalized.equipmentContentIds[index],
@@ -529,7 +539,16 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           `content-bound validation: fallen-hero decision ${decision.hallRecordId} is both appeased and defeated`,
         );
       }
-      if (matching[0]?.model === 'champion' && matching[0].rewardCreated) {
+      // An appeased haunt gave back its WHOLE recorded set, champion and echo alike -- the single
+      // drawn piece is what a haunt loses when it is put down, not what it hands over when it is
+      // bought off. So the owed set is keyed on appeasement first, and only a defeated echo falls
+      // through to the one-piece membership rule below.
+      const owed = matching[0];
+      const appeasedSet = decision.appeased && owed !== undefined;
+      if (
+        owed !== undefined &&
+        (appeasedSet || (owed.model === 'champion' && owed.rewardCreated))
+      ) {
         const standing = run.fallenHeroStandings.find(
           (entry) => entry.hallRecordId === decision.hallRecordId,
         )!;
@@ -537,7 +556,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         // reward is a SET. Re-materializing it through the very function the stepper drops with
         // keeps the two from drifting; the cell is irrelevant here (an item may since have been
         // picked up), so a placeholder location is passed and `location` is never compared.
-        const championPrefix = `${hauntDropItemIdPrefix(matching[0].populationId)}.`;
+        const championPrefix = `${hauntDropItemIdPrefix(owed.populationId)}.`;
         const expectedPieces = materializeDeathInventory({
           content: pack,
           snapshots: hauntDropSnapshots(standing).snapshots,
@@ -546,7 +565,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           // The singleton guard re-derived: everything in the run EXCEPT this haunt's own pieces,
           // which is exactly what it saw at drop time.
           existingItems: run.items.filter((item) => !item.itemId.startsWith(championPrefix)),
-          itemIdPrefix: hauntDropItemIdPrefix(matching[0].populationId),
+          itemIdPrefix: hauntDropItemIdPrefix(owed.populationId),
           floorId: run.activeFloorId,
           x: 0,
           y: 0,
@@ -560,7 +579,7 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
           }
         }
       }
-      if (matching[0]?.model === 'echo' && matching[0].lootCreated) {
+      if (!appeasedSet && matching[0]?.model === 'echo' && matching[0].lootCreated) {
         const standing = run.fallenHeroStandings.find(
           (entry) => entry.hallRecordId === decision.hallRecordId,
         )!;

@@ -555,6 +555,13 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       cell(memoryFloor, memory.x, memory.y, path);
     }
   };
+  // A haunt leaves the world two ways: put down, or appeased. The latch and membership rules below
+  // were written when defeat was the only one, so they read this set to stay true for the other.
+  const appeasedRecordIds = new Set(
+    run.fallenHeroDecisions
+      .filter((decision) => decision.appeased)
+      .map((decision) => decision.hallRecordId),
+  );
   for (const [index, populationValue] of run.populations.entries()) {
     const path = `populations.${index}`;
     if (!floorIds.has(populationValue.floorId))
@@ -809,29 +816,28 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         );
         validateOrderedIds(populationValue.abilityIds, `${path}.abilityIds`, 'normalized ability');
       }
+      // Appeasement fades the actor and surrenders the inventory without a defeat, so both the
+      // membership rule and the reward latches below are keyed on "the haunt is gone and has
+      // already given up what it held", not on `defeated` alone. `defeated` itself stays false --
+      // content-bound validation rejects a decision that claims both.
+      const surrendered =
+        ('defeated' in populationValue && populationValue.defeated) ||
+        ((populationValue.model === 'champion' || populationValue.model === 'echo') &&
+          appeasedRecordIds.has(populationValue.hallRecordId));
       if (
         'defeated' in populationValue &&
-        populationValue.defeated !==
-          populationValue.formerMemberIds.includes(populationValue.actorId)
+        surrendered !== populationValue.formerMemberIds.includes(populationValue.actorId)
       ) {
         fail(
           `${path}.defeated`,
-          'fallen-hero defeat state disagrees with primary actor membership',
+          'fallen-hero defeat or appeasement disagrees with primary actor membership',
         );
       }
-      if (
-        populationValue.model === 'champion' &&
-        populationValue.rewardCreated &&
-        !populationValue.defeated
-      ) {
-        fail(`${path}.rewardCreated`, 'Champion reward cannot exist before defeat');
+      if (populationValue.model === 'champion' && populationValue.rewardCreated && !surrendered) {
+        fail(`${path}.rewardCreated`, 'Champion reward cannot exist before defeat or appeasement');
       }
-      if (
-        populationValue.model === 'echo' &&
-        populationValue.lootCreated &&
-        !populationValue.defeated
-      ) {
-        fail(`${path}.lootCreated`, 'Echo loot cannot exist before defeat');
+      if (populationValue.model === 'echo' && populationValue.lootCreated && !surrendered) {
+        fail(`${path}.lootCreated`, 'Echo loot cannot exist before defeat or appeasement');
       }
       if (populationValue.model === 'boss') {
         const crossed = new Set(populationValue.crossedPhaseIds);
@@ -1223,14 +1229,17 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         ? undefined
         : run.fallenHeroStandings.find((entry) => entry.hallRecordId === owner.hallRecordId);
     const snapshots = standing === undefined ? [] : hauntDropSnapshots(standing).snapshots;
-    // A champion's id encodes WHICH piece it is, so the snapshot is pinned exactly. An echo
+    // A champion's id encodes WHICH piece it is, so the snapshot is pinned exactly. A DEFEATED echo
     // surrenders a single piece at index zero, drawn from the `loot` stream -- a draw this
     // content-free tier cannot replay -- so the rule there is membership: the provenance must
-    // belong to some piece of that record's drop set.
+    // belong to some piece of that record's drop set. An APPEASED echo took no draw at all: it gave
+    // back the whole set, so its ids are index-pinned exactly like a champion's.
+    const drawnSinglePiece =
+      owner !== undefined && owner.model === 'echo' && !appeasedRecordIds.has(owner.hallRecordId);
     const piece =
       owner === undefined
         ? undefined
-        : owner.model === 'echo'
+        : drawnSinglePiece
           ? itemValue.itemId === hauntPieceItemId(hauntDropItemIdPrefix(owner.populationId), 0)
             ? snapshots.find(
                 (snapshot) => snapshot.sourceItemId === itemValue.heirloom!.sourceItemId,
@@ -1530,6 +1539,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     const attackTargetActorId =
       recordValue.command.type === 'attack' ? recordValue.command.targetActorId : undefined;
     const commandItemId = 'itemId' in recordValue.command ? recordValue.command.itemId : undefined;
+    const commandTargetActorId =
+      recordValue.command.type === 'offer' ? recordValue.command.targetActorId : undefined;
     const splitNewItemId =
       recordValue.command.type === 'split-stack' ? recordValue.command.newItemId : undefined;
     const commandQuantity =
@@ -1753,7 +1764,18 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                                                                         'reputation.changed' &&
                                                                       entry.reason === 'dialogue',
                                                                   )
-                                                                : undefined;
+                                                                : recordValue.command.type ===
+                                                                    'offer'
+                                                                  ? recordValue.events.find(
+                                                                      (entry) =>
+                                                                        entry.type ===
+                                                                          'haunt.appeased' &&
+                                                                        entry.actorId ===
+                                                                          commandTargetActorId &&
+                                                                        entry.offeredItemId ===
+                                                                          commandItemId,
+                                                                    )
+                                                                  : undefined;
       if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
       if (recordValue.result.status === 'invalid') {
         if (
@@ -1913,6 +1935,14 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         eventValue.featureId === recordValue.command.featureId
       ) {
         // Feature state, any dropped loot, and the effects random stream store the outcome.
+      } else if (
+        recordValue.command.type === 'offer' &&
+        eventValue.type === 'haunt.appeased' &&
+        eventValue.actorId === recordValue.command.targetActorId &&
+        eventValue.offeredItemId === recordValue.command.itemId
+      ) {
+        // The faded actor is deliberately gone from `run.actors` by now, and the pieces it
+        // released are ordinary floor items; the decision and population state carry the outcome.
       } else if (recordValue.command.type === 'rest' && eventValue.type === 'rest.completed') {
         if (eventValue.elapsed > recordValue.command.maximumDuration) {
           fail(`${path}.events`, 'rest event exceeds requested maximum duration');
@@ -2245,6 +2275,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       recordValue.command.type === 'final-chamber-choice' ||
       recordValue.command.type === 'cast' ||
       recordValue.command.type === 'dialogue-consequence' ||
+      // An offering is made from where the hero stands: the retained position chain is unchanged.
+      recordValue.command.type === 'offer' ||
       tradeCommand
     )
       continue;

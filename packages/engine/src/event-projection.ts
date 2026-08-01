@@ -180,6 +180,9 @@ export function projectDomainEvents(
     const carriedDamageType = pendingDamageType;
     pendingDamageType = null;
     switch (event.type) {
+      // Pass-through group: events the hero caused or is unconditionally entitled to see. That
+      // includes `haunt.appeased` -- the hero's own offering, made from an adjacent cell, with
+      // nothing to gate on visibility and nothing to redact (see `HauntAppeasedEvent`).
       case 'hero.moved':
       case 'hero.waited':
       case 'action.invalid':
@@ -187,6 +190,7 @@ export function projectDomainEvents(
       case 'identification.appearance-revealed':
       case 'curse.revealed':
       case 'floor.entered':
+      case 'haunt.appeased':
         output.push(event);
         break;
       case 'attack.hit':

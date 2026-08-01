@@ -38,6 +38,11 @@ const template: FallenChampionTemplateContentEntry = {
     rarityWeights: { common: 1, uncommon: 3, rare: 8, legendary: 16 },
     qualityRankBonus: 2,
   },
+  appeasement: {
+    classFavors: { loomcaller: ['scroll', 'potion'] },
+    causelessCategories: ['light'],
+    defaultCategories: ['food', 'potion'],
+  },
 };
 
 function itemDef(id: string): ItemContentEntry {

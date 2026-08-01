@@ -468,6 +468,9 @@ describe('offer validation', () => {
 
   const scrollDefinition = itemDefinition('item.offer-scroll', 'scroll');
   const swordDefinition = itemDefinition('item.offer-sword', 'weapon');
+  // The template's fallback relic: an accepted offering materializes the haunt's death inventory,
+  // and any piece the pack no longer defines degrades to this one.
+  const fallbackDefinition = itemDefinition('item.fallback', 'weapon');
 
   const offerPack: CompiledContentPack = {
     ...createDemoContentPack(),
@@ -477,6 +480,7 @@ describe('offer validation', () => {
       template,
       scrollDefinition,
       swordDefinition,
+      fallbackDefinition,
     ],
   };
   const offerContext: ResolutionContext = { content: offerPack };
@@ -763,19 +767,15 @@ describe('offer validation', () => {
     }
   });
 
-  it('never attacks the haunt or spends the offering before the acceptance resolver lands', () => {
-    // Task 8 replaces the placeholder resolver. Until it does, an accepted offer must stay inert
-    // rather than falling through to `applyAction`'s bump-attack default, which would turn an
-    // offering into a swing at the haunt.
-    const state = heroBesideHaunt();
-    const resolved = resolveCommand(state, offerCommand(SCROLL_ID), offerContext);
+  it('appeases rather than attacking, spending the offering', () => {
+    // The registered resolver is also what keeps a validated offer off `applyAction`'s bump-attack
+    // default, which would turn an offering into a swing at the haunt.
+    const resolved = resolveCommand(heroBesideHaunt(), offerCommand(SCROLL_ID), offerContext);
     expect(resolved.result).toMatchObject({ status: 'applied' });
-    const haunt = resolved.state.actors.find((actor) => actor.actorId === HAUNT_ACTOR_ID)!;
-    expect(haunt.health).toBe(
-      state.actors.find((actor) => actor.actorId === HAUNT_ACTOR_ID)!.health,
-    );
-    expect(resolved.state.items.map((item) => item.itemId)).toContain(SCROLL_ID);
     expect(resolved.events.some((event) => event.type === 'attack.hit')).toBe(false);
+    expect(resolved.events).toContainEqual(expect.objectContaining({ type: 'haunt.appeased' }));
+    expect(resolved.state.actors.some((actor) => actor.actorId === HAUNT_ACTOR_ID)).toBe(false);
+    expect(resolved.state.items.map((item) => item.itemId)).not.toContain(SCROLL_ID);
   });
 
   it('rejects every command on a concluded run, offer included', () => {
@@ -803,8 +803,13 @@ describe('offer validation', () => {
   it.each(['item.missing', 'item.unavailable', 'target.invalid'] as const)(
     'records an offer rejected as %s without throwing on encode',
     (reason) => {
+      // `target.invalid` is taken through an out-of-reach haunt: it is the one refusal cause whose
+      // run state is fully representable (an appeased haunt has no actor left to stand beside, and
+      // an unretained one cannot still have a population).
       const state =
-        reason === 'target.invalid' ? heroBesideHaunt({ appeased: true }) : heroBesideHaunt();
+        reason === 'target.invalid'
+          ? heroBesideHaunt({ hauntAt: { x: 3, y: 1 } })
+          : heroBesideHaunt();
       const itemId =
         reason === 'item.missing'
           ? 'item.nope'

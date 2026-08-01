@@ -572,6 +572,13 @@ export function advanceFallenHeroEncounters(
   const events: DomainEvent[] = [];
   for (const original of sortedPopulations(state.populations)) {
     if (original.model !== 'champion' && original.model !== 'echo') continue;
+    // An appeased haunt has no actor: the offering faded it and its inventory is already on the
+    // floor. Skipping it here is what keeps the `fallen hero population ... is incomplete` throw
+    // below honest for the genuinely broken cases it exists to catch.
+    const appeased = state.fallenHeroDecisions.some(
+      (decision) => decision.hallRecordId === original.hallRecordId && decision.appeased,
+    );
+    if (appeased) continue;
     const actor = state.actors.find((candidate) => candidate.actorId === original.actorId);
     const standing = state.fallenHeroStandings.find(
       (candidate) => candidate.hallRecordId === original.hallRecordId,
