@@ -535,10 +535,7 @@ describe('active-run save codec', () => {
     return structuredClone(createGameplayDemoRun(compiledContent).run) as any;
   }
 
-  function withCursedItem(
-    run: any,
-    curse: Readonly<{ curseId: string; revealed: boolean }>,
-  ): any {
+  function withCursedItem(run: any, curse: Readonly<{ curseId: string; revealed: boolean }>): any {
     const [first, ...rest] = run.items;
     return { ...run, items: [{ ...first, curse: { ...curse } }, ...rest] };
   }
@@ -797,7 +794,10 @@ describe('active-run save codec', () => {
   });
 
   it('preserves the curse across a recorded heirloom snapshot', () => {
-    const snapshot = { ...heirloomFixture(), curse: { curseId: 'curse.leaden-weight', revealed: true } };
+    const snapshot = {
+      ...heirloomFixture(),
+      curse: { curseId: 'curse.leaden-weight', revealed: true },
+    };
     const run = withRecordedHeirloom(baseRun(), snapshot);
     const decoded = decodeActiveRun(encodeActiveRun(run));
     expect(recordedHeirloomOf(decoded).curse).toEqual({

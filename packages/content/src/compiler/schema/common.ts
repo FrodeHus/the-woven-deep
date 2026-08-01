@@ -123,7 +123,11 @@ export const depthRange = {
 
 export const negativeDerivedStatModifiers = z.partialRecord(
   z.enum(DERIVED_STAT_NAMES),
-  z.number().int().safe().negative({ message: 'drawback modifier values must be negative safe integers' }),
+  z
+    .number()
+    .int()
+    .safe()
+    .negative({ message: 'drawback modifier values must be negative safe integers' }),
 );
 
 export const rgb = z.tuple([

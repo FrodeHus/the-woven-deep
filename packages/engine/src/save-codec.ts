@@ -162,7 +162,9 @@ function migrateLegacy(
               migrateV11ToV12(
                 migrateV10ToV11(
                   migrateV9ToV10(
-                    migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input))))),
+                    migrateV8ToV9(
+                      migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input)))),
+                    ),
                   ),
                 ),
               ),
@@ -173,7 +175,9 @@ function migrateLegacy(
               migrateV12ToV13(
                 migrateV11ToV12(
                   migrateV10ToV11(
-                    migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input))))),
+                    migrateV9ToV10(
+                      migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))),
+                    ),
                   ),
                 ),
               ),

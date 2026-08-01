@@ -267,7 +267,9 @@ describe('effect.curse.remove', () => {
     const itemA = cursedItem('item.a.0001');
     const itemB = cursedItem('item.a.0002');
     const result = resolveEffectSequence({
-      ...fixture([{ effectId: 'effect.curse.remove', parameters: {}, requiresLivingTarget: false }]),
+      ...fixture([
+        { effectId: 'effect.curse.remove', parameters: {}, requiresLivingTarget: false },
+      ]),
       items: [itemB, itemA],
       targetActorId: 'hero.demo',
     });
@@ -284,7 +286,9 @@ describe('effect.curse.remove', () => {
   it('leaves an unrevealed curse alone', () => {
     const sword = cursedItem('item.sword.1', { revealed: false });
     const result = resolveEffectSequence({
-      ...fixture([{ effectId: 'effect.curse.remove', parameters: {}, requiresLivingTarget: false }]),
+      ...fixture([
+        { effectId: 'effect.curse.remove', parameters: {}, requiresLivingTarget: false },
+      ]),
       items: [sword],
       targetActorId: 'hero.demo',
     });
@@ -294,7 +298,9 @@ describe('effect.curse.remove', () => {
 
   it('consumes no randomness whether or not it finds a target', () => {
     const input = {
-      ...fixture([{ effectId: 'effect.curse.remove', parameters: {}, requiresLivingTarget: false }]),
+      ...fixture([
+        { effectId: 'effect.curse.remove', parameters: {}, requiresLivingTarget: false },
+      ]),
       items: [],
       targetActorId: 'hero.demo',
     };
@@ -343,9 +349,7 @@ describe('effect.curse.remove', () => {
         { content: pack },
       );
       expect(resolved.result).toMatchObject({ status: 'invalid', reason: 'target.invalid' });
-      expect(
-        resolved.state.items.find((item) => item.itemId === scroll.itemId)!.quantity,
-      ).toBe(1);
+      expect(resolved.state.items.find((item) => item.itemId === scroll.itemId)!.quantity).toBe(1);
     });
   });
 });

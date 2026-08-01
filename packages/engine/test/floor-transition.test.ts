@@ -594,7 +594,10 @@ describe('on-floor-enter curse triggers', () => {
     // `applyCurseTriggers` still advances `rng.effects` on a miss (curse-triggers.ts's documented
     // roll-spent-either-way contract), and `applyFloorEntryTriggers`'s zero-events early return
     // must keep that advanced state rather than discarding it back to the pre-roll input.
-    const run = withEquippedCurse(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }), 'curse.cold-tether');
+    const run = withEquippedCurse(
+      createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }),
+      'curse.cold-tether',
+    );
     const before = teleportHeroTo(run, run.floors[0]!.stairDown!);
     const descended = descendToNextFloor(before, { content: pack });
     expect(descended.events).not.toContainEqual(

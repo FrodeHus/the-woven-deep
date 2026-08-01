@@ -39,7 +39,9 @@ beforeAll(async () => {
   });
   encounter = content.entries.find(
     (entry): entry is MerchantEncounterContentEntry =>
-      entry.kind === 'encounter' && entry.model === 'merchant' && entry.id === 'encounter.town-curios-dealer',
+      entry.kind === 'encounter' &&
+      entry.model === 'merchant' &&
+      entry.id === 'encounter.town-curios-dealer',
   )!;
   faction = content.entries.find(
     (entry): entry is NpcFactionContentEntry => entry.id === 'npc-faction.town-curios-dealer',
@@ -113,7 +115,12 @@ function curiosRun(options: FixtureOptions = {}): ActiveRun {
   });
   const heroItems: ItemInstance[] = [
     item('item.hero.clean', ring.id, { type: 'backpack', actorId: HERO_ID }),
-    item('item.hero.unidentified', ring.id, { type: 'backpack', actorId: HERO_ID }, { identified: false }),
+    item(
+      'item.hero.unidentified',
+      ring.id,
+      { type: 'backpack', actorId: HERO_ID },
+      { identified: false },
+    ),
     item(
       'item.hero.hidden-cursed',
       ring.id,
@@ -213,7 +220,10 @@ describe('trade-service remove-curse projection', () => {
       (s) => s.serviceId === 'merchant-service.remove-curse',
     )!;
     expect(identify.targetItemIds).toEqual(['item.hero.unidentified']);
-    expect(removeCurse.targetItemIds).toEqual(['item.hero.revealed-cursed', 'item.hero.worn-cursed']);
+    expect(removeCurse.targetItemIds).toEqual([
+      'item.hero.revealed-cursed',
+      'item.hero.worn-cursed',
+    ]);
     // Explicit, named leak check: the unrevealed curse on item.hero.hidden-cursed must stay
     // invisible everywhere in the trade projection, not just absent from remove-curse by omission.
     expect(identify.targetItemIds).not.toContain('item.hero.hidden-cursed');
