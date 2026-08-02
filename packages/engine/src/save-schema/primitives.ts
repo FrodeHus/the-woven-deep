@@ -46,6 +46,7 @@ export const merchantServiceId = z.enum([
   'merchant-service.identify',
   'merchant-service.remove-curse',
   'merchant-service.strongbox',
+  'merchant-service.enchant',
 ]);
 export const blockReason = z.enum([
   'blocked.bounds',
