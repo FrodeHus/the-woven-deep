@@ -1,4 +1,4 @@
-import type { Direction, OpaqueId } from '@woven-deep/engine';
+import type { AttributeName, Direction, OpaqueId } from '@woven-deep/engine';
 import type { MerchantServiceId } from '@woven-deep/content';
 
 /**
@@ -80,4 +80,8 @@ export type PlayerIntent =
   // Offers a backpack item to the haunt the hero is Chebyshev-adjacent to. Carries no target:
   // command-builder.ts resolves the adjacent haunt from `projection.haunts`, exactly the way
   // `trade-open` resolves its merchant and `pick-lock` its feature.
-  | { readonly type: 'offer'; readonly itemId: OpaqueId };
+  | { readonly type: 'offer'; readonly itemId: OpaqueId }
+  // Spends one banked tempering point on `attribute`. The engine re-validates the banked/capped
+  // rules on `resolveTemper`/`validateTemperCommand`; `command-builder.ts` only pre-refuses the
+  // no-banked-point case so a bare keypress with nothing to spend never reaches the wire.
+  | { readonly type: 'temper'; readonly attribute: AttributeName };

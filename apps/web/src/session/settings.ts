@@ -26,6 +26,10 @@ export type ActionId =
   | 'character-sheet'
   | 'map-journal'
   | 'spellbook'
+  // Opens the temper overlay (`TemperOverlay.tsx`) -- spends one of the hero's banked tempering
+  // points on an attribute. Rebindable and listed in help/settings exactly like the other six
+  // overlay-open actions above.
+  | 'temper'
   | 'codex'
   | 'settings'
   | 'help'
@@ -94,6 +98,7 @@ export const ACTION_IDS: readonly ActionId[] = [
   'character-sheet',
   'map-journal',
   'spellbook',
+  'temper',
   'codex',
   'settings',
   'help',
@@ -131,6 +136,7 @@ export const ACTION_LABELS: Readonly<Record<ActionId, string>> = {
   'character-sheet': 'Character sheet',
   'map-journal': 'Map & journal',
   spellbook: 'Spellbook',
+  temper: 'Temper',
   codex: 'Codex',
   settings: 'Settings',
   help: 'Help',
@@ -168,6 +174,8 @@ export const DEFAULT_BINDINGS: Readonly<Record<ActionId, KeyChord>> = {
   'character-sheet': chord('c'),
   'map-journal': chord('m'),
   spellbook: chord('v'),
+  // Free (never hardwired, never used by any other default).
+  temper: chord('a'),
   codex: chord('x'),
   settings: chord('O', true),
   help: chord('?', true),

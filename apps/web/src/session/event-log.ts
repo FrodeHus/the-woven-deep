@@ -106,6 +106,10 @@ function renderEvent(event: PublicEvent, context: LogContext | undefined): Rende
           return { text: 'It will not come free.', tone: 'system' };
         case 'offer.refused':
           return { text: 'The haunt does not want this.', tone: 'system' };
+        case 'temper.unavailable':
+          return { text: 'The Deep has given you nothing to spend.', tone: 'system' };
+        case 'temper.capped':
+          return { text: 'That part of you can harden no further.', tone: 'system' };
         case 'signature.no-charges':
           return { text: 'The relic is spent — it will wake on the next floor.', tone: 'system' };
         default:
@@ -119,6 +123,13 @@ function renderEvent(event: PublicEvent, context: LogContext | undefined): Rende
       return { text: event.revealText, tone: 'curse' };
     case 'curse.removed':
       return { text: 'The weight lifts. The thing is only iron again.', tone: 'curse' };
+    case 'hero.tempering-banked':
+      return { text: 'The Deep tempers those who dare it.', tone: 'info' };
+    case 'hero.tempered':
+      return {
+        text: `${event.attribute.charAt(0).toUpperCase()}${event.attribute.slice(1)} hardens to ${event.value}.`,
+        tone: 'info',
+      };
     // Descent already narrates itself (the floor-transition UI) -- an explicit no-op case rather
     // than falling to `default` keeps this switch's coverage of `PublicEvent` honest.
     case 'floor.entered':

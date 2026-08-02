@@ -10,6 +10,7 @@ export type OverlayId =
   | 'character-sheet'
   | 'map-journal'
   | 'spellbook'
+  | 'temper'
   | 'codex'
   | 'settings'
   | 'help'
@@ -47,6 +48,7 @@ export const OVERLAY_REGISTRY: Readonly<Record<OverlayId, OverlayDefinition>> = 
     action: 'map-journal',
   },
   spellbook: { id: 'spellbook', title: 'Spellbook', scope: 'play', action: 'spellbook' },
+  temper: { id: 'temper', title: 'Temper', scope: 'play', action: 'temper' },
   codex: { id: 'codex', title: 'Codex', scope: 'global', action: 'codex' },
   settings: { id: 'settings', title: 'Settings', scope: 'global', action: 'settings' },
   help: { id: 'help', title: 'Help', scope: 'global', action: 'help' },

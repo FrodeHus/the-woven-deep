@@ -15,6 +15,7 @@ import { InventoryOverlay } from './InventoryOverlay.js';
 import { CharacterSheetOverlay } from './CharacterSheetOverlay.js';
 import { MapJournalOverlay } from './MapJournalOverlay.js';
 import { SpellbookOverlay } from './SpellbookOverlay.js';
+import { TemperOverlay } from './TemperOverlay.js';
 import { CodexOverlay } from './CodexOverlay.js';
 import { SettingsOverlay } from './SettingsOverlay.js';
 import { HelpOverlay } from './HelpOverlay.js';
@@ -219,6 +220,15 @@ function renderBody(overlay: OverlayId, ctx: RenderBodyContext): JSX.Element {
     case 'spellbook':
       if (!ctx.snapshot) return <p>Your spellbook is unavailable right now.</p>;
       return <SpellbookOverlay onCast={ctx.onCastSpell} />;
+    case 'temper':
+      if (!ctx.snapshot || !ctx.session) return <p>Tempering is unavailable right now.</p>;
+      return (
+        <TemperOverlay
+          projection={ctx.snapshot.projection}
+          onTemper={(attribute) => ctx.session?.dispatch({ type: 'temper', attribute })}
+          onClose={ctx.onClose}
+        />
+      );
     case 'codex':
       // Codex renders from the session-less title screen too, so it takes records/snapshot/
       // sightings/pack as explicit props here rather than reading them from session context.

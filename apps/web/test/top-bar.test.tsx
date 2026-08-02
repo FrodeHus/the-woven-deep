@@ -8,10 +8,19 @@ function snapshotOf(overrides: {
   depth?: number;
   currency?: number;
   turnsElapsed?: number;
+  banked?: number;
 }): never {
   return {
     projection: {
-      hero: { name: 'Ashwalker', currency: overrides.currency ?? 0 },
+      hero: {
+        name: 'Ashwalker',
+        currency: overrides.currency ?? 0,
+        tempering: {
+          banked: overrides.banked ?? 0,
+          spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+          temperable: ['might', 'agility', 'vitality', 'wits', 'resolve'],
+        },
+      },
       floor: { depth: overrides.depth ?? 1, town: overrides.town ?? false },
       metrics: { turnsElapsed: overrides.turnsElapsed ?? 0 },
     },
@@ -44,5 +53,15 @@ describe('TopBar', () => {
   it('shows the game title', () => {
     render(<TopBar snapshot={snapshotOf({})} />);
     expect(screen.getByText('THE WOVEN DEEP')).toBeInTheDocument();
+  });
+
+  it('shows a banked-tempering badge while a point is banked', () => {
+    render(<TopBar snapshot={snapshotOf({ banked: 2 })} />);
+    expect(screen.getByTestId('top-bar-tempering-banked')).toHaveTextContent('2 banked');
+  });
+
+  it('shows no banked-tempering badge with nothing banked', () => {
+    render(<TopBar snapshot={snapshotOf({ banked: 0 })} />);
+    expect(screen.queryByTestId('top-bar-tempering-banked')).not.toBeInTheDocument();
   });
 });
