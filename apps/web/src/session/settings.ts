@@ -199,9 +199,15 @@ export function resolveKeymap(overrides: Settings['bindings']): Readonly<{
   byAction: Readonly<Record<ActionId, KeyChord>>;
 }> {
   const byAction = { ...DEFAULT_BINDINGS, ...overrides } as Record<ActionId, KeyChord>;
+  // Two passes so an explicitly overridden action always owns its chord: writing defaults first
+  // and overrides second means a later action's DEFAULT binding can never steal a chord the user
+  // bound to an earlier action (each new ActionId used to be another chance to strand a keymap).
   const byChord = new Map<string, ActionId>();
   for (const actionId of ACTION_IDS) {
-    byChord.set(chordKey(byAction[actionId]), actionId);
+    if (!(actionId in overrides)) byChord.set(chordKey(byAction[actionId]), actionId);
+  }
+  for (const actionId of ACTION_IDS) {
+    if (actionId in overrides) byChord.set(chordKey(byAction[actionId]), actionId);
   }
   return { byChord, byAction };
 }
