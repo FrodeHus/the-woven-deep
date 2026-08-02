@@ -22,13 +22,8 @@ import { emptyRunMetrics, type RunMetrics } from './run-metrics.js';
 import { compareHallRecords } from './score-run.js';
 import { compareCodeUnits } from './stable-json.js';
 
-/**
- * The most Hall standings anything may carry: `standingsFromRecords` caps its output here, and
- * `createNewRun`/`validateActiveRun` reject a run seeded with more. Exported so every host — the
- * server's SQLite Hall, the guest's session-storage Hall — caps against this one definition
- * instead of its own copy.
- */
-export const MAX_STANDINGS = 10;
+export { MAX_STANDINGS } from './run-records-model.js';
+import { MAX_STANDINGS } from './run-records-model.js';
 
 /**
  * Recursively deep-copies and deep-freezes a value. Arrays and plain objects are cloned

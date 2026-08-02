@@ -24,6 +24,7 @@ import {
 } from './population.js';
 import { recorded } from './events.js';
 import { validateKnowledgePacking } from '../knowledge.js';
+import { MAX_STANDINGS } from '../run-records-model.js';
 import { RUN_MODES, tileIndex, type ActiveRun, type Direction } from '../model.js';
 import type { AttributeName } from '../actor-model.js';
 import { SaveLoadError } from '../save-error.js';
@@ -117,8 +118,8 @@ export const activeRunSchema = z.strictObject({
   recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
   encounterDecisions: z.array(encounterDecision).readonly(),
   populations: z.array(population).readonly(),
-  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
-  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(MAX_STANDINGS).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(MAX_STANDINGS).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   offeredArtifact: identifier.nullable(),
   artifactsUndiscovered: z.array(identifier).readonly(),
