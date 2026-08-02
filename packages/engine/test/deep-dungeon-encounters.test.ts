@@ -89,13 +89,21 @@ describe('deep-dungeon depth-band population', () => {
     expect(result.encounterId).not.toBeNull();
   });
 
-  it('offers only Bound encounters at depth 13 (previously a total void)', () => {
+  it('offers only Bound encounters (plus the Travelling Lampwright) at depth 13 (previously a total void)', () => {
     const depth = 13;
     const eligible = encounters().filter(
       (entry) => depth >= entry.minDepth && depth <= entry.maxDepth,
     );
     expect(eligible.length).toBeGreaterThan(0);
-    expect(eligible.every((entry) => entry.tags.includes('the-bound'))).toBe(true);
+    // The Travelling Lampwright's maxDepth was raised 10 -> 20 (#154, light-pressure) so the
+    // dedicated fuel merchant covers the whole run instead of vanishing halfway through; it is
+    // the one non-Bound encounter now eligible at every deep-band depth, this one included.
+    expect(
+      eligible.every(
+        (entry) =>
+          entry.tags.includes('the-bound') || entry.id === 'encounter.travelling-lampwright',
+      ),
+    ).toBe(true);
   });
 
   it('covers every deep floor 13 through 19 with at least one eligible encounter', () => {

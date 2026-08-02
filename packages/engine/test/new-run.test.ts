@@ -447,8 +447,18 @@ describe('createNewRun records input', () => {
     // creation). Verified by diffing the decoded run objects field-by-field against the prior pin:
     // only `contentHash` differs, nothing else -- confirming that chain held. Expected
     // content-authoring drift, not an engine regression.
+    // Re-pinned again for issue #154 (light-pressure): encounter.travelling-lampwright's maxDepth
+    // moved 10 -> 20 (the dedicated fuel merchant now covers the whole run), and four loot tables
+    // (chest-shallow, floor-scatter-deep, chest-deep, town-provisioner) gained or reshaped light-fuel
+    // choices (pitch-torch/lamp-oil weights and quantities). None of these are reachable from
+    // `createNewRun`: the lampwright depth range only affects mid-run encounter eligibility, and
+    // widening an existing loot-table choice list or reshaping a quantity range doesn't add or
+    // remove a roll (`rolls` stays 1 on every touched table), so no stream shifts. Verified by
+    // diffing the decoded run objects field-by-field against the prior pin: only `contentHash`
+    // differs, nothing else -- confirmed by rebuilding the pre-#154 tree in a scratch worktree and
+    // comparing byte-for-byte. Expected content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '6e216b592149873d726ee4e1a175dcd6be067c5eba91e4a76f1a975bbe727fc4',
+      '75104bac1e56caf704bf9356b4031724002db83608b88530fefb67d783211515',
     );
   });
 
