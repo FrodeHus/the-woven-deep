@@ -10,8 +10,13 @@ export interface VerifyResult {
   profile: ProfileRow;
 }
 
+/** Why a token is not (or no longer) redeemable -- surfaced only in server logs, never to users. */
+export type TokenState = 'valid' | 'expired' | 'consumed' | 'unknown';
+
 export interface VerifyService {
   verify(input: Readonly<{ token: string }>): VerifyResult | null;
+  /** Read-only redeemability check: never consumes, safe against link-scanner prefetches. */
+  peek(input: Readonly<{ token: string }>): TokenState;
 }
 
 export function createVerifyService(
@@ -29,6 +34,17 @@ export function createVerifyService(
   const { clock, tokens, profiles, sessions, generateToken, hashToken, newId, transaction } = deps;
 
   return {
+    peek(input) {
+      const row = tokens.find(hashToken(input.token));
+      if (!row) {
+        return 'unknown';
+      }
+      if (row.consumedAt !== null) {
+        return 'consumed';
+      }
+      return row.expiresAt <= clock.now().toISOString() ? 'expired' : 'valid';
+    },
+
     verify(input) {
       const hash = hashToken(input.token);
       const row = tokens.findUnconsumed(hash);

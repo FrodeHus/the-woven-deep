@@ -147,6 +147,24 @@ describe('createVerifyService.verify', () => {
     expect(result).toBeNull();
   });
 
+  it('peek reports token state without ever consuming', () => {
+    const service = makeService();
+
+    expect(service.peek({ token: 'not-a-real-token' })).toBe('unknown');
+
+    const fresh = generateToken();
+    insertToken({ token: fresh, email: 'peek@example.com', expiresAt: '2026-07-17T00:15:00.000Z' });
+    expect(service.peek({ token: fresh })).toBe('valid');
+    // Peeking any number of times leaves the token redeemable.
+    expect(service.peek({ token: fresh })).toBe('valid');
+    expect(service.verify({ token: fresh })).not.toBeNull();
+    expect(service.peek({ token: fresh })).toBe('consumed');
+
+    const stale = generateToken();
+    insertToken({ token: stale, email: 'peek@example.com', expiresAt: '2026-07-16T23:59:59.000Z' });
+    expect(service.peek({ token: stale })).toBe('expired');
+  });
+
   it('rolls back the whole transaction (no session, token stays consumed-or-not atomically) when session insert fails after consume', () => {
     // Use a real db.transaction to prove atomicity: force sessions.insert to throw by
     // inserting a session that violates the profile_id foreign key via a broken profiles dep.

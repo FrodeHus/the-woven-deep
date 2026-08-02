@@ -29,6 +29,7 @@ function toRow(row: LoginTokenTableRow): LoginTokenRow {
 export class LoginTokenRepository {
   private readonly insertStatement;
   private readonly findUnconsumedStatement;
+  private readonly findStatement;
   private readonly markConsumedStatement;
   private readonly deleteExpiredStatement;
 
@@ -40,6 +41,7 @@ export class LoginTokenRepository {
     this.findUnconsumedStatement = this.database.prepare(
       'select * from login_tokens where token_hash = ? and consumed_at is null',
     );
+    this.findStatement = this.database.prepare('select * from login_tokens where token_hash = ?');
     this.markConsumedStatement = this.database.prepare(
       'update login_tokens set consumed_at = ? where token_hash = ? and consumed_at is null',
     );
@@ -50,6 +52,11 @@ export class LoginTokenRepository {
 
   insert(row: Omit<LoginTokenRow, 'consumedAt'>): void {
     this.insertStatement.run(row.tokenHash, row.normalizedEmail, row.expiresAt, row.createdAt);
+  }
+
+  find(tokenHash: string): LoginTokenRow | undefined {
+    const row = this.findStatement.get(tokenHash) as LoginTokenTableRow | undefined;
+    return row ? toRow(row) : undefined;
   }
 
   findUnconsumed(tokenHash: string): LoginTokenRow | undefined {
