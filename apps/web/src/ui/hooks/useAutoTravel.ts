@@ -19,6 +19,8 @@ import {
   type TravelMode,
   type TravelPlan,
 } from '../../session/travel.js';
+import { heroOf } from '../../session/projection-view.js';
+import { heroLightIsOut } from '../panels/types.js';
 import { STEP_MS } from '../playfield/scene-state.js';
 
 /** Auto-explore's per-step pace: twice click-travel's, because an explore is a long walk the player
@@ -244,6 +246,13 @@ export function useAutoTravel({
     clearPendingStep();
     travelRef.current = null;
     if (disabled) return;
+    // A dead light outside town would make this a near-blind cell-by-cell crawl -- refuse to start
+    // rather than walk the player somewhere they cannot see. The mid-walk light-failing stop is
+    // separate and still applies to a walk that began lit.
+    if (!projection.floor.town && heroLightIsOut(heroOf(projection).equipment)) {
+      session.noteSystemLine('It is too dark to explore.');
+      return;
+    }
     const path = computeExplorePath(projection);
     if (path === null || path.length === 0) {
       session.noteSystemLine('You have explored this floor.');
