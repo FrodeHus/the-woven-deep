@@ -15,6 +15,7 @@ import {
   IDENTIFICATION_MODES,
   ITEM_CATEGORIES,
   ITEM_HANDEDNESS_VALUES,
+  ITEM_ONLY_EFFECT_IDS,
   ITEM_RARITIES,
   LEADER_DEATH_RESPONSES,
   MERCHANT_AGGRESSION_RESPONSES,
@@ -100,6 +101,24 @@ export const effect = z.strictObject({
   effectId: stableIdSchema,
   parameters: jsonObject.default({}),
   requiresLivingTarget: z.boolean().default(false),
+});
+
+/**
+ * `effect`, plus a compile-time rejection of `ITEM_ONLY_EFFECT_IDS`: effects whose engine
+ * resolver requires item-instance context a spell cast, a trap trigger, or a condition tick
+ * cannot supply. Curse triggers and boss phases already close this door with their own
+ * allowlists; spell/trap/condition effect lists otherwise carry no restriction at all, so this is
+ * the blocklist equivalent, shared by `spell.ts`, `trap.ts`, and `condition.ts`.
+ */
+export const nonItemEffect = effect.superRefine((value, context) => {
+  if (!(ITEM_ONLY_EFFECT_IDS as readonly string[]).includes(value.effectId)) return;
+  context.addIssue({
+    code: 'custom',
+    path: ['effectId'],
+    message:
+      `effect ${value.effectId} requires item-instance context this content kind cannot supply; ` +
+      'see ITEM_ONLY_EFFECT_IDS in packages/content/src/model/common.ts',
+  });
 });
 
 export const base = {

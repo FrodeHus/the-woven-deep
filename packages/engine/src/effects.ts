@@ -423,6 +423,9 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       }
       continue;
     } else if (effect.effectId === 'effect.item.enchant') {
+      // Unreachable for compiled content: ITEM_ONLY_EFFECT_IDS bars effect.item.enchant from
+      // spell/trap/condition effect lists at compile time, so only use-item ever reaches here,
+      // and use-item always supplies enchantingState.
       if (!enchantingState) {
         throw new TypeError('effect.item.enchant requires enchantingState');
       }

@@ -173,6 +173,26 @@ export const EFFECT_IDS = [
 ] as const;
 export type EffectId = (typeof EFFECT_IDS)[number];
 
+/**
+ * Effects whose engine resolver (`resolveEffectSequence` in `effects.ts`) requires item-instance
+ * context -- a `sourceItemId`, or another item-scoped RNG stream (`enchantingState`) -- that a
+ * spell cast, a trap trigger, or a condition tick structurally cannot supply: none of those three
+ * paths resolve against a specific item instance the way `use-item` does. Unlike curse triggers
+ * and boss phases (both closed by their own compile-time allowlist), spell/trap/condition effect
+ * lists otherwise carry no restriction, so this is enforced as a blocklist by the spell, trap, and
+ * condition compile schemas. `effect.curse.remove` and `effect.fuel.transfer` were audited and
+ * excluded: `effect.curse.remove` only ever reads the actor-owned `items` array (already supplied
+ * by every caller) and never throws on a missing precondition, and `effect.fuel.transfer` is
+ * resolved through the generic `operations` seam (already unimplemented -- and already rejected
+ * the same way every other operations-seam effect is -- in these three contexts, not a new gap
+ * this list needs to close).
+ */
+export const ITEM_ONLY_EFFECT_IDS = [
+  'effect.item.consume',
+  'effect.item.enchant',
+] as const satisfies readonly EffectId[];
+export type ItemOnlyEffectId = (typeof ITEM_ONLY_EFFECT_IDS)[number];
+
 export type ContentEntry =
   | MonsterContentEntry
   | ItemContentEntry

@@ -1776,3 +1776,94 @@ entries:
     expect(DERIVED_STAT_NAMES).toContain('spellPower');
   });
 });
+
+describe('item-only effect ids outside item context', () => {
+  it('rejects a spell authoring effect.item.enchant, naming the effect and the reason', () => {
+    const source = `schemaVersion: 14
+entries:
+  - kind: spell
+    id: spell.test-temper
+    name: Test temper
+    tags: [utility]
+    targetingId: target.self
+    range: 0
+    actionCost: 100
+    weaveCost: 0
+    effects:
+      - { effectId: effect.item.enchant, parameters: {}, requiresLivingTarget: false }
+`;
+    expect(() => parseContentFile({ path: 'spells/test.yaml', source })).toThrow(
+      /effect\.item\.enchant requires item-instance context/,
+    );
+  });
+
+  it('rejects a trap authoring effect.item.enchant, naming the effect and the reason', () => {
+    const source = `schemaVersion: 14
+entries:
+  - kind: trap
+    id: trap.test-temper
+    name: Test temper trap
+    glyph: "^"
+    color: "#9a7658"
+    tags: [mechanical]
+    targetingId: target.actor
+    discoveryDifficulty: 7
+    disarmDifficulty: 9
+    disarmOutcomes: { failure: safe, criticalFailure: trigger, toolDamage: 10 }
+    resetMode: once
+    effects:
+      - { effectId: effect.item.enchant, parameters: {}, requiresLivingTarget: false }
+`;
+    expect(() => parseContentFile({ path: 'traps/test.yaml', source })).toThrow(
+      /effect\.item\.enchant requires item-instance context/,
+    );
+  });
+
+  it('rejects a condition tickEffect authoring effect.item.enchant, naming the effect and the reason', () => {
+    const source = `schemaVersion: 14
+entries:
+  - kind: condition
+    id: condition.test-temper
+    name: Test temper condition
+    tags: [utility]
+    description: A test condition.
+    color: '#e05a2b'
+    duration: { mode: timed, default: 3, maximum: 6 }
+    stacking: { mode: replace, maximumStacks: 1 }
+    tickEffects:
+      - { effectId: effect.item.enchant, parameters: {}, requiresLivingTarget: false }
+`;
+    expect(() => parseContentFile({ path: 'conditions/test.yaml', source })).toThrow(
+      /effect\.item\.enchant requires item-instance context/,
+    );
+  });
+
+  it('still allows item content to author effect.item.enchant and effect.item.consume', () => {
+    const source = `schemaVersion: 14
+entries:
+  - kind: item
+    id: item.test-temper-scroll
+    name: Test temper scroll
+    glyph: "?"
+    color: "#c98f3f"
+    tags: [magic, utility, scroll]
+    minDepth: 8
+    maxDepth: 20
+    category: scroll
+    stackLimit: 3
+    price: 40
+    rarity: rare
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    artifact: null
+    identification: { mode: known, poolId: null }
+    effects:
+      - { effectId: effect.item.enchant, parameters: {}, requiresLivingTarget: false }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }
+`;
+    const entries = parseContentFile({ path: 'items/test.yaml', source });
+    expect(entries).toHaveLength(1);
+  });
+});

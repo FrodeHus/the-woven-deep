@@ -5,7 +5,7 @@ import {
   color,
   conditionStackingModes,
   damageTypes,
-  effect,
+  nonItemEffect,
   safeInteger,
   safeNonNegative,
   safePositive,
@@ -41,7 +41,7 @@ export const conditionEntry = z
     }),
     modifiersPerStack: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger).default({}),
     traits: z.array(z.enum(CONDITION_TRAIT_IDS)).default([]),
-    tickEffects: z.array(effect).default([]),
+    tickEffects: z.array(nonItemEffect).default([]),
     mitigation: conditionMitigation.optional(),
   })
   .superRefine((entry, context) => {
