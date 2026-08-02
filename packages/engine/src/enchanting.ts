@@ -2,11 +2,12 @@ import type {
   CompiledContentPack,
   EnchantmentContentEntry,
   ItemCategory,
+  ItemRarity,
 } from '@woven-deep/content';
 import { balanceEntry } from './balance.js';
 import { requireItem } from './content-index.js';
 import type { ItemEnchantmentState, ItemInstance } from './item-model.js';
-import type { Uint32State } from './model.js';
+import type { OpaqueId, Uint32State } from './model.js';
 import { rollDie } from './random.js';
 import { compareCodeUnits } from './stable-json.js';
 
@@ -51,6 +52,35 @@ function scaledMagnitude(authored: number, bps: number): number {
 }
 
 /**
+ * The scaled modifier magnitudes a given `(enchantmentId, rarity)` pair produces: every authored
+ * modifier value scaled by the rarity's `rarityMagnitudeBps`, floored at 1. Shared by
+ * `drawEnchantment` (the generation path, below) and content-bound validation (the round-trip
+ * check that a live item's stored magnitudes still match what the current pack would derive), so
+ * both compute the identical numbers from the identical three inputs -- one definition of "what
+ * this enchantment is worth on this rarity," not two that could drift apart.
+ */
+export function deriveEnchantmentModifiers(
+  content: CompiledContentPack,
+  enchantmentId: OpaqueId,
+  rarity: ItemRarity,
+): Readonly<Record<string, number>> {
+  const entry = content.entries.find(
+    (candidate): candidate is EnchantmentContentEntry =>
+      candidate.kind === 'enchantment' && candidate.id === enchantmentId,
+  );
+  if (!entry) {
+    throw new Error(`internal invariant: enchantment definition ${enchantmentId} does not exist`);
+  }
+  const bps = balanceEntry(content).enchanting.rarityMagnitudeBps[rarity];
+  return Object.fromEntries(
+    Object.entries(entry.modifiers).map(([stat, authored]) => [
+      stat,
+      scaledMagnitude(authored, bps),
+    ]),
+  );
+}
+
+/**
  * Draws one enchantment for `item` on the `enchanting` stream: a single weighted pick over the
  * pack's `enchantment` entries eligible for the item's category, with each modifier scaled by the
  * item rarity's `rarityMagnitudeBps`. Exactly ONE draw, always -- an ineligible item must be
@@ -87,13 +117,7 @@ export function drawEnchantment(
       break;
     }
   }
-  const bps = balanceEntry(content).enchanting.rarityMagnitudeBps[definition.rarity];
-  const modifiers = Object.fromEntries(
-    Object.entries(chosen.modifiers).map(([stat, authored]) => [
-      stat,
-      scaledMagnitude(authored, bps),
-    ]),
-  );
+  const modifiers = deriveEnchantmentModifiers(content, chosen.id, definition.rarity);
   return {
     enchantment: { enchantmentId: chosen.id, modifiers },
     state: roll.state,

@@ -49,7 +49,11 @@ function ring(id: string): ItemContentEntry {
     category: 'ring',
     stackLimit: 1,
     price: 10,
-    rarity: 'rare',
+    // Common (bps 10000) keeps `deriveEnchantmentModifiers`'s scaling a 1:1 identity against the
+    // authored modifier below, so the hand-picked test magnitudes (5 maxHealth, 3 maxWeave) are
+    // exactly what content-bound validation's registry re-derivation expects to see on the
+    // instance -- rarity plays no other role in this suite.
+    rarity: 'common',
     heirloomEligible: false,
     minDepth: 1,
     maxDepth: 20,
@@ -106,7 +110,20 @@ const testEnchantment: EnchantmentContentEntry = {
   name: 'Test enchantment',
   tags: ['enchantment', 'ring'],
   categories: ['ring'],
-  modifiers: { maxHealth: 1 },
+  modifiers: { maxHealth: 5 },
+  weight: 1,
+};
+
+/** A distinct registry entry for the weave-side fixtures below, since content-bound validation now
+ * re-derives each instance's stored modifiers from its own `enchantmentId` -- one entry cannot
+ * honestly stand in for both a maxHealth and a maxWeave test magnitude. */
+const testWeaveEnchantment: EnchantmentContentEntry = {
+  kind: 'enchantment',
+  id: 'enchantment.test-weave',
+  name: 'Test weave enchantment',
+  tags: ['enchantment', 'ring'],
+  categories: ['ring'],
+  modifiers: { maxWeave: 3 },
   weight: 1,
 };
 
@@ -121,6 +138,7 @@ function pack(): CompiledContentPack {
       potion,
       belowHalfCurse,
       testEnchantment,
+      testWeaveEnchantment,
       {
         ...ring(WITS_RING),
         equipment: { slots: ['right-ring'], handedness: 'one-handed', reservedSlots: [] },
@@ -158,13 +176,14 @@ function ringInstance(
   contentId: string,
   modifiers: Record<string, number>,
   location: ItemInstance['location'],
+  enchantmentId = 'enchantment.test',
 ): ItemInstance {
   return {
     itemId,
     contentId,
     quantity: 1,
     condition: 100,
-    enchantment: { enchantmentId: 'enchantment.test', modifiers },
+    enchantment: { enchantmentId, modifiers },
     identified: true,
     charges: null,
     fuel: null,
@@ -293,14 +312,21 @@ function equipViaCommand(
 ): ActiveRun {
   const hero = heroActor(run);
   const modifiers = contentId === VITALITY_RING ? { maxHealth: 5 } : { maxWeave: 3 };
+  const enchantmentId = contentId === VITALITY_RING ? 'enchantment.test' : 'enchantment.test-weave';
   const staged: ActiveRun = {
     ...run,
     items: [
       ...run.items,
-      ringInstance('item.ring.1', contentId, modifiers, {
-        type: 'backpack',
-        actorId: hero.actorId,
-      }),
+      ringInstance(
+        'item.ring.1',
+        contentId,
+        modifiers,
+        {
+          type: 'backpack',
+          actorId: hero.actorId,
+        },
+        enchantmentId,
+      ),
     ],
   };
   return apply(staged, { type: 'equip', itemId: 'item.ring.1', slot } as never);

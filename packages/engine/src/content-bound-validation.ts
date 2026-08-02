@@ -19,6 +19,7 @@ import {
   retainEchoCandidates,
 } from './champion.js';
 import { bossUniqueDropId } from './commerce.js';
+import { deriveEnchantmentModifiers } from './enchanting.js';
 import {
   hauntDropItemIdPrefix,
   hauntDropSnapshots,
@@ -797,6 +798,24 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         throw new Error(
           `content-bound validation: item ${item.itemId} carries unknown enchantment ${item.enchantment.enchantmentId}`,
         );
+      }
+      // A recorded heirloom round-trips whatever magnitudes its record held, which may be scaled
+      // by an older pack's `rarityMagnitudeBps` -- the same reasoning `modifiersCompatible` in
+      // `inventory.ts` already applies to heirloom modifier names, extended here to the exact
+      // scaled values. Every non-heirloom item, by contrast, was either drawn by this pack's own
+      // `drawEnchantment` or authored directly against it, so its stored magnitudes must still be
+      // exactly what the current pack would derive for its `(enchantmentId, rarity)` pair.
+      if (item.heirloom === undefined) {
+        const expectedModifiers = deriveEnchantmentModifiers(
+          pack,
+          item.enchantment.enchantmentId,
+          definition.rarity,
+        );
+        if (stableJson(item.enchantment.modifiers) !== stableJson(expectedModifiers)) {
+          throw new Error(
+            `content-bound validation: item ${item.itemId} enchantment modifiers do not match the registry`,
+          );
+        }
       }
     }
   }
