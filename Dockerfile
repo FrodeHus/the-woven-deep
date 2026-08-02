@@ -1,7 +1,8 @@
-FROM node:22-bookworm-slim AS build
+# Base pinned by digest so builds are reproducible and immune to tag repointing.
+# Refresh deliberately: `docker buildx imagetools inspect node:22-bookworm-slim` and update the digest.
+FROM node:22-bookworm-slim@sha256:f32b81066cde10a75dbac96646099533316d94bac4150c55da1636e1f0ffdc46 AS build
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.base.json ./
-COPY compose.yaml ./
 COPY apps ./apps
 COPY packages ./packages
 COPY content ./content
@@ -14,7 +15,7 @@ RUN npm ci
 RUN npm run build && npm run content:validate
 RUN npm prune --omit=dev
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:22-bookworm-slim@sha256:f32b81066cde10a75dbac96646099533316d94bac4150c55da1636e1f0ffdc46 AS runtime
 # Operational defaults (safe to bake in) plus the auth/config surface documented in
 # docs/server-admin/authentication.md. PUBLIC_URL, COOKIE_SECRET, and the three MAILGUN_* keys are
 # REQUIRED at runtime in production and are declared here only as empty placeholders — supply real
@@ -40,8 +41,12 @@ COPY --from=build /app/packages/engine/dist ./packages/engine/dist
 COPY --from=build /app/packages/session-core/package.json ./packages/session-core/package.json
 COPY --from=build /app/packages/session-core/dist ./packages/session-core/dist
 COPY --from=build /app/content ./content
-RUN mkdir -p /data && chown -R node:node /app /data
+# /app stays root-owned and read-only to the runtime user; only /data (the SQLite volume) is
+# writable by node. A compromised process must not be able to rewrite its own code or content.
+RUN mkdir -p /data && chown node:node /data
 USER node
 EXPOSE 3000
 VOLUME ["/data"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
 CMD ["node", "apps/server/dist/main.js"]

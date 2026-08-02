@@ -1,16 +1,22 @@
 services:
   rogue:
     build: .
+    # On a production host fronted by a same-machine TLS reverse proxy (Secure cookies require
+    # HTTPS anyway), set BIND_ADDRESS=127.0.0.1 so the port is not reachable from the network.
+    # The default stays 0.0.0.0 because loopback-bound publishes do not work under every engine
+    # (OrbStack resets them).
     ports:
-      - '3000:3000'
+      - '${BIND_ADDRESS:-0.0.0.0}:3000:3000'
     environment:
-      NODE_ENV: development
+      # Production by default; override NODE_ENV=development for local hacking. With
+      # NODE_ENV=production the server refuses to boot unless PUBLIC_URL is a public,
+      # non-localhost URL — that refusal is the guard, don't work around it.
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_PATH: /data/rogue.sqlite
       CONTENT_DIR: /app/content
       # Auth/config — see docs/server-admin/authentication.md. All overridable from the host env.
-      # PUBLIC_URL, COOKIE_SECRET, and the three MAILGUN_* keys are REQUIRED in production; with
-      # NODE_ENV=production the server refuses to boot unless PUBLIC_URL is a public, non-localhost
-      # URL. Unset host vars become empty strings, which the server reads as "not configured".
+      # PUBLIC_URL, COOKIE_SECRET, and the three MAILGUN_* keys are REQUIRED in production.
+      # Unset host vars become empty strings, which the server reads as "not configured".
       PUBLIC_URL: ${PUBLIC_URL:-}
       COOKIE_SECRET: ${COOKIE_SECRET:-}
       MAILGUN_API_KEY: ${MAILGUN_API_KEY:-}
@@ -21,13 +27,25 @@ services:
     volumes:
       - ${CONTENT_SOURCE:-./content}:/app/content:ro
       - rogue-data:/data
+    # Container hardening: immutable root filesystem (only /data and a scratch /tmp are
+    # writable), no capabilities, no privilege escalation, PID-1 signal handling via init,
+    # and a fork-bomb ceiling. The image already runs as the unprivileged `node` user.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    init: true
+    pids_limit: 256
     healthcheck:
       test:
         [
           'CMD',
           'node',
           '-e',
-          "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)})",
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))",
         ]
       interval: 10s
       timeout: 3s

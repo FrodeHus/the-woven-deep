@@ -1,8 +1,17 @@
 .git
+.github
 .superpowers
+.worktrees
+.claude
+.idea
+.playwright-mcp
 node_modules
 **/dist
 coverage
 data
 playwright-report
 test-results
+.env
+.env.*
+*.env
+**/*.sqlite
