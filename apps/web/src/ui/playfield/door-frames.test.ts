@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ObservableCell } from '@woven-deep/engine';
-import { withImpliedDoorFrames } from './door-frames.js';
+import { doorWallAxis, withImpliedDoorFrames } from './door-frames.js';
 
 const WIDTH = 5;
 const HEIGHT = 5;
@@ -140,5 +140,44 @@ describe('withImpliedDoorFrames', () => {
     expect(framed.map((entry) => entry.index)).toEqual(
       Array.from({ length: WIDTH * HEIGHT }, (_unused, index) => index),
     );
+  });
+});
+
+describe('doorWallAxis', () => {
+  /** A `cellAt`-shaped lookup over a plain array, exactly the shape `IsoRenderer` builds from its
+   * own `cellByKey` map -- the same lookup contract `doorWallAxis` consumes. */
+  function lookup(
+    cells: readonly ObservableCell[],
+  ): (x: number, y: number) => ObservableCell | undefined {
+    return (x, y) => cells.find((candidate) => candidate.x === x && candidate.y === y);
+  }
+
+  it('reports a horizontal wall axis for a door on a north-south passage (flanked east/west)', () => {
+    const cells = corridorDoorFloor();
+    expect(doorWallAxis(lookup(cells), 2, 2)).toBe('horizontal');
+  });
+
+  it('reports a vertical wall axis for a door on an east-west passage (flanked north/south)', () => {
+    const cells = grid((x, y) => {
+      if (x === 2 && y === 2) return 'terrain.door';
+      if (y === 2) return 'terrain.floor';
+      return undefined;
+    });
+    expect(doorWallAxis(lookup(cells), 2, 2)).toBe('vertical');
+  });
+
+  it('returns null when the passage axis is ambiguous (passage on both axes)', () => {
+    const cells = grid((x, y) => {
+      if (x === 2 && y === 2) return 'terrain.door';
+      if (x === 2 && y === 1) return 'terrain.floor';
+      if (x === 1 && y === 2) return 'terrain.floor';
+      return undefined;
+    });
+    expect(doorWallAxis(lookup(cells), 2, 2)).toBeNull();
+  });
+
+  it('returns null when neither axis has known passage (both flanks still unknown)', () => {
+    const cells = grid((x, y) => (x === 2 && y === 2 ? 'terrain.door' : undefined));
+    expect(doorWallAxis(lookup(cells), 2, 2)).toBeNull();
   });
 });

@@ -10,6 +10,37 @@ function isPassageToken(token: string | undefined): boolean {
   return token === 'terrain.floor' || token === 'terrain.stair';
 }
 
+/** A cell lookup by grid coordinate -- the one shape both `withImpliedDoorFrames` (built off its
+ * own `byIndex` array) and `IsoRenderer` (built off its `cellByKey` map) already have lying around,
+ * so `doorWallAxis` takes this rather than a `cells`/`width`/`height` triple: no caller needs to
+ * rebuild an index it already has just to ask this one question. */
+export type CellAt = (x: number, y: number) => ObservableCell | undefined;
+
+/**
+ * The axis the wall a door at `(x, y)` is embedded in runs along, derived from which axis has
+ * known passage (floor/stair) beside the door -- the exact same vote `withImpliedDoorFrames`
+ * already made internally before this was extracted. `'horizontal'` means the wall runs along the
+ * grid x-axis (the door's passage runs north-south, flanked by wall to the west/east);
+ * `'vertical'` means the wall runs along the grid y-axis (passage runs east-west, flanked north/
+ * south). Returns `null` when ambiguous -- passage on both axes, or on neither (an undiscovered or
+ * mid-corridor door) -- since there is then no single wall line to reason about.
+ *
+ * Consumed by `IsoRenderer` to decide whether to mirror a door's leaf sprite so a door in a wall
+ * running one screen diagonal doesn't render identically to one running the other.
+ */
+export function doorWallAxis(
+  cellAt: CellAt,
+  x: number,
+  y: number,
+): 'horizontal' | 'vertical' | null {
+  const knownPassage = (px: number, py: number): boolean => isPassageToken(cellAt(px, py)?.token);
+  const vertical = knownPassage(x, y - 1) || knownPassage(x, y + 1);
+  const horizontal = knownPassage(x - 1, y) || knownPassage(x + 1, y);
+  // Passage on both axes (or on neither) leaves no single perpendicular wall line to report.
+  if (vertical === horizontal) return null;
+  return vertical ? 'horizontal' : 'vertical';
+}
+
 /**
  * Fills in the wall mass a discovered door implies but the hero has not discovered yet.
  *
@@ -42,30 +73,25 @@ export function withImpliedDoorFrames(
     if (x < 0 || x >= width || y < 0 || y >= height) return undefined;
     return byIndex[y * width + x];
   };
-  const knownPassage = (x: number, y: number): boolean => {
-    const neighbour = cellAt(x, y);
-    return neighbour !== undefined && isPassageToken(neighbour.token);
-  };
 
   const implied = new Map<number, ObservableCell>();
 
   for (const door of cells) {
     if (door.token !== DOOR_TOKEN || door.knowledge === 'unknown') continue;
 
-    const vertical = knownPassage(door.x, door.y - 1) || knownPassage(door.x, door.y + 1);
-    const horizontal = knownPassage(door.x - 1, door.y) || knownPassage(door.x + 1, door.y);
-    // Passage on both axes (or on neither) leaves no single perpendicular to frame.
-    if (vertical === horizontal) continue;
+    const axis = doorWallAxis(cellAt, door.x, door.y);
+    if (axis === null) continue;
 
-    const flanks: readonly (readonly [number, number])[] = vertical
-      ? [
-          [door.x - 1, door.y],
-          [door.x + 1, door.y],
-        ]
-      : [
-          [door.x, door.y - 1],
-          [door.x, door.y + 1],
-        ];
+    const flanks: readonly (readonly [number, number])[] =
+      axis === 'horizontal'
+        ? [
+            [door.x - 1, door.y],
+            [door.x + 1, door.y],
+          ]
+        : [
+            [door.x, door.y - 1],
+            [door.x, door.y + 1],
+          ];
 
     for (const [fx, fy] of flanks) {
       const flank = cellAt(fx, fy);

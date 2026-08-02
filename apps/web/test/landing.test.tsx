@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import { userEvent } from '@testing-library/user-event';
 import '@testing-library/jest-dom/vitest';
 import { LandingPage } from '../src/landing/LandingPage.js';
-import { PLAY_ROUTE, REGISTRATION_COMING_SOON_HREF } from '../src/landing/copy.js';
+import { PLAY_ROUTE, REGISTRATION_SIGN_IN_HREF } from '../src/landing/copy.js';
 
 // jsdom has no matchMedia; the landing hooks/canvas all guard with `window.matchMedia?.(...)`, so
 // leaving it unset exercises that guard. A couple of tests below stub it in to assert the
@@ -63,7 +63,7 @@ describe('LandingPage structure', () => {
   it('points the unbuilt registration CTA at a coming-soon anchor, not a dead route', () => {
     render(<LandingPage />);
     const registerCta = screen.getByRole('link', { name: /register free/i });
-    expect(registerCta).toHaveAttribute('href', REGISTRATION_COMING_SOON_HREF);
+    expect(registerCta).toHaveAttribute('href', REGISTRATION_SIGN_IN_HREF);
   });
 
   it('links in-page nav anchors to their sections', () => {
