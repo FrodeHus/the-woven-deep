@@ -28,3 +28,28 @@ describe('parseClientMessage — offer intent', () => {
     ).toBe(false);
   });
 });
+
+describe('parseClientMessage — temper intent', () => {
+  it('validates the temper intent over the wire', () => {
+    expect(
+      parseClientMessage(
+        JSON.stringify({
+          type: 'command',
+          commandId: 'c.1',
+          expectedRevision: 1,
+          intent: { type: 'temper', attribute: 'wits' },
+        }),
+      ).ok,
+    ).toBe(true);
+    expect(
+      parseClientMessage(
+        JSON.stringify({
+          type: 'command',
+          commandId: 'c.1',
+          expectedRevision: 1,
+          intent: { type: 'temper', attribute: 'luck' },
+        }),
+      ).ok,
+    ).toBe(false);
+  });
+});

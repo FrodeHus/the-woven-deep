@@ -5,8 +5,9 @@ import { directionDelta, movementAction } from './movement.js';
 import { actorHasConditionTrait } from './conditions.js';
 import { dropItem, pickupItem, splitStack } from './inventory.js';
 import { validateTarget } from './targeting.js';
-import { resolveEffectSequence, resolveEffectSweep } from './effects.js';
+import { firstEnchantableItemId, resolveEffectSequence, resolveEffectSweep } from './effects.js';
 import { heroCasterAptitude, spellLearnTarget } from './caster.js';
+import { spellPowerFor } from './spell-power.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
 import { artifactById } from './commerce.js';
@@ -121,6 +122,9 @@ function validateItemSpellUse(
   }>,
 ): PlayerActionValidation {
   const { state, content, actor, target: aim } = input;
+  // One derivation for both branches, and the same pre-mutation state `action-dispatch.ts` derives
+  // from at commit time -- the dry run must resolve the identical sequence.
+  const casterSpellPower = spellPowerFor({ state, content, actor });
   const spell = entryById(content, input.spellId);
   if (!spell || spell.kind !== 'spell') return { status: 'invalid', reason: 'action.unavailable' };
   const perception = targetContext(state, actor, content);
@@ -155,6 +159,7 @@ function validateItemSpellUse(
         actors: state.actors,
         items: state.items,
         content,
+        spellPower: casterSpellPower,
         sourceActorId: actor.actorId,
         casterActorId: actor.actorId,
         includeCaster: false,
@@ -209,6 +214,7 @@ function validateItemSpellUse(
       actors: state.actors,
       items: state.items,
       content,
+      spellPower: casterSpellPower,
       sourceActorId: actor.actorId,
       targetActorId: candidate.actorId,
       effectsState: state.rng.effects,
@@ -716,6 +722,15 @@ export function validatePlayerAction(
     ) {
       return { status: 'invalid', reason: 'target.invalid' };
     }
+    // effect.item.enchant targets the actor's own first enchantable item (equipped before
+    // backpack, see effects.ts's firstEnchantableItemId) -- same non-fallthrough rejection shape
+    // as effect.curse.remove immediately above, so an ineligible hero never consumes the scroll.
+    if (
+      definition.effects.some((effect) => effect.effectId === 'effect.item.enchant') &&
+      firstEnchantableItemId(input.context.content, input.state.items, actor.actorId) === undefined
+    ) {
+      return { status: 'invalid', reason: 'target.invalid' };
+    }
     let targetActor = actor;
     if (command.target !== null) {
       const candidate = input.state.actors.find(
@@ -751,6 +766,7 @@ export function validatePlayerAction(
         sourceItemId: source.itemId,
         targetActorId: targetActor.actorId,
         effectsState: input.state.rng.effects,
+        enchantingState: input.state.rng.enchanting,
         survival: input.state.survival,
         survivalActorId: input.state.hero.actorId,
         worldTime: input.state.worldTime,
@@ -786,6 +802,13 @@ export function validatePlayerAction(
     if (actor.weave < definition.weaveCost) {
       return { status: 'invalid', reason: 'cast.insufficient-weave' };
     }
+    // Derived once, from the same pre-deduction state the dispatch-side `cast` resolver derives
+    // from, so the dry run and the commit scale identically by construction.
+    const castSpellPower = spellPowerFor({
+      state: input.state,
+      content: input.context.content,
+      actor,
+    });
     // The aptitude gate runs after the Weave gate but still before any target resolution or RNG:
     // an invalid cast must mutate neither state nor RNG.
     if (
@@ -839,6 +862,7 @@ export function validatePlayerAction(
           actors: input.state.actors,
           items: input.state.items,
           content: input.context.content,
+          spellPower: castSpellPower,
           sourceActorId: actor.actorId,
           casterActorId: actor.actorId,
           includeCaster: false,
@@ -895,6 +919,7 @@ export function validatePlayerAction(
         actors: input.state.actors,
         items: input.state.items,
         content: input.context.content,
+        spellPower: castSpellPower,
         sourceActorId: actor.actorId,
         targetActorId: candidate.actorId,
         effectsState: input.state.rng.effects,

@@ -1,4 +1,4 @@
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: encounter
     id: encounter.town-provisioner
@@ -55,7 +55,8 @@ entries:
       merchantSaleBps: 12000
       merchantPurchaseBps: 6000
       acceptedCategories: [weapon, ammunition, armor, shield]
-      services: []
+      services:
+        - { serviceId: merchant-service.enchant, basePrice: 80, minimumUses: 1, maximumUses: 2, tierIds: [neutral, trusted] }
       permanent: true
       aggressionResponse: self-defense
       commerceReputationDelta: 25

@@ -88,6 +88,29 @@ export const balanceEntry = z
       doorTilePercent: z.number().int().min(0).max(100),
       artifactOfferPercent: z.number().int().min(0).max(100),
     }),
+    tempering: z.strictObject({
+      depths: z
+        .array(z.number().int().safe().positive())
+        .min(1)
+        .refine(
+          (values) => values.every((value, index) => index === 0 || value > values[index - 1]!),
+          { message: 'tempering depths must be strictly ascending' },
+        )
+        .readonly(),
+    }),
+    spellPowerDivisor: z
+      .number()
+      .int()
+      .safe()
+      .min(1, { message: 'spellPowerDivisor must be a positive safe integer divisor' }),
+    enchanting: z.strictObject({
+      rarityMagnitudeBps: z.strictObject({
+        common: safePositive,
+        uncommon: safePositive,
+        rare: safePositive,
+        legendary: safePositive,
+      }),
+    }),
     floorLoot: z.strictObject({
       // `maximum: 0` disables scatter piles or chests outright; the superRefine below still
       // enforces minimum <= maximum.

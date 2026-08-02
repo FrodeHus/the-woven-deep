@@ -6,6 +6,7 @@ import {
   createNewRun,
   DEFAULT_GUEST_HERO,
   decodeActiveRun,
+  deriveEnchantmentModifiers,
   descendToNextFloor,
   encodeActiveRun,
   heroActor,
@@ -331,13 +332,16 @@ describe('house deposit/withdraw legality matrix', () => {
   it('round-trips a whole enchanted stack through the house, preserving its identity exactly', () => {
     const base = atHouseDoor(townRun());
     const hero = heroActor(base);
+    // The stored magnitudes must be exactly what the registry derives for this pair (content-bound
+    // validation now checks it), so it is computed here rather than hand-picked.
+    const modifiers = deriveEnchantmentModifiers(pack, 'enchantment.keen-edge', 'common');
     const enchanted: ItemInstance = backpackItem(
       'item.house-test.enchanted',
       'item.iron-sword',
       1,
       hero.actorId,
       {
-        enchantment: { enchantmentId: 'enchantment.test', modifiers: { defense: 2 } },
+        enchantment: { enchantmentId: 'enchantment.keen-edge', modifiers },
         condition: 87,
       },
     );

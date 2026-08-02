@@ -19,10 +19,11 @@ unset, so a deploy manifest may declare them as blank placeholders and let the h
 | `MAILGUN_API_KEY` | **Yes in production** | unset | Mailgun API key used to send login links. |
 | `MAILGUN_DOMAIN` | **Yes in production** | unset | Mailgun sending domain. |
 | `MAILGUN_SENDER` | **Yes in production** | unset | `From` address for login-link mail. |
+| `MAILGUN_REGION` | No | `us` | Mailgun API region: `us` or `eu`. Must match the region hosting `MAILGUN_DOMAIN` -- an EU domain with the default `us` region fails every send (visible in the server log as `login link delivery failed`). |
 | `LOGIN_RATE_LIMIT_PER_EMAIL_PER_HOUR` | No | `5` | Max login requests accepted per normalized email per hour. |
 | `LOGIN_RATE_LIMIT_PER_SOURCE_PER_HOUR` | No | `20` | Max login requests accepted per source address per hour. |
 
-The three `MAILGUN_*` keys are all-or-nothing: set all three or none. Setting only some is a
+The three `MAILGUN_*` credential keys are all-or-nothing: set all three or none. Setting only some is a
 fail-fast configuration error.
 
 ### `PUBLIC_URL` is mandatory in production

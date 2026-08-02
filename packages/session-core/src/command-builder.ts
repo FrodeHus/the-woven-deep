@@ -21,6 +21,7 @@ import {
   heroOf,
   ownedItemOf,
   type ActorView,
+  type AttributeName,
   type FeatureView,
   type GroundItemView,
   type OwnedItemView,
@@ -211,6 +212,28 @@ function buildOfferIntent(
   };
 }
 
+function buildTemperIntent(
+  input: Readonly<{
+    projection: GameplayProjection;
+    commandId: OpaqueId;
+    expectedRevision: number;
+    attribute: AttributeName;
+  }>,
+): BuiltIntent {
+  const { projection, commandId, expectedRevision, attribute } = input;
+  // Only the "nothing banked" case is worth pre-refusing client-side: the engine re-validates the
+  // cap on `resolveTemper`/`validateTemperCommand` regardless, and `TemperOverlay` already disables
+  // a capped attribute's button, so a `temper.capped` refusal reaching the wire would mean a stale
+  // overlay, not a normal path.
+  if (heroOf(projection).tempering.banked <= 0) {
+    return { kind: 'rejected', message: 'The Deep has given you nothing to spend.' };
+  }
+  return {
+    kind: 'command',
+    command: { type: 'temper', attribute, commandId, expectedRevision },
+  };
+}
+
 function buildPickupIntent(
   input: Readonly<{
     projection: GameplayProjection;
@@ -366,6 +389,14 @@ export function buildIntent(
   }
   if (intent.type === 'offer') {
     return buildOfferIntent({ projection, commandId, expectedRevision, itemId: intent.itemId });
+  }
+  if (intent.type === 'temper') {
+    return buildTemperIntent({
+      projection,
+      commandId,
+      expectedRevision,
+      attribute: intent.attribute,
+    });
   }
   if (intent.type === 'descend') {
     return stairDownUnderHero(projection)

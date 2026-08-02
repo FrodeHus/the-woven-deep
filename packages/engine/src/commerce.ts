@@ -78,6 +78,19 @@ export function quoteMerchantService(
   return product === 0 ? 0 : Math.max(1, integerQuotient(product, BPS_DIVISOR, 'up'));
 }
 
+/**
+ * Scales a merchant service's authored base price by a positive integer multiplier -- e.g. the
+ * enchant service's doubled price for a re-enchant -- checked against safe-integer overflow
+ * before the faction-tier quote (`quoteMerchantService`) is ever applied to the result.
+ */
+export function scaledServiceBasePrice(basePrice: number, multiplier: number): number {
+  assertPriceComponent(basePrice, 'service base price');
+  if (!Number.isSafeInteger(multiplier) || multiplier <= 0) {
+    throw new RangeError('service price multiplier must be a positive safe integer');
+  }
+  return checkedProduct(basePrice, multiplier, 'service price multiplier');
+}
+
 function assertFactionBounds(faction: NpcFactionContentEntry): void {
   if (
     !Number.isSafeInteger(faction.minimumReputation) ||

@@ -3,7 +3,7 @@ import type { PlayerIntent } from '../session/intents.js';
 import type { ActionId, ResolvedKeymap } from '../session/settings.js';
 import type { StairDirection } from '../session/stairs.js';
 
-/** The seven overlay-open commands whose outcome is `{ type: 'open-overlay', overlay }`. Typed
+/** The eight overlay-open commands whose outcome is `{ type: 'open-overlay', overlay }`. Typed
  * directly as this string union (rather than importing an `OverlayId` from elsewhere) so this
  * module stays free of a dependency on the overlay registry -- it happens to be the exact same
  * string set as `OverlayId` (registry.ts), `inventory` included: `i` routes through this same
@@ -13,6 +13,7 @@ export type OverlayActionId =
   | 'character-sheet'
   | 'map-journal'
   | 'spellbook'
+  | 'temper'
   | 'codex'
   | 'settings'
   | 'help'
@@ -137,6 +138,7 @@ function outcomeForAction(action: ActionId): RouterOutcome {
     case 'character-sheet':
     case 'map-journal':
     case 'spellbook':
+    case 'temper':
     case 'codex':
     case 'settings':
     case 'help':

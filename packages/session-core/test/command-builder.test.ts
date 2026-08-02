@@ -97,6 +97,15 @@ function withAdjacentHaunt(projection: GameplayProjection): GameplayProjection {
   };
 }
 
+/** Overrides `hero.tempering.banked` -- the one field `buildTemperIntent` reads client-side to
+ * pre-refuse a temper intent before it reaches the wire. */
+function withBankedTempering(projection: GameplayProjection, banked: number): GameplayProjection {
+  return {
+    ...projection,
+    hero: { ...projection.hero, tempering: { ...projection.hero.tempering, banked } },
+  };
+}
+
 function withLockedChestSouth(projection: GameplayProjection): GameplayProjection {
   const { x, y } = heroPosition(projection);
   return {
@@ -342,6 +351,30 @@ describe('buildIntent', () => {
       expectedRevision: 4,
     });
     expect(rejected.kind).toBe('rejected');
+  });
+
+  it('builds a temper command from the intent', () => {
+    const withPoint = withBankedTempering(baseProjection, 1);
+    expect(
+      buildIntent({
+        intent: { type: 'temper', attribute: 'wits' },
+        projection: withPoint,
+        commandId: 'c.1',
+        expectedRevision: 4,
+      }),
+    ).toMatchObject({ kind: 'command', command: { type: 'temper', attribute: 'wits' } });
+  });
+
+  it('rejects a temper intent with no banked point before it reaches the wire', () => {
+    const noPoint = withBankedTempering(baseProjection, 0);
+    expect(
+      buildIntent({
+        intent: { type: 'temper', attribute: 'wits' },
+        projection: noPoint,
+        commandId: 'c.1',
+        expectedRevision: 4,
+      }).kind,
+    ).toBe('rejected');
   });
 
   it('builds pickup for the top ground item under the hero with its full quantity', () => {

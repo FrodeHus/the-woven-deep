@@ -333,4 +333,47 @@ describe('foldEventsIntoLog', () => {
     );
     expect(log).toMatchObject([{ text: 'The haunt does not want this.', tone: 'system' }]);
   });
+
+  it('logs the tempering-banked line', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [{ type: 'hero.tempering-banked', eventId: 'e1', depth: 3, banked: 1 }],
+      0,
+    );
+    expect(log).toMatchObject([{ text: 'The Deep tempers those who dare it.', tone: 'info' }]);
+  });
+
+  it('logs the temper spend', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [{ type: 'hero.tempered', eventId: 'e1', attribute: 'vitality', value: 13, remaining: 0 }],
+      0,
+    );
+    expect(log).toMatchObject([{ text: 'Vitality hardens to 13.', tone: 'info' }]);
+  });
+
+  it('logs the two temper refusals', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [
+        {
+          type: 'action.invalid',
+          eventId: 'e1',
+          commandId: 'command.temper-1',
+          reason: 'temper.unavailable',
+        },
+        {
+          type: 'action.invalid',
+          eventId: 'e2',
+          commandId: 'command.temper-2',
+          reason: 'temper.capped',
+        },
+      ],
+      0,
+    );
+    expect(log.map((line) => line.text)).toEqual([
+      'The Deep has given you nothing to spend.',
+      'That part of you can harden no further.',
+    ]);
+  });
 });

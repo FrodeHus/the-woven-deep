@@ -5,6 +5,7 @@ import {
   type IdentificationPoolContentEntry,
   type ItemContentEntry,
 } from '@woven-deep/content';
+import type { AttributeName } from './actor-model.js';
 import type { ActiveRun } from './model.js';
 import { unidentifiedPresentation } from './identification.js';
 import { hungerStage } from './survival.js';
@@ -18,6 +19,7 @@ import {
   retainEchoCandidates,
 } from './champion.js';
 import { bossUniqueDropId } from './commerce.js';
+import { deriveEnchantmentModifiers } from './enchanting.js';
 import {
   hauntDropItemIdPrefix,
   hauntDropSnapshots,
@@ -701,6 +703,27 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
       );
     }
   }
+  // The content-bound half of the derived-base invariant the save tier started: the chargen base is
+  // `attributes - tempering.spent`, and the CAP on both ends is authored, so only this tier can
+  // police it. Without the upper bound a forged save could temper past `attributeMaximum`; without
+  // the lower one a forged `spent` could claim points the hero never had.
+  const heroAttributes = run.actors.find((actor) => actor.actorId === run.hero.actorId)?.attributes;
+  if (!heroAttributes) {
+    throw new Error('content-bound validation: hero actor does not exist');
+  }
+  for (const [attribute, value] of Object.entries(heroAttributes) as [AttributeName, number][]) {
+    if (value > balance.attributeMaximum) {
+      throw new Error(
+        `content-bound validation: hero attribute ${attribute} exceeds maximum ${balance.attributeMaximum}`,
+      );
+    }
+    const base = value - run.hero.tempering.spent[attribute];
+    if (base < balance.attributeMinimum) {
+      throw new Error(
+        `content-bound validation: hero attribute ${attribute} spends below minimum ${balance.attributeMinimum}`,
+      );
+    }
+  }
   if (run.survival.hungerReserve > balance.hungerMaximum) {
     throw new Error(
       `content-bound validation: hunger reserve exceeds maximum ${balance.hungerMaximum}`,
@@ -765,6 +788,34 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         throw new Error(
           `content-bound validation: item ${item.itemId} carries unknown curse ${itemCurse.curseId}`,
         );
+      }
+    }
+    if (item.enchantment !== null) {
+      const enchantment = pack.entries.find(
+        (entry) => entry.kind === 'enchantment' && entry.id === item.enchantment!.enchantmentId,
+      );
+      if (!enchantment) {
+        throw new Error(
+          `content-bound validation: item ${item.itemId} carries unknown enchantment ${item.enchantment.enchantmentId}`,
+        );
+      }
+      // A recorded heirloom round-trips whatever magnitudes its record held, which may be scaled
+      // by an older pack's `rarityMagnitudeBps` -- the same reasoning `modifiersCompatible` in
+      // `inventory.ts` already applies to heirloom modifier names, extended here to the exact
+      // scaled values. Every non-heirloom item, by contrast, was either drawn by this pack's own
+      // `drawEnchantment` or authored directly against it, so its stored magnitudes must still be
+      // exactly what the current pack would derive for its `(enchantmentId, rarity)` pair.
+      if (item.heirloom === undefined) {
+        const expectedModifiers = deriveEnchantmentModifiers(
+          pack,
+          item.enchantment.enchantmentId,
+          definition.rarity,
+        );
+        if (stableJson(item.enchantment.modifiers) !== stableJson(expectedModifiers)) {
+          throw new Error(
+            `content-bound validation: item ${item.itemId} enchantment modifiers do not match the registry`,
+          );
+        }
       }
     }
   }

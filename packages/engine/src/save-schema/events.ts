@@ -219,6 +219,13 @@ export const spellLearnedEvent = z.strictObject({
   actorId: identifier,
   spellId: identifier,
 });
+export const heroTemperedEvent = z.strictObject({
+  type: z.literal('hero.tempered'),
+  eventId: identifier,
+  attribute: z.enum(['might', 'agility', 'vitality', 'wits', 'resolve']),
+  value: safeNonNegative,
+  remaining: safeNonNegative,
+});
 export const heroRecalledEvent = z.strictObject({
   type: z.literal('hero.recalled'),
   eventId: identifier,
@@ -855,6 +862,7 @@ export const eventOptions = [
   itemThrownEvent,
   itemUsedEvent,
   spellLearnedEvent,
+  heroTemperedEvent,
   heroRecalledEvent,
   floorEnteredEvent,
   spellCastEvent,
@@ -1091,6 +1099,7 @@ import type {
   SoundHeardEvent,
   SpellCastEvent,
   SpellLearnedEvent,
+  HeroTemperedEvent,
   SwarmCapReachedEvent,
   SwarmMembersCreatedEvent,
   SwarmSourceDestroyedEvent,
@@ -1166,6 +1175,9 @@ type _ItemThrownDrift = Expect<SchemaMatches<z.infer<typeof itemThrownEvent>, It
 type _ItemUsedDrift = Expect<SchemaMatches<z.infer<typeof itemUsedEvent>, ItemUsedEvent>>;
 type _SpellLearnedDrift = Expect<
   SchemaMatches<z.infer<typeof spellLearnedEvent>, SpellLearnedEvent>
+>;
+type _HeroTemperedDrift = Expect<
+  SchemaMatches<z.infer<typeof heroTemperedEvent>, HeroTemperedEvent>
 >;
 type _HeroRecalledDrift = Expect<
   SchemaMatches<z.infer<typeof heroRecalledEvent>, HeroRecalledEvent>

@@ -34,6 +34,7 @@ describe('content summary counts', () => {
       vault: 1,
       condition: 1,
       curse: 0,
+      enchantment: 0,
       dialogue: 0,
       'identification-pool': 1,
       encounter: 0,

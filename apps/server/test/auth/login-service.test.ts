@@ -144,7 +144,7 @@ describe('createLoginService.request', () => {
     expect(transport.lastLinkFor?.('c@example.com')).toBeUndefined();
   });
 
-  it('still resolves uniformly when the transport rejects', async () => {
+  it('propagates a transport rejection after storing the token, so the route can log it', async () => {
     const clock = new FakeClock('2026-07-17T00:00:00.000Z');
     const config = authConfig();
     const failingTransport = {
@@ -163,7 +163,7 @@ describe('createLoginService.request', () => {
 
     await expect(
       service.request({ email: 'd@example.com', sourceAddress: '203.0.113.10' }),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('smtp exploded');
 
     const rows = database.prepare('select * from login_tokens').all();
     expect(rows).toHaveLength(1);

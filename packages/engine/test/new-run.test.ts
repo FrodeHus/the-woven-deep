@@ -36,13 +36,17 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v16 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v17 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(16);
+    expect(first.schemaVersion).toBe(17);
     expect(first.mode).toBe('classic');
+    expect(first.hero.tempering).toEqual({
+      banked: 0,
+      spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+    });
     expect(first.offeredArtifact).toBeNull();
     expect(first.artifactsUndiscovered).toEqual([]);
     expect(first.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
@@ -263,6 +267,13 @@ describe('createNewRun', () => {
     expect({ ...wanderer, mode: 'classic' }).toEqual(classic);
   });
 
+  it('starts a new run with zeroed tempering', () => {
+    expect(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }).hero.tempering).toEqual({
+      banked: 0,
+      spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+    });
+  });
+
   describe('engine-required floor loot tables', () => {
     const MISSING = 'loot-table.chest-mid';
 
@@ -404,8 +415,40 @@ describe('createNewRun records input', () => {
     // loot/merchant logic reads it yet -- so the digest moves purely because `contentHash` covers
     // the whole compiled pack and the template entry grew a field. This is expected
     // content-authoring drift, not an engine regression.
+    // Re-pinned again for save schema v17 (hero tempering + the `enchanting` stream,
+    // hero-power-curve feature): `schemaVersion` moves 16 -> 17, every encoded hero now carries a
+    // zeroed `tempering`, and `rng` gains the seed-derived `enchanting` stream (the FIRST new RNG
+    // stream since the eleven-stream list froze) -- no other key differs. This is the expected
+    // save-schema bump, not an engine regression.
+    // Re-pinned again for content schema v14 (the `enchantment` kind, `tempering`/
+    // `spellPowerDivisor`/`enchanting` balance knobs, and the required `formulas.spellPower`
+    // entry): `contentHash` moves because the compiled pack grew a kind and the balance entry grew
+    // fields, and every hero's derived stats now include `spellPower` alongside the existing
+    // derived-stat set -- no RNG stream moves (enchanting is drawn only by the enchant service and
+    // the tempering-steel scroll, neither reachable from run creation). This is expected
+    // content-authoring drift, not an engine regression.
+    // Re-pinned again for the Town Armorer's new `merchant-service.enchant` offer
+    // (content/encounters/town-merchants.yaml, basePrice 80) plus the matching `neutral`/`trusted`
+    // faction `serviceIds` grant (content/npc-factions/town-merchants.yaml): the same
+    // `materializeMerchant` mechanism as the remove-curse re-pin above -- one `rollDie` per
+    // authored service (packages/engine/src/merchant-stock.ts:120-129) -- means the armorer's
+    // now-one-entry `services` list consumes one additional `merchant-stock` roll during town
+    // materialization, shifting the shared stream for every merchant materialized afterward.
+    // Verified by diffing the decoded run objects field-by-field against the prior pin: only
+    // `contentHash`, `items`, `populations`, and `rng['merchant-stock']` differ -- the `populations`
+    // delta is exactly the armorer's new `services` entry, nothing else moved. Expected
+    // content-authoring drift from adding a merchant service, not an engine regression.
+    // Re-pinned again for the scroll of tempering steel (content/items/tempering-steel-scroll.yaml,
+    // a new `known`-identification item so it never touches the identification-pool sweep, plus its
+    // low-weight `loot-table.floor-scatter-deep` / `loot-table.chest-deep` choices): this is the
+    // content-schema-v14 re-pin's "neither reachable from run creation" prediction above made real
+    // -- the scroll now exists, but `createNewRun` still never draws on the `enchanting` stream
+    // (only the enchant merchant service and a *read* of this scroll do, and neither runs during run
+    // creation). Verified by diffing the decoded run objects field-by-field against the prior pin:
+    // only `contentHash` differs, nothing else -- confirming that chain held. Expected
+    // content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '4529a80dabaee02ef4948b557598bb9001bcc8c59b102b6794fc635bd6042bbf',
+      '6e216b592149873d726ee4e1a175dcd6be067c5eba91e4a76f1a975bbe727fc4',
     );
   });
 

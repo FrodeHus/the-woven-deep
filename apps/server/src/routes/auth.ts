@@ -50,8 +50,9 @@ export function registerAuthRoutes(
 
     try {
       await login.request({ email: body.email, sourceAddress: request.ip });
-    } catch {
-      // Uniform response even on unexpected transport/service failure.
+    } catch (error) {
+      // Uniform response even on unexpected transport/service failure -- but never silent.
+      request.log.error({ err: error }, 'login link delivery failed');
     }
 
     reply.send({ ok: true });

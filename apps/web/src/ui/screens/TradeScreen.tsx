@@ -90,6 +90,7 @@ const SERVICE_LABEL: Readonly<Record<MerchantServiceId, string>> = {
   'merchant-service.identify': 'Identify',
   'merchant-service.remove-curse': 'Remove curse',
   'merchant-service.strongbox': 'Strongbox',
+  'merchant-service.enchant': 'Enchant',
 };
 
 interface TradeRow {
@@ -203,7 +204,14 @@ export function TradeScreen({
       })),
       services: view.services.map((entry) => ({
         id: entry.serviceId,
-        name: `${SERVICE_LABEL[entry.serviceId]} (${entry.remainingUses} left)`,
+        // Re-enchanting an already-enchanted item costs double (`scaledServiceBasePrice`,
+        // `packages/engine/src/trade.ts`) -- the projection's flat `unitPrice` never reflects that
+        // per-target scaling (it can't: the doubling depends on which item the player picks in the
+        // inline picker below), so this is a static disclaimer rather than a computed figure.
+        name:
+          entry.serviceId === 'merchant-service.enchant'
+            ? `${SERVICE_LABEL[entry.serviceId]} (${entry.remainingUses} left) — re-enchanting costs double`
+            : `${SERVICE_LABEL[entry.serviceId]} (${entry.remainingUses} left)`,
         price: `${entry.unitPrice}g`,
         // A service with eligible targets (e.g. identify) opens the inline picker instead of guessing
         // which item the player meant; a targetless service (e.g. the strongbox) dispatches straight

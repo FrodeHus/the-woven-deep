@@ -134,6 +134,22 @@ describe('auth routes', () => {
     expect(responseB.json()).toEqual({ ok: true });
   });
 
+  it('returns the uniform 200 {ok:true} when the transport rejects', async () => {
+    bundle.transport.sendLoginLink = async () => {
+      throw new Error('mailgun down');
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      headers: { origin: PUBLIC_URL, 'content-type': 'application/json' },
+      payload: { email: 'fail@example.com' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ ok: true });
+  });
+
   it('rejects login from a mismatched Origin with 403', async () => {
     const response = await app.inject({
       method: 'POST',

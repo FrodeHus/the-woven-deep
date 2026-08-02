@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { base, effect, safeNonNegative, safePositive, targetingIds } from './common.js';
+import { base, nonItemEffect, safeNonNegative, safePositive, targetingIds } from './common.js';
 
 const aoe = z.strictObject({
   shape: z.enum(['burst', 'line', 'cone']),
@@ -14,5 +14,5 @@ export const spellEntry = z.strictObject({
   actionCost: safePositive,
   weaveCost: safeNonNegative,
   aoe: aoe.optional(),
-  effects: z.array(effect).min(1),
+  effects: z.array(nonItemEffect).min(1),
 });

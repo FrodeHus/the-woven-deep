@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  effect,
+  nonItemEffect,
   presented,
   safeNonNegative,
   safePositive,
@@ -21,5 +21,5 @@ export const trapEntry = z.strictObject({
     toolDamage: safePositive,
   }),
   resetMode: z.enum(trapResetModes),
-  effects: z.array(effect).min(1),
+  effects: z.array(nonItemEffect).min(1),
 });

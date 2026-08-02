@@ -5,6 +5,7 @@ import type { ClassContentEntry } from './class.js';
 import type { ConditionContentEntry } from './condition.js';
 import type { CurseContentEntry } from './curse.js';
 import type { DialogueContentEntry } from './dialogue.js';
+import type { EnchantmentContentEntry } from './enchantment.js';
 import type { EncounterContentEntry } from './encounter.js';
 import type { FallenChampionTemplateContentEntry } from './champion.js';
 import type { IdentificationPoolContentEntry } from './identification-pool.js';
@@ -18,7 +19,7 @@ import type { TraitContentEntry } from './trait.js';
 import type { TrapContentEntry } from './trap.js';
 import type { VaultContentEntry } from './vault.js';
 
-export const CONTENT_SCHEMA_VERSION = 13 as const;
+export const CONTENT_SCHEMA_VERSION = 14 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
@@ -41,6 +42,7 @@ export const CONTENT_KIND_IDS = [
   'background',
   'trait',
   'curse',
+  'enchantment',
 ] as const;
 export type ContentKind = (typeof CONTENT_KIND_IDS)[number];
 export const DERIVED_STAT_NAMES = [
@@ -56,6 +58,7 @@ export const DERIVED_STAT_NAMES = [
   'lightOutMemoryPersists',
   'lightOutCommitsMemory',
   'weaveRegen',
+  'spellPower',
 ] as const;
 export type DerivedStatName = (typeof DERIVED_STAT_NAMES)[number];
 export const DAMAGE_TYPES = ['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane'] as const;
@@ -144,6 +147,7 @@ export const MERCHANT_SERVICE_IDS = [
   'merchant-service.identify',
   'merchant-service.remove-curse',
   'merchant-service.strongbox',
+  'merchant-service.enchant',
 ] as const;
 export type MerchantServiceId = (typeof MERCHANT_SERVICE_IDS)[number];
 
@@ -165,8 +169,29 @@ export const EFFECT_IDS = [
   'effect.spell.learn',
   'effect.recall',
   'effect.curse.remove',
+  'effect.item.enchant',
 ] as const;
 export type EffectId = (typeof EFFECT_IDS)[number];
+
+/**
+ * Effects whose engine resolver (`resolveEffectSequence` in `effects.ts`) requires item-instance
+ * context -- a `sourceItemId`, or another item-scoped RNG stream (`enchantingState`) -- that a
+ * spell cast, a trap trigger, or a condition tick structurally cannot supply: none of those three
+ * paths resolve against a specific item instance the way `use-item` does. Unlike curse triggers
+ * and boss phases (both closed by their own compile-time allowlist), spell/trap/condition effect
+ * lists otherwise carry no restriction, so this is enforced as a blocklist by the spell, trap, and
+ * condition compile schemas. `effect.curse.remove` and `effect.fuel.transfer` were audited and
+ * excluded: `effect.curse.remove` only ever reads the actor-owned `items` array (already supplied
+ * by every caller) and never throws on a missing precondition, and `effect.fuel.transfer` is
+ * resolved through the generic `operations` seam (already unimplemented -- and already rejected
+ * the same way every other operations-seam effect is -- in these three contexts, not a new gap
+ * this list needs to close).
+ */
+export const ITEM_ONLY_EFFECT_IDS = [
+  'effect.item.consume',
+  'effect.item.enchant',
+] as const satisfies readonly EffectId[];
+export type ItemOnlyEffectId = (typeof ITEM_ONLY_EFFECT_IDS)[number];
 
 export type ContentEntry =
   | MonsterContentEntry
@@ -187,7 +212,8 @@ export type ContentEntry =
   | ClassContentEntry
   | BackgroundContentEntry
   | TraitContentEntry
-  | CurseContentEntry;
+  | CurseContentEntry
+  | EnchantmentContentEntry;
 
 export interface ContentGenerationReport {
   readonly foundationalCategories: readonly string[];

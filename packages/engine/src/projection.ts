@@ -7,7 +7,8 @@ import type {
   MerchantServiceId,
   SpellContentEntry,
 } from '@woven-deep/content';
-import { heroActor, heroPerception } from './actor-model.js';
+import { heroActor, heroPerception, type AttributeName } from './actor-model.js';
+import { ATTRIBUTE_ORDER } from './chargen.js';
 import { entryById } from './content-index.js';
 import type { deriveActorStats } from './attributes.js';
 import { balanceEntry } from './actions.js';
@@ -440,6 +441,17 @@ export interface ObservableHouse {
   readonly items: readonly Readonly<Record<string, unknown>>[];
 }
 
+/** The hero's own tempering progress -- player-known by construction (it's the hero's own growth).
+ * `temperable` is computed here, against `balanceEntry(content).attributeMaximum`, so the client
+ * never re-derives the cap: an attribute strictly below the authored maximum is temperable, one
+ * already at (or somehow past) it is not. Empty means every banked point is currently unspendable
+ * -- "held by the Deep" until some future content raises the ceiling. */
+export interface HeroTemperingProjection {
+  readonly banked: number;
+  readonly spent: Readonly<Record<AttributeName, number>>;
+  readonly temperable: readonly AttributeName[];
+}
+
 /** One spell the hero currently knows and can cast, resolved from the content spell registry. */
 export interface CastableSpellView {
   readonly spellId: OpaqueId;
@@ -481,6 +493,7 @@ export interface GameplayProjection {
   readonly floor: ObservableFloorProjection;
   readonly hero: Readonly<Record<string, unknown>> & {
     readonly castableSpells?: readonly CastableSpellView[];
+    readonly tempering: HeroTemperingProjection;
   };
   /**
    * `contentId` is the one formally-typed field here (the rest of an actor's shape stays an
@@ -745,9 +758,15 @@ function projectHeroView(
     derived: DerivedHeroStats;
     rules: BalanceRules;
   }>,
-): Readonly<Record<string, unknown>> & { readonly castableSpells?: readonly CastableSpellView[] } {
+): Readonly<Record<string, unknown>> & {
+  readonly castableSpells?: readonly CastableSpellView[];
+  readonly tempering: HeroTemperingProjection;
+} {
   const { state, content, observed, derived, rules } = input;
   const { hero } = observed;
+  const temperable = ATTRIBUTE_ORDER.filter(
+    (name) => hero.attributes[name] < rules.attributeMaximum,
+  );
   const castableSpells: readonly CastableSpellView[] = (state.hero.knownSpellIds ?? [])
     .map((spellId) => entryById(content, spellId))
     .filter((entry): entry is SpellContentEntry => entry?.kind === 'spell')
@@ -816,6 +835,11 @@ function projectHeroView(
     backpack,
     backpackCapacity: state.hero.backpackCapacity,
     knownAppearanceIds: [...state.identification.knownAppearanceIds],
+    tempering: {
+      banked: state.hero.tempering.banked,
+      spent: { ...state.hero.tempering.spent },
+      temperable,
+    },
     ...(castableSpells.length > 0 ? { castableSpells } : {}),
   };
 }

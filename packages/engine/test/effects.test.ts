@@ -1,13 +1,19 @@
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  allocateIdentificationMap,
   createDemoContentPack,
   createDemoRun,
   createGameplayDemoRun,
   expandLegacySeed,
+  firstEnchantableItemId,
   resolveCommand,
   resolveEffectSequence,
+  stableJson,
+  RNG_STREAM_NAMES,
+  type ActiveRun,
   type ActorState,
+  type HeirloomItemMetadata,
   type ItemInstance,
 } from '../src/index.js';
 import type { CompiledContentPack, ConditionContentEntry } from '@woven-deep/content';
@@ -351,5 +357,261 @@ describe('effect.curse.remove', () => {
       expect(resolved.result).toMatchObject({ status: 'invalid', reason: 'target.invalid' });
       expect(resolved.state.items.find((item) => item.itemId === scroll.itemId)!.quantity).toBe(1);
     });
+  });
+});
+
+describe('effect.item.enchant', () => {
+  let pack: CompiledContentPack;
+
+  const HERO_ID = 'hero.demo';
+  const SWORD_CONTENT_ID = 'item.iron-sword';
+  const ARTIFACT_CONTENT_ID = 'item.thread-counts-needle';
+  const CURSE_ID = 'curse.hungering-edge';
+  const POTION_CONTENT_ID = 'item.crimson-potion';
+  const SCROLL_CONTENT_ID = 'item.tempering-steel-scroll';
+  const SCROLL_ID = 'item.tempering-steel-scroll.1';
+
+  beforeAll(async () => {
+    pack = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+  });
+
+  function item(
+    itemId: string,
+    contentId: string,
+    location: ItemInstance['location'],
+    overrides: Partial<ItemInstance> = {},
+  ): ItemInstance {
+    return {
+      itemId,
+      contentId,
+      quantity: 1,
+      condition: 100,
+      enchantment: null,
+      identified: true,
+      charges: null,
+      fuel: null,
+      enabled: null,
+      location,
+      ...overrides,
+    };
+  }
+
+  function scroll(): ItemInstance {
+    return item(SCROLL_ID, SCROLL_CONTENT_ID, { type: 'backpack', actorId: HERO_ID });
+  }
+
+  /** A hero-owned, content-bound run carrying exactly `items` (plus the scroll), suitable for
+   * `resolveCommand`'s `validateContentBoundRun` gate: real `contentHash`, an identification map
+   * allocated against the real pack, and one current encounter decision per authored encounter. */
+  function heroRun(items: readonly ItemInstance[]): ActiveRun {
+    const base = createDemoRun();
+    const identified = allocateIdentificationMap({ content: pack, rng: base.rng });
+    return {
+      ...base,
+      contentHash: pack.hash,
+      identification: identified.identification,
+      rng: identified.rng,
+      encounterDecisions: pack.entries
+        .filter((entry) => entry.kind === 'encounter')
+        .sort((left, right) => (left.id < right.id ? -1 : 1))
+        .map((entry) => ({
+          encounterId: entry.id,
+          baseProbability: entry.runAppearanceChance,
+          protectionBonus: 0,
+          effectiveProbability: entry.runAppearanceChance,
+          eligible: true,
+          reachedEligibleDepth: false,
+          encountered: false,
+          instancesCreated: 0,
+        })),
+      items: [...items, scroll()].sort((left, right) => (left.itemId < right.itemId ? -1 : 1)),
+    };
+  }
+
+  /** Plain iron swords (an ordinary enchantable weapon) at the given itemIds, equipped before
+   * backpack -- mirrors the scroll's own targeting convention under test. */
+  function heroWith(
+    setup: Readonly<{ equipped?: readonly string[]; backpack?: readonly string[] }>,
+  ): ActiveRun {
+    // `validateContentBoundRun` only checks that each item's own slot is one its definition
+    // allows -- it never checks cross-item slot uniqueness against `hero.equipment` -- so every
+    // equipped iron sword can legally share `main-hand` here; targeting order is what is under
+    // test, not equipment-slot bookkeeping.
+    const equipped = (setup.equipped ?? []).map((itemId) =>
+      item(itemId, SWORD_CONTENT_ID, {
+        type: 'equipped',
+        actorId: HERO_ID,
+        slot: 'main-hand',
+      }),
+    );
+    const backpack = (setup.backpack ?? []).map((itemId) =>
+      item(itemId, SWORD_CONTENT_ID, { type: 'backpack', actorId: HERO_ID }),
+    );
+    return heroRun([...equipped, ...backpack]);
+  }
+
+  function readScroll(run: ActiveRun): ActiveRun {
+    const resolved = resolveCommand(
+      run,
+      {
+        type: 'use-item',
+        commandId: 'command.temper',
+        expectedRevision: run.revision,
+        itemId: SCROLL_ID,
+        target: null,
+      },
+      { content: pack },
+    );
+    if (resolved.result.status !== 'applied') {
+      throw new Error(`fixture readScroll failed: ${stableJson(resolved.result)}`);
+    }
+    return resolved.state;
+  }
+
+  function readTemperingScroll(run: ActiveRun) {
+    return {
+      type: 'use-item' as const,
+      commandId: 'command.temper',
+      expectedRevision: run.revision,
+      itemId: SCROLL_ID,
+      target: null,
+    };
+  }
+
+  function enchantmentOf(run: ActiveRun, itemId: string) {
+    return run.items.find((candidate) => candidate.itemId === itemId)!.enchantment;
+  }
+
+  it('enchants the first eligible item, equipped before backpack, by itemId order', () => {
+    const run = heroWith({
+      equipped: ['item.b.0002', 'item.a.0003'],
+      backpack: ['item.a.0001'],
+    });
+    const resolved = readScroll(run);
+    expect(enchantmentOf(resolved, 'item.a.0003')).not.toBeNull(); // equipped wins over backpack
+    expect(enchantmentOf(resolved, 'item.a.0001')).toBeNull();
+    const identified = resolved.items.find((candidate) => candidate.itemId === 'item.a.0003')!;
+    expect(identified.identified).toBe(true);
+  });
+
+  it('skips artifacts and revealed-cursed items when choosing a target', () => {
+    const artifactId = 'item.hero.artifact';
+    const revealedCursedSwordId = 'item.hero.cursed-sword';
+    const ironSwordId = 'item.hero.sword';
+    const run = heroRun([
+      item(artifactId, ARTIFACT_CONTENT_ID, {
+        type: 'equipped',
+        actorId: HERO_ID,
+        slot: 'left-ring',
+      }),
+      item(
+        revealedCursedSwordId,
+        SWORD_CONTENT_ID,
+        { type: 'equipped', actorId: HERO_ID, slot: 'main-hand' },
+        { curse: { curseId: CURSE_ID, revealed: true } },
+      ),
+      item(ironSwordId, SWORD_CONTENT_ID, {
+        type: 'equipped',
+        actorId: HERO_ID,
+        slot: 'main-hand',
+      }),
+    ]);
+    const resolved = readScroll(run);
+    expect(enchantmentOf(resolved, ironSwordId)).not.toBeNull();
+    expect(enchantmentOf(resolved, artifactId)).toBeNull();
+    expect(enchantmentOf(resolved, revealedCursedSwordId)).toBeNull();
+  });
+
+  it('skips a wielded heirloom-provenance item and targets the next eligible item', () => {
+    const heirloomSwordId = 'item.hero.heirloom-sword';
+    const ironSwordId = 'item.hero.sword';
+    // A recovered heirloom the hero is WIELDING is otherwise the scroll's preferred target
+    // (equipped-first ordering) -- its identity IS its recorded provenance, so it must never be
+    // the one the scroll touches. Exercised directly against the pure targeting function: a
+    // hand-placed `.heirloom` item cannot round-trip `resolveCommand`'s content-bound haunts
+    // provenance cross-check (it only recognizes items the haunts drop machinery itself created),
+    // and that check is orthogonal to what this test is proving.
+    const heirloom: HeirloomItemMetadata = {
+      displayName: 'Ancestral Blade',
+      glyph: ')',
+      color: '#ddeeff',
+      originatingHallRecordId: `record.${'a'.repeat(32)}.${'b'.repeat(16)}`,
+      originatingRank: 1,
+      sourceItemId: 'item.original.0001',
+    };
+    const items: readonly ItemInstance[] = [
+      item(
+        heirloomSwordId,
+        SWORD_CONTENT_ID,
+        { type: 'equipped', actorId: HERO_ID, slot: 'main-hand' },
+        { heirloom },
+      ),
+      item(ironSwordId, SWORD_CONTENT_ID, { type: 'backpack', actorId: HERO_ID }),
+    ];
+    expect(firstEnchantableItemId(pack, items, HERO_ID)).toBe(ironSwordId);
+  });
+
+  it('identifies completely and reveals the curse when enchanting an unrevealed-cursed item, never leaving identified: true with curse.revealed: false', () => {
+    const unrevealedCursedSwordId = 'item.hero.unrevealed-cursed-sword';
+    const run = heroRun([
+      item(
+        unrevealedCursedSwordId,
+        SWORD_CONTENT_ID,
+        { type: 'equipped', actorId: HERO_ID, slot: 'main-hand' },
+        { identified: false, curse: { curseId: CURSE_ID, revealed: false } },
+      ),
+    ]);
+    const resolved = readScroll(run);
+    const enchanted = resolved.items.find(
+      (candidate) => candidate.itemId === unrevealedCursedSwordId,
+    )!;
+    // The #121 invariant every identify path reveals: identified and curse.revealed rise
+    // together, never `identified: true` with a hidden curse.
+    expect(enchanted.identified).toBe(true);
+    expect(enchanted.curse).toEqual({ curseId: CURSE_ID, revealed: true });
+    expect(enchanted.enchantment).not.toBeNull();
+    // item.iron-sword identifies per-instance (mode: instance, no shared appearance pool), so
+    // there is nothing for the appearance step to touch -- bookkeeping stays exactly as it was.
+    expect(resolved.identification).toEqual(run.identification);
+  });
+
+  it('rejects the read and consumes nothing when no item is eligible', () => {
+    const state = heroRun([
+      item('item.hero.potion', POTION_CONTENT_ID, { type: 'backpack', actorId: HERO_ID }),
+    ]);
+    const resolved = resolveCommand(state, readTemperingScroll(state), { content: pack });
+    expect(resolved.result).toMatchObject({ status: 'invalid', reason: 'target.invalid' });
+    expect(
+      resolved.state.items.some((item) => item.contentId === 'item.tempering-steel-scroll'),
+    ).toBe(true);
+    expect(resolved.state.rng.enchanting).toEqual(state.rng.enchanting);
+  });
+
+  it('re-enchants an already-enchanted item', () => {
+    const ironSwordId = 'item.hero.sword';
+    const run = heroRun([
+      item(
+        ironSwordId,
+        SWORD_CONTENT_ID,
+        { type: 'equipped', actorId: HERO_ID, slot: 'main-hand' },
+        {
+          enchantment: { enchantmentId: 'enchantment.keen-edge', modifiers: { meleeAccuracy: 1 } },
+        },
+      ),
+    ]);
+    const resolved = readScroll(run);
+    expect(enchantmentOf(resolved, ironSwordId)).not.toBeNull();
+  });
+
+  it('draws on the enchanting stream only', () => {
+    const before = heroWith({ equipped: ['item.hero.sword'] });
+    const after = readScroll(before);
+    for (const stream of RNG_STREAM_NAMES.filter(
+      (name) => name !== 'enchanting' && name !== 'effects',
+    )) {
+      expect(after.rng[stream]).toEqual(before.rng[stream]);
+    }
   });
 });

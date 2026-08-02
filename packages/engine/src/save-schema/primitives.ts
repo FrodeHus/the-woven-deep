@@ -46,6 +46,7 @@ export const merchantServiceId = z.enum([
   'merchant-service.identify',
   'merchant-service.remove-curse',
   'merchant-service.strongbox',
+  'merchant-service.enchant',
 ]);
 export const blockReason = z.enum([
   'blocked.bounds',
@@ -90,6 +91,8 @@ export const blockReason = z.enum([
   'trade.target-invalid',
   'run.concluded',
   'offer.refused',
+  'temper.unavailable',
+  'temper.capped',
   'town.truce',
   'town.rest',
   'house.full',

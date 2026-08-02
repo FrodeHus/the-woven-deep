@@ -1385,3 +1385,35 @@ describe('haunt projection', () => {
     ).toBeNull();
   });
 });
+
+describe('hero tempering projection', () => {
+  it('projects banked/spent/temperable, every attribute below the authored maximum', () => {
+    const base = createDemoRun();
+    const spent = { might: 1, agility: 0, vitality: 0, wits: 0, resolve: 0 };
+    const run: ActiveRun = {
+      ...base,
+      hero: { ...base.hero, tempering: { banked: 2, spent } },
+    };
+    const projected = projectGameplayState({ state: run, content: createDemoContentPack() });
+    expect(projected.hero.tempering).toEqual({
+      banked: 2,
+      spent,
+      temperable: ['might', 'agility', 'vitality', 'wits', 'resolve'],
+    });
+  });
+
+  it('excludes an attribute already at the authored maximum from temperable', () => {
+    const base = createDemoRun();
+    const hero = base.actors[0]!;
+    const capped: ActiveRun = {
+      ...base,
+      actors: base.actors.map((actor) =>
+        actor.actorId === hero.actorId
+          ? { ...actor, attributes: { ...actor.attributes, might: 30 } }
+          : actor,
+      ),
+    };
+    const projected = projectGameplayState({ state: capped, content: createDemoContentPack() });
+    expect(projected.hero.tempering.temperable).toEqual(['agility', 'vitality', 'wits', 'resolve']);
+  });
+});

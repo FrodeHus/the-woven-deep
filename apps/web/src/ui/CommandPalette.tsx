@@ -21,6 +21,7 @@ const OVERLAY_ENTRIES: readonly OverlayId[] = [
   'inventory',
   'character-sheet',
   'map-journal',
+  'temper',
   'codex',
   'settings',
   'help',

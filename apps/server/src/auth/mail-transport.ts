@@ -24,7 +24,7 @@ function createDevMailTransport(): MailTransport {
 }
 
 function createMailgunTransport(
-  mailgun: Readonly<{ apiKey: string; domain: string; sender: string }>,
+  mailgun: Readonly<{ apiKey: string; domain: string; sender: string; apiBase: string }>,
   fetchImpl: typeof fetch,
 ): MailTransport {
   return {
@@ -37,7 +37,7 @@ function createMailgunTransport(
         text: `Sign in to Woven Deep using this link: ${link}\n\nThis link expires in 15 minutes and can only be used once.`,
       });
 
-      const response = await fetchImpl(`https://api.mailgun.net/v3/${mailgun.domain}/messages`, {
+      const response = await fetchImpl(`${mailgun.apiBase}/v3/${mailgun.domain}/messages`, {
         method: 'POST',
         headers: {
           Authorization: `Basic ${auth}`,

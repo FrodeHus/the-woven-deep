@@ -3,7 +3,12 @@ import type { GameAction } from './action-types.js';
 import { targetContext } from './target-context.js';
 import { actorById, heroPerception, withActor, type ActorState } from './actor-model.js';
 import { applyPopulationCombatModifiers, resolveAttack } from './combat.js';
-import { applyEffectResult, resolveEffectSequence, resolveEffectSweep } from './effects.js';
+import {
+  applyEffectResult,
+  firstEnchantableItemId,
+  resolveEffectSequence,
+  resolveEffectSweep,
+} from './effects.js';
 import { spellLearnTarget } from './caster.js';
 import { validateTarget } from './targeting.js';
 import { consumeItemQuantity, dropItem, pickupItem, splitStack } from './inventory.js';
@@ -16,8 +21,9 @@ import {
   toggleItemLight,
   unequipItem,
 } from './equipment.js';
-import { identifyAppearance } from './identification.js';
+import { identifyAppearance, identifyItemCompletely } from './identification.js';
 import { deriveRunActorStats } from './stats.js';
+import { spellPowerFor } from './spell-power.js';
 import {
   closeDoor,
   disarmTrap,
@@ -68,6 +74,9 @@ function resolveItemSpell(
   }>,
 ): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   const { state, content, actor, target, eventId } = input;
+  // One derivation for both branches below, mirroring `validateItemSpellUse`'s single call so the
+  // dry run and the commit can never scale differently.
+  const casterSpellPower = spellPowerFor({ state, content, actor });
   const spell = entryById(content, input.spellId);
   if (!spell || spell.kind !== 'spell')
     throw new Error(
@@ -108,6 +117,7 @@ function resolveItemSpell(
       actors: state.actors,
       items: state.items,
       content,
+      spellPower: casterSpellPower,
       sourceActorId: actor.actorId,
       casterActorId: actor.actorId,
       includeCaster: false,
@@ -127,6 +137,7 @@ function resolveItemSpell(
     actors: state.actors,
     items: state.items,
     content,
+    spellPower: casterSpellPower,
     sourceActorId: actor.actorId,
     targetActorId: target.actorId,
     effectsState: state.rng.effects,
@@ -526,6 +537,18 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       events.push(...consumed.events);
       return { state: next, chargeEnergy: true };
     }
+    // Re-derives, against the PRE-fold state, the same deterministic target
+    // `effect.item.enchant`'s fold will pick (`firstEnchantableItemId` is pure over
+    // content/items/actorId, and eligibility can only shrink -- never grow -- between here and
+    // the fold, since nothing this sequence resolves can make an ineligible item eligible). The
+    // item-level fold has no route to `run.identification`, so the identify pass below finishes
+    // the reveal once the fold hands back a full `ActiveRun` again -- the same pattern
+    // `actions.ts`'s validation already uses to agree with the fold without sharing its innards.
+    const enchantTargetItemId = definition.effects.some(
+      (effect) => effect.effectId === 'effect.item.enchant',
+    )
+      ? firstEnchantableItemId(content, state.items, actor.actorId)
+      : undefined;
     const resolved = resolveEffectSequence({
       effects: definition.effects,
       actors: state.actors,
@@ -535,6 +558,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       sourceItemId: source.itemId,
       targetActorId: target.actorId,
       effectsState: state.rng.effects,
+      enchantingState: state.rng.enchanting,
       worldTime: state.worldTime,
       eventId,
       survival: state.survival,
@@ -551,6 +575,21 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     let next = applyEffectResult(state, resolved);
     const consumedEvents = resolved.events.filter((event) => event.type === 'item.consumed');
     events.push(...resolved.events.filter((event) => event.type !== 'item.consumed'));
+    if (enchantTargetItemId !== undefined) {
+      // The scroll's magic reveals what it touches: enchanting identifies the item completely --
+      // appearance, instance, and any curse -- exactly as the identify service would, so a curse
+      // can never survive hidden behind `identified: true` (the #121 invariant every identify
+      // path reveals). Draws no randomness, so this does not touch any stream the fold above
+      // doesn't already touch.
+      const identified = identifyItemCompletely({
+        run: next,
+        content,
+        itemId: enchantTargetItemId,
+        eventId,
+      });
+      next = identified.state;
+      events.push(...identified.events);
+    }
     if (definition.identification.mode === 'shuffled') {
       const identified = identifyAppearance({ run: next, contentId: definition.id, eventId });
       next = identified.state;
@@ -577,6 +616,11 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     const definition = entryById(content, action.spellId);
     if (!definition || definition.kind !== 'spell')
       throw new Error(`internal invariant: cast spell ${action.spellId} does not exist`);
+    // Derived ONCE, from the pre-deduction state, and threaded into whichever resolution branch
+    // runs below. `validatePlayerAction` derives the caster's bonus from that same pre-deduction
+    // state, so validation and commit resolve an identical sequence by construction rather than by
+    // the accident that Weave happens not to feed the derivation.
+    const casterSpellPower = spellPowerFor({ state, content, actor });
     // The Weave powers the casting before the spell's effects resolve: the cost is subtracted from
     // the caster first, then the effects apply against that post-spend state.
     let next = withActor(state, { ...actor, weave: actor.weave - action.weaveCost });
@@ -619,6 +663,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
         actors: next.actors,
         items: next.items,
         content,
+        spellPower: casterSpellPower,
         sourceActorId: actor.actorId,
         casterActorId: actor.actorId,
         includeCaster: false,
@@ -652,6 +697,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       actors: next.actors,
       items: next.items,
       content,
+      spellPower: casterSpellPower,
       sourceActorId: actor.actorId,
       targetActorId: target.actorId,
       effectsState: next.rng.effects,

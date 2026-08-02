@@ -7,6 +7,7 @@ export * from './model/class.js';
 export * from './model/condition.js';
 export * from './model/curse.js';
 export * from './model/dialogue.js';
+export * from './model/enchantment.js';
 export * from './model/encounter.js';
 export * from './model/identification-pool.js';
 export * from './model/item.js';

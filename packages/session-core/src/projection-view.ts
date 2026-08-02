@@ -91,6 +91,15 @@ export interface DerivedStatView {
   readonly formula: DerivedStatFormula;
 }
 
+/** The hero's own milestone-tempering progress -- player-known by construction. `temperable` is
+ * pre-computed engine-side (`projection.ts`'s `HeroTemperingProjection`) against the authored
+ * `attributeMaximum`, so this client boundary never re-derives the cap itself. */
+export interface HeroTemperingView {
+  readonly banked: number;
+  readonly spent: Readonly<Record<AttributeName, number>>;
+  readonly temperable: readonly AttributeName[];
+}
+
 export interface HeroView {
   readonly actorId: OpaqueId;
   readonly name: string;
@@ -110,6 +119,7 @@ export interface HeroView {
   readonly backpack: readonly OwnedItemView[];
   readonly backpackCapacity: number;
   readonly knownAppearanceIds: readonly string[];
+  readonly tempering: HeroTemperingView;
   readonly castableSpells?: readonly CastableSpellView[];
 }
 

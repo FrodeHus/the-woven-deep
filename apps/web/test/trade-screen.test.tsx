@@ -206,6 +206,30 @@ describe('TradeScreen', () => {
     expect(within(servicesList).queryByText(/merchant-service\.strongbox/)).not.toBeInTheDocument();
   });
 
+  it('lists the enchant service with its own targets and warns that re-enchanting costs double', async () => {
+    const user = userEvent.setup();
+    const projection = withTrade(baseProjection, {
+      services: [
+        {
+          serviceId: 'merchant-service.enchant',
+          unitPrice: 40,
+          remainingUses: 3,
+          targetItemIds: ['item.mystery-ring'],
+        },
+      ],
+    });
+    render(
+      <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    await user.keyboard('{Tab}{Tab}');
+
+    const servicesList = screen.getByRole('listbox', { name: 'Services' });
+    expect(within(servicesList).getByText(/Enchant/)).toBeInTheDocument();
+    expect(screen.getByText(/costs double/i)).toBeInTheDocument();
+  });
+
   it('opens the identify target picker for a service with eligible targets, then dispatches the chosen target', async () => {
     const user = userEvent.setup();
     const onDispatch = vi.fn();

@@ -375,6 +375,10 @@ export function createNewRun(
       currency: balance.startingCurrency,
       classTags: hero.classTags,
       statModifiers: hero.statModifiers,
+      tempering: {
+        banked: 0,
+        spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+      },
       ...(hero.knownSpellIds && hero.knownSpellIds.length > 0
         ? { knownSpellIds: hero.knownSpellIds }
         : {}),

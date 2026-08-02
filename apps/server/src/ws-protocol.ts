@@ -1,4 +1,5 @@
 import { MERCHANT_SERVICE_IDS, type MerchantServiceId } from '@woven-deep/content';
+import { ATTRIBUTE_ORDER } from '@woven-deep/engine';
 import {
   PROTOCOL_VERSION,
   type ClientMessage,
@@ -92,6 +93,8 @@ function validateIntent(value: unknown): value is PlayerIntent {
       );
     case 'offer':
       return typeof value.itemId === 'string';
+    case 'temper':
+      return isOneOf(value.attribute, ATTRIBUTE_ORDER);
     default:
       return false;
   }

@@ -12,6 +12,7 @@ export {
   legacyActiveRunV13Schema,
   legacyActiveRunV14Schema,
   legacyActiveRunV15Schema,
+  legacyActiveRunV16Schema,
   legacyV11RngEntries,
   legacyV12RngEntries,
   emptyLegacyRunMetricsV9,
