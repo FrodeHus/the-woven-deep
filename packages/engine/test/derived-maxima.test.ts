@@ -1,15 +1,22 @@
-import { describe, expect, it } from 'vitest';
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import { resolve } from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
+import type { CompiledContentPack, CurseContentEntry, ItemContentEntry } from '@woven-deep/content';
+import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
+  applyCurseTriggers,
   createDemoContentPack,
+  createMerchantDemoRun,
   createDemoRun,
   decodeActiveRun,
   encodeActiveRun,
   heroActor,
+  merchantDemoCommands,
   projectGameplayState,
   resolveCommand,
   synchronizeDerivedMaxima,
   type ActiveRun,
+  type ActorState,
+  type DomainEvent,
   type GameCommand,
   type ItemInstance,
 } from '../src/index.js';
@@ -51,6 +58,43 @@ function ring(id: string): ItemContentEntry {
   };
 }
 
+const HEALING_POTION = 'item.test-elixir';
+const CURSED_RING = 'item.cursed-ring';
+const TEST_CURSE = 'curse.test-below-half';
+
+/** Heals far more than any gap the tests open, so the cap -- not the roll -- is what is measured. */
+const potion: ItemContentEntry = {
+  ...ring(HEALING_POTION),
+  category: 'potion',
+  glyph: '!',
+  equipment: null,
+  effects: [
+    {
+      effectId: 'effect.heal',
+      parameters: { dice: { count: 1, sides: 1, bonus: 50 } },
+      requiresLivingTarget: true,
+    },
+  ],
+};
+
+const belowHalfCurse: CurseContentEntry = {
+  kind: 'curse',
+  id: TEST_CURSE,
+  name: 'Test curse',
+  tags: ['curse'],
+  revealText: 'The weight of it settles.',
+  drawbackModifiers: { defense: -1 },
+  trigger: {
+    on: 'on-hurt-below-half',
+    effect: {
+      effectId: 'effect.hunger.restore',
+      parameters: { amount: 1 },
+      requiresLivingTarget: true,
+    },
+    chanceBps: 10000,
+  },
+};
+
 function pack(): CompiledContentPack {
   const base = createDemoContentPack();
   return {
@@ -58,6 +102,9 @@ function pack(): CompiledContentPack {
     entries: [
       ...base.entries,
       ring(VITALITY_RING),
+      ring(CURSED_RING),
+      potion,
+      belowHalfCurse,
       {
         ...ring(WITS_RING),
         equipment: { slots: ['right-ring'], handedness: 'one-handed', reservedSlots: [] },
@@ -353,5 +400,192 @@ describe('every reader of the stored maximum, driven through resolveCommand', ()
     expect(heroActor(bare).maxHealth).toBe(BASE_MAX_HEALTH);
     expect(heroActor(bare).health).toBe(BASE_MAX_HEALTH);
     expect(() => encodeActiveRun(bare)).not.toThrow();
+  });
+});
+
+describe('the readers a non-world command reaches', () => {
+  let shipping: CompiledContentPack;
+
+  beforeAll(async () => {
+    shipping = await compileContentDirectory({
+      rootDir: resolve(import.meta.dirname, '../../../content'),
+    });
+  });
+
+  /** The shipping pack plus the test ring, so a merchant scenario can carry one. */
+  function shippingWithRing(): CompiledContentPack {
+    return { ...shipping, entries: [...shipping.entries, ring(VITALITY_RING)] };
+  }
+
+  it('refreshes the stored maximum on a trade command, which never runs a world step', () => {
+    // The trade, dialogue and house branches return before the world branch's own refresh, so the
+    // sync has to live at the recording choke point every branch funnels through. This matters on
+    // shipping content: `merchant-service.remove-curse` strips a curse whose `maxWeave` drawback is
+    // live, and a paid service must show its effect in the command the player bought it in.
+    const content = shippingWithRing();
+    const initial = createMerchantDemoRun(content);
+    const commands = merchantDemoCommands(initial);
+    const openCommand = commands.find((entry) => entry.boundary === 'before-open')!.command;
+    const buyCommand = commands.find((entry) => entry.boundary === 'before-buy')!.command;
+
+    const opened = resolveCommand(initial, openCommand, { content });
+    expect(opened.result.status).toBe('applied');
+
+    const hero = heroActor(opened.state);
+    const staleMaximum = hero.maxHealth;
+    const staged: ActiveRun = {
+      ...opened.state,
+      items: [
+        ...opened.state.items,
+        ringInstance(
+          'item.ring.stale',
+          VITALITY_RING,
+          { maxHealth: 5 },
+          {
+            type: 'equipped',
+            actorId: hero.actorId,
+            slot: 'left-ring',
+          },
+        ),
+      ],
+      actors: opened.state.actors.map((actor) =>
+        actor.actorId === hero.actorId
+          ? { ...actor, equipment: { ...actor.equipment, 'left-ring': 'item.ring.stale' } }
+          : actor,
+      ),
+    };
+
+    const bought = resolveCommand(staged, buyCommand, { content });
+    expect(bought.result.status).toBe('applied');
+    // No world step ran -- the turn did not even advance -- and the maximum is still correct.
+    expect(bought.state.turn).toBe(opened.state.turn);
+    expect(heroActor(bought.state).maxHealth).toBe(staleMaximum + 5);
+  });
+
+  it('heals a potion up to the raised maximum', () => {
+    // `effect.heal` caps at `maxHealth - health`, a reader distinct from rest's stop condition.
+    const worn = equipViaCommand(wounded(heroAtFullHealth(), 10), VITALITY_RING, 'left-ring');
+    const hero = heroActor(worn);
+    const withPotion: ActiveRun = {
+      ...worn,
+      items: [
+        ...worn.items,
+        {
+          itemId: 'item.elixir.1',
+          contentId: HEALING_POTION,
+          quantity: 1,
+          condition: 100,
+          enchantment: null,
+          identified: true,
+          charges: null,
+          fuel: null,
+          enabled: null,
+          location: { type: 'backpack', actorId: hero.actorId },
+        },
+      ],
+    };
+    const drunk = apply(withPotion, {
+      type: 'use-item',
+      itemId: 'item.elixir.1',
+      target: null,
+    } as never);
+    expect(heroActor(drunk).health).toBe(BASE_MAX_HEALTH + 5);
+    expect(heroActor(drunk).health).toBeGreaterThan(BASE_MAX_HEALTH);
+  });
+});
+
+describe('the below-half crossing reads the pre-sync maximum', () => {
+  /**
+   * `matchedTriggers` fires when `2 * health < maxHealth <= 2 * (health + amount)` -- it reads the
+   * hero's STORED maximum, and in `resolveCommand` it runs before the refresh. So the crossing is
+   * decided against the maximum the hero had when the blow landed, not the one they end the command
+   * with.
+   *
+   * The two only disagree when the refresh moves the maximum across the crossing window
+   * `(2 * health, 2 * (health + amount)]` -- a window exactly `2 * amount` wide. A maximum that
+   * moves by less than the damage taken this turn can never straddle it, which is every modifier in
+   * shipping content by a wide margin. This test pins the agreeing case; a divergence would need a
+   * single command to both damage the hero and swing their maximum by more than twice that damage.
+   */
+  function cursedState(): ActiveRun {
+    const run = heroAtFullHealth();
+    const hero = heroActor(run);
+    return {
+      ...run,
+      items: [
+        ...run.items,
+        {
+          ...ringInstance(
+            'item.cursed.1',
+            CURSED_RING,
+            { maxHealth: 5 },
+            {
+              type: 'equipped',
+              actorId: hero.actorId,
+              slot: 'left-ring',
+            },
+          ),
+          curse: { curseId: TEST_CURSE, revealed: false },
+        },
+      ],
+      actors: run.actors.map((actor) =>
+        actor.actorId === hero.actorId
+          ? {
+              ...actor,
+              // Just under half of the STORED maximum, which the ring has not been folded into yet.
+              health: Math.floor(BASE_MAX_HEALTH / 2) - 1,
+              equipment: { ...actor.equipment, 'left-ring': 'item.cursed.1' },
+            }
+          : actor,
+      ),
+    };
+  }
+
+  function damageEvent(actor: ActorState, amount: number): DomainEvent {
+    return {
+      type: 'actor.damaged',
+      eventId: 'event.blow',
+      actorId: actor.actorId,
+      sourceActorId: actor.actorId,
+      damageType: 'physical',
+      amount,
+      health: actor.health,
+    } as DomainEvent;
+  }
+
+  it('decides the crossing before the refresh, and the refresh does not undo it', () => {
+    const state = cursedState();
+    const hero = heroActor(state);
+    // Pre-blow health was at or above half of the stored 28; post-blow health is below it.
+    const triggered = applyCurseTriggers({
+      state,
+      content,
+      events: [damageEvent(hero, 3)],
+      eventId: 'event.blow',
+    });
+    expect(triggered.events.some((event) => event.type === 'curse.revealed')).toBe(true);
+
+    const synced = synchronizeDerivedMaxima(triggered.state, content);
+    // The refresh raises the bar afterwards -- the crossing already happened and stands.
+    expect(heroActor(synced).maxHealth).toBe(BASE_MAX_HEALTH + 5);
+    expect(heroActor(synced).health).toBe(heroActor(triggered.state).health);
+  });
+
+  it('does not fire when the same blow lands above half of the stored maximum', () => {
+    const state = cursedState();
+    const hero = heroActor(state);
+    const healthy: ActiveRun = {
+      ...state,
+      actors: state.actors.map((actor) =>
+        actor.actorId === hero.actorId ? { ...actor, health: BASE_MAX_HEALTH - 1 } : actor,
+      ),
+    };
+    const triggered = applyCurseTriggers({
+      state: healthy,
+      content,
+      events: [damageEvent(heroActor(healthy), 1)],
+      eventId: 'event.blow',
+    });
+    expect(triggered.events).toEqual([]);
   });
 });

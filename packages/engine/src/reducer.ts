@@ -70,12 +70,31 @@ function record(
 ): ActiveRun {
   const next: RecordedCommand = { command, result, events, publicEvents };
   const turnAdvanced = result.status === 'applied' && result.turn > state.turn;
+  // Every applied branch -- world, trade, dialogue, house, and any branch a later task adds --
+  // funnels through here, so this is where the hero's stored maxima are refreshed from the
+  // derivation. Placing it at the choke point rather than per-branch is deliberate: the trade
+  // branch alone can change a maximum without a world step (`merchant-service.remove-curse` strips
+  // a curse whose `maxWeave` drawback is live, and identify does the same for a drawback the
+  // character sheet was hiding), and a paid service must show its effect in the same command the
+  // player bought it. The world branch syncs once more of its own accord, BEFORE its conclusion
+  // boundary, which this idempotent pass then leaves untouched.
+  //
+  // Rejected commands are deliberately excluded: they change nothing else about the world, and with
+  // the sync at this choke point a maximum can never be stale by the time one arrives.
+  const synchronized =
+    result.status === 'applied' ? synchronizeDerivedMaxima(state, content) : state;
   return {
-    ...state,
+    ...synchronized,
     revision: result.revision,
     turn: result.turn,
-    recentCommands: [...state.recentCommands, next].slice(-RECENT_COMMAND_LIMIT),
-    metrics: foldRunMetrics({ metrics: state.metrics, state, content, events, turnAdvanced }),
+    recentCommands: [...synchronized.recentCommands, next].slice(-RECENT_COMMAND_LIMIT),
+    metrics: foldRunMetrics({
+      metrics: synchronized.metrics,
+      state: synchronized,
+      content,
+      events,
+      turnAdvanced,
+    }),
   };
 }
 

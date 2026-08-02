@@ -1,5 +1,5 @@
 import type { CompiledContentPack } from '@woven-deep/content';
-import { withActor } from './actor-model.js';
+import { heroActor, withActor } from './actor-model.js';
 import type { ActiveRun } from './model.js';
 import { deriveRunActorStats } from './stats.js';
 
@@ -22,8 +22,9 @@ export function synchronizeDerivedMaxima(
   state: ActiveRun,
   content: CompiledContentPack,
 ): ActiveRun {
-  const hero = state.actors.find((actor) => actor.actorId === state.hero.actorId);
-  if (!hero) throw new Error('internal invariant: hero actor does not exist');
+  // `heroActor` rather than a hand-rolled lookup: it also asserts the actor is player-controlled,
+  // which is the invariant this pass depends on (non-hero maxima are pinned elsewhere).
+  const hero = heroActor(state);
   const derived = deriveRunActorStats({ state, content, actor: hero });
   const maxHealth = Math.max(MINIMUM_LIVING_HEALTH, derived.maxHealth);
   const maxWeave = Math.max(0, derived.maxWeave);

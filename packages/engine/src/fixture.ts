@@ -265,6 +265,13 @@ export function createDemoRun(): ActiveRun {
     x: 1,
     y: 1,
     attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+    // CAUTION for fixtures built on the DEMO pack: these stored maxima match the shipping balance
+    // (`maxHealth: base 10 + vitality`), not `createDemoContentPack`'s own formula
+    // (`base 8 + 2 * vitality`), which derives 28. Since `synchronizeDerivedMaxima` makes the
+    // derivation authoritative, a demo-pack run's hero silently becomes WOUNDED (20 of 28) on its
+    // first command rather than starting at full health. Tests that care about full health should
+    // set health/maxHealth themselves; the values here are left alone because every shipping-pack
+    // fixture is exactly consistent with them.
     health: 20,
     maxHealth: 20,
     weave: 14,

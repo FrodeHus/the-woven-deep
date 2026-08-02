@@ -229,7 +229,10 @@ export function createMagicDemoRun(pack: CompiledContentPack): ActiveRun {
     hero: {
       ...base.hero,
       classTags: ['loomcaller'],
-      statModifiers: { maxWeave: DEMO_WEAVE_POOL - baseHeroStats.maxWeave },
+      statModifiers: {
+        ...base.hero.statModifiers,
+        maxWeave: DEMO_WEAVE_POOL - baseHeroStats.maxWeave,
+      },
     },
     actors: [
       {
