@@ -69,6 +69,9 @@ function resolveItemSpell(
   }>,
 ): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
   const { state, content, actor, target, eventId } = input;
+  // One derivation for both branches below, mirroring `validateItemSpellUse`'s single call so the
+  // dry run and the commit can never scale differently.
+  const casterSpellPower = spellPowerFor({ state, content, actor });
   const spell = entryById(content, input.spellId);
   if (!spell || spell.kind !== 'spell')
     throw new Error(
@@ -109,7 +112,7 @@ function resolveItemSpell(
       actors: state.actors,
       items: state.items,
       content,
-      spellPower: spellPowerFor({ state, content, actor }),
+      spellPower: casterSpellPower,
       sourceActorId: actor.actorId,
       casterActorId: actor.actorId,
       includeCaster: false,
@@ -129,7 +132,7 @@ function resolveItemSpell(
     actors: state.actors,
     items: state.items,
     content,
-    spellPower: spellPowerFor({ state, content, actor }),
+    spellPower: casterSpellPower,
     sourceActorId: actor.actorId,
     targetActorId: target.actorId,
     effectsState: state.rng.effects,
@@ -581,6 +584,11 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
     const definition = entryById(content, action.spellId);
     if (!definition || definition.kind !== 'spell')
       throw new Error(`internal invariant: cast spell ${action.spellId} does not exist`);
+    // Derived ONCE, from the pre-deduction state, and threaded into whichever resolution branch
+    // runs below. `validatePlayerAction` derives the caster's bonus from that same pre-deduction
+    // state, so validation and commit resolve an identical sequence by construction rather than by
+    // the accident that Weave happens not to feed the derivation.
+    const casterSpellPower = spellPowerFor({ state, content, actor });
     // The Weave powers the casting before the spell's effects resolve: the cost is subtracted from
     // the caster first, then the effects apply against that post-spend state.
     let next = withActor(state, { ...actor, weave: actor.weave - action.weaveCost });
@@ -623,7 +631,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
         actors: next.actors,
         items: next.items,
         content,
-        spellPower: spellPowerFor({ state: next, content, actor }),
+        spellPower: casterSpellPower,
         sourceActorId: actor.actorId,
         casterActorId: actor.actorId,
         includeCaster: false,
@@ -657,7 +665,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       actors: next.actors,
       items: next.items,
       content,
-      spellPower: spellPowerFor({ state: next, content, actor }),
+      spellPower: casterSpellPower,
       sourceActorId: actor.actorId,
       targetActorId: target.actorId,
       effectsState: next.rng.effects,

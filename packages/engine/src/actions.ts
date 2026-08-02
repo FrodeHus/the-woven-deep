@@ -122,6 +122,9 @@ function validateItemSpellUse(
   }>,
 ): PlayerActionValidation {
   const { state, content, actor, target: aim } = input;
+  // One derivation for both branches, and the same pre-mutation state `action-dispatch.ts` derives
+  // from at commit time -- the dry run must resolve the identical sequence.
+  const casterSpellPower = spellPowerFor({ state, content, actor });
   const spell = entryById(content, input.spellId);
   if (!spell || spell.kind !== 'spell') return { status: 'invalid', reason: 'action.unavailable' };
   const perception = targetContext(state, actor, content);
@@ -156,7 +159,7 @@ function validateItemSpellUse(
         actors: state.actors,
         items: state.items,
         content,
-        spellPower: spellPowerFor({ state, content, actor }),
+        spellPower: casterSpellPower,
         sourceActorId: actor.actorId,
         casterActorId: actor.actorId,
         includeCaster: false,
@@ -211,7 +214,7 @@ function validateItemSpellUse(
       actors: state.actors,
       items: state.items,
       content,
-      spellPower: spellPowerFor({ state, content, actor }),
+      spellPower: casterSpellPower,
       sourceActorId: actor.actorId,
       targetActorId: candidate.actorId,
       effectsState: state.rng.effects,
@@ -799,6 +802,13 @@ export function validatePlayerAction(
     if (actor.weave < definition.weaveCost) {
       return { status: 'invalid', reason: 'cast.insufficient-weave' };
     }
+    // Derived once, from the same pre-deduction state the dispatch-side `cast` resolver derives
+    // from, so the dry run and the commit scale identically by construction.
+    const castSpellPower = spellPowerFor({
+      state: input.state,
+      content: input.context.content,
+      actor,
+    });
     // The aptitude gate runs after the Weave gate but still before any target resolution or RNG:
     // an invalid cast must mutate neither state nor RNG.
     if (
@@ -852,11 +862,7 @@ export function validatePlayerAction(
           actors: input.state.actors,
           items: input.state.items,
           content: input.context.content,
-          spellPower: spellPowerFor({
-            state: input.state,
-            content: input.context.content,
-            actor,
-          }),
+          spellPower: castSpellPower,
           sourceActorId: actor.actorId,
           casterActorId: actor.actorId,
           includeCaster: false,
@@ -913,11 +919,7 @@ export function validatePlayerAction(
         actors: input.state.actors,
         items: input.state.items,
         content: input.context.content,
-        spellPower: spellPowerFor({
-          state: input.state,
-          content: input.context.content,
-          actor,
-        }),
+        spellPower: castSpellPower,
         sourceActorId: actor.actorId,
         targetActorId: candidate.actorId,
         effectsState: input.state.rng.effects,
