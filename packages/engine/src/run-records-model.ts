@@ -85,6 +85,15 @@ export interface LifetimeDeltas {
   readonly metrics: RunMetrics; // this run's metrics, merged by the host
 }
 
+/**
+ * The most Hall standings anything may carry: `standingsFromRecords` caps its output here, the
+ * live save schema caps `fallenHeroStandings`/`fallenHeroDecisions` against it, and
+ * `createNewRun`/`validateActiveRun` reject a run seeded with more. Exported so every host — the
+ * server's SQLite Hall, the guest's session-storage Hall — caps against this one definition
+ * instead of its own copy. Frozen legacy save schemas keep their own literal `10`s on purpose.
+ */
+export const MAX_STANDINGS = 10;
+
 /** Encodes the run seed as 32 lowercase hex characters: each word as eight zero-padded digits. */
 export function encodeRunSeed(runSeed: Uint32State): string {
   return runSeed.map((word) => word.toString(16).padStart(8, '0')).join('');
