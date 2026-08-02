@@ -5,6 +5,7 @@ import { stepIsSatisfied, type WizardState } from '../../../session/wizard-reduc
 import { backgroundById, classById } from '../../../session/pack-queries.js';
 import { useListNavigation } from '../roving-focus.js';
 import { LOOM_FOOTER_LINES } from './step-copy.js';
+import { modeLabel } from '../../mode-label.js';
 
 export const STEP_LABELS: Readonly<Record<WizardState['step'], string>> = {
   1: 'Identity',
@@ -78,7 +79,7 @@ function currentValue(
     case 6:
       return `${state.traitIds.length}/2 traits`;
     case 7:
-      return state.mode === 'wanderer' ? 'Wanderer' : 'Classic';
+      return modeLabel(state.mode);
     case 8:
       return '—';
   }

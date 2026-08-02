@@ -483,6 +483,27 @@ describe('ProfileSession', () => {
       expect(socket().sentMessages).toEqual([]);
     });
 
+    it('does not send rise-again for a non-death conclusion', async () => {
+      const { socket, connectPromise } = harness();
+      const fresh = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO, mode: 'wanderer' });
+      const won: ActiveRun = {
+        ...fresh,
+        conclusion: {
+          completionType: 'broke-cycle',
+          cause: { killerContentId: null, depth: 0, turn: fresh.turn, worldTime: fresh.worldTime },
+          concludedAtRevision: fresh.revision,
+          finalized: false,
+        },
+      };
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(won) });
+      const session = await connectPromise;
+
+      // A victory is the run's real ending -- rising is a death's prerogative alone.
+      expect(session.riseAgain()).toBe(false);
+      expect(socket().sentMessages).toEqual([]);
+    });
+
     it('does not send rise-again for a run still in progress', async () => {
       const { socket, connectPromise } = harness();
       socket().emit(HELLO);

@@ -10,6 +10,7 @@ import {
 } from '../derived-stats-display.js';
 import { heroOf, type HeroView } from '../../session/projection-view.js';
 import { lightStateText } from '../panels/types.js';
+import { modeLabel } from '../mode-label.js';
 
 /** Only the current-run stats the brief lists -- deliberately a narrower literal union than
  * `keyof RunMetrics` (which also has `killsByModel`, a nested object, plus a few fields the brief
@@ -183,9 +184,7 @@ export function CharacterSheetOverlay(): JSX.Element | null {
           <p className="text-xs uppercase tracking-[0.08em] text-subtle">{location}</p>
           <dl className="m-0 flex items-baseline gap-1.5 text-xs uppercase tracking-[0.08em] text-subtle">
             <dt className="shrink-0">MODE</dt>
-            <dd className="m-0 text-fg">
-              {snapshot.projection.mode === 'wanderer' ? 'Wanderer' : 'Classic'}
-            </dd>
+            <dd className="m-0 text-fg">{modeLabel(snapshot.projection.mode)}</dd>
           </dl>
         </div>
       </header>

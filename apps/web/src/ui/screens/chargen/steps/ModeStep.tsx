@@ -2,11 +2,7 @@ import type { JSX } from 'react';
 import { RUN_MODES, type RunMode } from '@woven-deep/engine';
 import type { StepProps } from './step-content.js';
 import { OPTION_SELECTED_CLASS } from './step-content.js';
-
-const MODE_LABELS: Readonly<Record<RunMode, string>> = {
-  classic: 'Classic',
-  wanderer: 'Wanderer',
-};
+import { MODE_LABELS } from '../../../mode-label.js';
 
 const MODE_BLURBS: Readonly<Record<RunMode, string>> = {
   classic: 'The true Deep. Death is final. The Hall remembers.',

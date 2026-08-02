@@ -19,6 +19,7 @@ import {
 import { DotLeaderRow } from '../chargen-components.js';
 import { STEP_LABELS } from '../StepMenu.js';
 import type { StepProps } from './step-content.js';
+import { modeLabel } from '../../../mode-label.js';
 
 const REVIEW_GATED_STEPS: readonly WizardState['step'][] = [1, 2, 3, 4, 5, 6, 7];
 
@@ -49,7 +50,7 @@ export function ReviewStep({ state, pack }: StepProps): JSX.Element {
         <DotLeaderRow label="Attributes" value={attributesSummary} />
         <DotLeaderRow label="Origin" value={background?.name ?? '—'} />
         <DotLeaderRow label="Marks" value={marksSummary} />
-        <DotLeaderRow label="Mode" value={state.mode === 'wanderer' ? 'Wanderer' : 'Classic'} />
+        <DotLeaderRow label="Mode" value={modeLabel(state.mode)} />
         {balance && <DotLeaderRow label="Starting gold" value={`${balance.startingCurrency}g`} />}
       </div>
       {stats && (

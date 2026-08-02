@@ -435,6 +435,10 @@ export class ProfileSession implements RunSession {
         this.lastEvents = [];
         this.lastDispatchedIntentType = null;
         this.notice = null;
+        // A rise-again answered with `rejected` (unreachable today -- the server replies with a
+        // state push either way) must still settle the pending flag, or the NEXT state push would
+        // misread itself as the rise's answer.
+        this.riseAwaitingAnswer = false;
         this.appendSystemLine(rejectionLine(message.reason));
         this.syncSightings(true);
         this.snapshot = this.buildSnapshot();
