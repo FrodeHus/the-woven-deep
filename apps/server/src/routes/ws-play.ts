@@ -15,7 +15,12 @@ import {
   ServerPlaySession,
   type ApplyOutcome,
 } from '../play/play-session.js';
-import { parseClientMessage, PROTOCOL_VERSION, type ServerMessage } from '../ws-protocol.js';
+import {
+  parseClientMessage,
+  PROTOCOL_VERSION,
+  type ClientMessage,
+  type ServerMessage,
+} from '../ws-protocol.js';
 
 export type { PlaySocket } from '../play/play-socket.js';
 
@@ -55,8 +60,45 @@ export function handleMessage(session: ServerPlaySession, raw: unknown): readonl
   if (!parsed.ok) {
     return [{ type: 'error', code: 'malformed-message', message: parsed.reason }];
   }
-  const message = parsed.value;
+  if (parsed.value.type === 'start-run') {
+    try {
+      return [
+        {
+          type: 'state',
+          snapshot: session.startRun({
+            choices: parsed.value.choices,
+            mode: parsed.value.mode,
+            seed: generateSeed(),
+          }),
+        },
+      ];
+    } catch (error) {
+      if (error instanceof LockedClassError) {
+        return [{ type: 'error', code: 'locked-class', message: error.message }];
+      }
+      // heroFromChoices' own validation: unknown ids, an illegal point-buy, a bad name. The
+      // connection survives so the wizard can correct and resend.
+      return [
+        {
+          type: 'error',
+          code: 'invalid-choices',
+          message: error instanceof Error ? error.message : 'hero choices were rejected',
+        },
+      ];
+    }
+  }
+  // Every other message drives an existing run; a client that skipped `start-run` (or raced the
+  // `no-run` push) gets a re-prompt instead of a crash against a session with no run.
+  if (!session.hasRun()) {
+    return [{ type: 'no-run' }];
+  }
+  return handleRunMessage(session, parsed.value);
+}
 
+function handleRunMessage(
+  session: ServerPlaySession,
+  message: Exclude<ClientMessage, { type: 'start-run' }>,
+): readonly ServerMessage[] {
   if (message.type === 'command') {
     return [
       outcomeToMessage(
@@ -195,8 +237,17 @@ export function registerWsPlayRoute(
       try {
         // Reusing an already-open (still-live-elsewhere) session skips `open()` entirely — it's
         // already rehydrated/created, and re-opening would clobber its in-memory state.
+        // A profile with NO stored run gets `no-run` instead of a server-invented default hero:
+        // the client answers with `start-run` carrying its chargen choices. A stored run (or a
+        // still-live in-memory session) rehydrates/reuses exactly as before.
         const snapshot =
-          existing !== undefined ? session.getSnapshot() : session.open({ seed: generateSeed() });
+          existing !== undefined
+            ? existing.session.hasRun()
+              ? session.getSnapshot()
+              : null
+            : repo.get(profileId) !== undefined
+              ? session.open({ seed: generateSeed() })
+              : null;
         registry.register(profileId, socket, session);
         // Deferred one tick: sending in the exact same synchronous tick as the handshake is safe
         // over a real socket (the client's WebSocket parser handles trailing bytes after the
@@ -213,7 +264,7 @@ export function registerWsPlayRoute(
             gameVersion: ENGINE_GAME_VERSION,
             saveSchemaVersion: SAVE_SCHEMA_VERSION,
           });
-          send(socket, { type: 'state', snapshot });
+          send(socket, snapshot !== null ? { type: 'state', snapshot } : { type: 'no-run' });
         });
       } catch (error) {
         if (error instanceof ContentHashMismatchError) {

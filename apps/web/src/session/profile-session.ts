@@ -4,8 +4,10 @@ import {
   tabletFragmentIds,
   type FinalChamberChoiceCommand,
   type HallRecordEnrichment,
+  type HeroChoices,
   type PublicEvent,
   type RunConclusionProjection,
+  type RunMode,
   type RunRecordRepository,
 } from '@woven-deep/engine';
 import type {
@@ -121,6 +123,61 @@ function computePendingFinalChamberChoice(
   return { canBreakCycle };
 }
 
+/** What `ProfileSession.connect` resolves to: an immediately-playable session (the profile had a
+ * run, stored or live), or a held connection awaiting the chargen wizard's choices. */
+export type ProfileConnectOutcome =
+  | Readonly<{ kind: 'session'; session: ProfileSession }>
+  | Readonly<{ kind: 'chargen'; pending: PendingProfileStart }>;
+
+/**
+ * The held `/ws/play` connection of a profile with no run yet. `startRun` answers the server's
+ * `no-run` push with the wizard's choices; a rejection (`invalid-choices`, `locked-class`) leaves
+ * the connection open so the wizard can correct and resend.
+ */
+export class PendingProfileStart {
+  private startSequence = 0;
+
+  constructor(
+    private readonly input: ProfileSessionInput,
+    private readonly ws: WsClient,
+  ) {}
+
+  startRun(choices: HeroChoices, mode: RunMode): Promise<ProfileSession> {
+    return new Promise<ProfileSession>((resolve, reject) => {
+      let settled = false;
+      const unsubscribe = this.ws.onMessage((raw) => {
+        if (settled) return;
+        const message = parseServerMessage(raw);
+        if (message === null) return;
+        if (message.type === 'hello' || message.type === 'superseded' || message.type === 'no-run')
+          return;
+        if (message.type === 'error') {
+          settled = true;
+          unsubscribe();
+          reject(new Error(`${message.code}: ${message.message}`));
+          return;
+        }
+        settled = true;
+        unsubscribe();
+        resolve(ProfileSession.adopt(this.input, this.ws, message.snapshot));
+      });
+      this.ws.send({
+        type: 'start-run',
+        commandId: `command.profile-start-${this.startSequence}`,
+        expectedRevision: 0,
+        choices,
+        mode,
+      });
+      this.startSequence += 1;
+    });
+  }
+
+  /** Tears the held connection down without starting a run (e.g. backing out to the title). */
+  close(): void {
+    this.ws.close();
+  }
+}
+
 export interface ProfileSessionInput {
   readonly pack: CompiledContentPack;
   readonly url: string;
@@ -181,6 +238,17 @@ export class ProfileSession implements RunSession {
   private sightingsCorruptionNotified = false;
   private onboardingCorruptionNotified = false;
 
+  /** Internal factory for `PendingProfileStart`: wraps an already-held connection whose first
+   * `state` just arrived. Not part of the public surface callers should reach for -- `connect`
+   * is the entry point. */
+  static adopt(
+    input: ProfileSessionInput,
+    ws: WsClient,
+    snapshot: ServerRunSnapshot,
+  ): ProfileSession {
+    return new ProfileSession(input, ws, snapshot);
+  }
+
   private constructor(
     input: ProfileSessionInput,
     ws: WsClient,
@@ -217,8 +285,8 @@ export class ProfileSession implements RunSession {
    * before ever reaching that point. Every message the fake/real socket delivers before this
    * settles is consumed here; once settled, the constructed instance's own handler takes over.
    */
-  static connect(input: ProfileSessionInput): Promise<ProfileSession> {
-    return new Promise<ProfileSession>((resolve, reject) => {
+  static connect(input: ProfileSessionInput): Promise<ProfileConnectOutcome> {
+    return new Promise<ProfileConnectOutcome>((resolve, reject) => {
       const ws = new WsClient({
         url: input.url,
         ...(input.createSocket ? { createSocket: input.createSocket } : {}),
@@ -237,10 +305,19 @@ export class ProfileSession implements RunSession {
           reject(new Error(`${message.code}: ${message.message}`));
           return;
         }
+        if (message.type === 'no-run') {
+          // The profile has no stored run: hand the held connection back so the caller can route
+          // through hero creation and answer with `start-run` -- the server no longer invents a
+          // default hero (#95).
+          settled = true;
+          unsubscribe();
+          resolve({ kind: 'chargen', pending: new PendingProfileStart(input, ws) });
+          return;
+        }
         // 'state' | 'decision-required' | 'rejected' all carry a usable initial snapshot.
         settled = true;
         unsubscribe();
-        resolve(new ProfileSession(input, ws, message.snapshot));
+        resolve({ kind: 'session', session: new ProfileSession(input, ws, message.snapshot) });
       });
       ws.connect();
     });

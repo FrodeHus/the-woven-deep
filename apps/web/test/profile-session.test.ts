@@ -89,11 +89,12 @@ interface Harness {
   readonly sockets: FakeSocket[];
   readonly socket: () => FakeSocket;
   readonly connectPromise: Promise<ProfileSession>;
+  readonly outcomePromise: ReturnType<typeof ProfileSession.connect>;
 }
 
 function harness(): Harness {
   const sockets: FakeSocket[] = [];
-  const connectPromise = ProfileSession.connect({
+  const outcomePromise = ProfileSession.connect({
     pack,
     url: 'ws://test/ws/play',
     createSocket: () => {
@@ -102,7 +103,16 @@ function harness(): Harness {
       return socket;
     },
   });
-  return { sockets, socket: () => sockets[sockets.length - 1]!, connectPromise };
+  // Every pre-existing test connects into a run that already exists, so the harness unwraps the
+  // session outcome; the chargen outcome has its own tests below.
+  const connectPromise = outcomePromise.then((outcome) => {
+    if (outcome.kind !== 'session') throw new Error('expected a session outcome');
+    return outcome.session;
+  });
+  // The chargen-outcome tests never await connectPromise; swallow its expected rejection so it
+  // can't surface as an unhandled rejection after the test body has already passed.
+  void connectPromise.catch(() => {});
+  return { sockets, socket: () => sockets[sockets.length - 1]!, connectPromise, outcomePromise };
 }
 
 const HELLO: ServerMessage = {
@@ -112,6 +122,56 @@ const HELLO: ServerMessage = {
   gameVersion: 'test-version',
   saveSchemaVersion: 1,
 };
+
+describe('ProfileSession chargen handshake', () => {
+  const CHOICES = {
+    name: 'Chosen',
+    method: 'roll' as const,
+    attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+    classId: 'class.wayfarer',
+    kitId: 'blade',
+    backgroundId: 'background.caravan-guard',
+    traitIds: [],
+  };
+
+  it('resolves the chargen outcome on no-run, and startRun sends choices then yields the session', async () => {
+    const { socket, outcomePromise } = harness();
+    socket().emit(HELLO);
+    socket().emit({ type: 'no-run' });
+    const outcome = await outcomePromise;
+    expect(outcome.kind).toBe('chargen');
+    if (outcome.kind !== 'chargen') return;
+
+    const sessionPromise = outcome.pending.startRun(CHOICES, 'classic');
+    expect(socket().sentMessages.at(-1)).toMatchObject({
+      type: 'start-run',
+      expectedRevision: 0,
+      choices: CHOICES,
+      mode: 'classic',
+    });
+
+    socket().emit({ type: 'state', snapshot: snapshotOf(freshRun()) });
+    const session = await sessionPromise;
+    expect(session.getSnapshot().projection.floor).toBeDefined();
+  });
+
+  it('a refused start-run rejects but leaves the connection open for a corrected resend', async () => {
+    const { socket, outcomePromise } = harness();
+    socket().emit(HELLO);
+    socket().emit({ type: 'no-run' });
+    const outcome = await outcomePromise;
+    if (outcome.kind !== 'chargen') throw new Error('expected chargen outcome');
+
+    const first = outcome.pending.startRun(CHOICES, 'classic');
+    socket().emit({ type: 'error', code: 'invalid-choices', message: 'no such class' });
+    await expect(first).rejects.toThrow(/invalid-choices/);
+    expect(socket().readyState).toBe(1);
+
+    const second = outcome.pending.startRun(CHOICES, 'classic');
+    socket().emit({ type: 'state', snapshot: snapshotOf(freshRun()) });
+    await expect(second).resolves.toBeInstanceOf(ProfileSession);
+  });
+});
 
 describe('ProfileSession', () => {
   it('sends nothing until hello + state arrive, then resolves with a full snapshot', async () => {
