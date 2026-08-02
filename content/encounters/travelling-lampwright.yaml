@@ -6,7 +6,7 @@ entries:
     tags: [lampwright, merchant]
     model: merchant
     minDepth: 1
-    maxDepth: 10
+    maxDepth: 20
     environmentTags: []
     requiredVaultTags: []
     weight: 1
