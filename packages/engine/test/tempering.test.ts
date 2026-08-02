@@ -195,18 +195,36 @@ describe('grantTemperingMilestones', () => {
       eventId: 'e1',
     }).state;
     expect(crossed.hero.tempering.banked).toBe(1);
+
+    // The checkpoint blob restores BOTH halves: the mark drops back to 1 and the point goes with it.
     const rewound = withTempering(
       { ...crossed, metrics: { ...crossed.metrics, deepestDepth: 1 } },
       { banked: 0, spent: zeroSpent() },
     );
-    const reCrossed = grantTemperingMilestones({
-      state: { ...rewound, metrics: { ...rewound.metrics, deepestDepth: 3 } },
+    // Granting against the rewound run itself owes nothing -- depth 1 has genuinely reached no
+    // milestone. (Asserted on the rewound state, not on a state that re-raises the mark in the same
+    // expression, or this case would collapse into the back-fill case above.)
+    const atRewind = grantTemperingMilestones({
+      state: rewound,
       content: pack,
-      previousDeepestDepth: 1,
+      previousDeepestDepth: 3,
       eventId: 'e2',
     });
+    expect(atRewind.state.hero.tempering.banked).toBe(0);
+    expect(atRewind.events).toEqual([]);
+
+    // Walking back down to 3 re-earns the point. A stored crossed-depth set would remember depth 3
+    // and refuse to re-grant here, so this assertion is what pins the derived semantics.
+    const reCrossed = grantTemperingMilestones({
+      state: { ...atRewind.state, metrics: { ...atRewind.state.metrics, deepestDepth: 3 } },
+      content: pack,
+      previousDeepestDepth: 1,
+      eventId: 'e3',
+    });
     expect(reCrossed.state.hero.tempering.banked).toBe(1);
-    expect(reCrossed.events).toHaveLength(1);
+    expect(reCrossed.events).toEqual([
+      expect.objectContaining({ type: 'hero.tempering-banked', depth: 3, banked: 1 }),
+    ]);
   });
 
   it('consumes no randomness', () => {
