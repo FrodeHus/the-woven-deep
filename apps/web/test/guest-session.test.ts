@@ -1738,7 +1738,8 @@ describe('GuestSession', () => {
       session.dispatch({ type: 'temper', attribute });
     }
 
-    it('rewinds tempering wholesale with a wanderer checkpoint', () => {
+    // Multi-descent integration construction: give it CI headroom past the 5s default.
+    it('rewinds tempering wholesale with a wanderer checkpoint', { timeout: 30_000 }, () => {
       // Milestone depths are [3, 6, 9, 12, ...], so a checkpoint written anywhere between two
       // milestones (e.g. depth 4) has IDENTICAL tempering to whatever is still live at death --
       // spending never changes it again before the next milestone, so a rewind that wrongly kept
@@ -1767,7 +1768,7 @@ describe('GuestSession', () => {
       expect(session.getSnapshot().projection.hero.tempering).toEqual(atCheckpoint);
     });
 
-    it('re-grants a milestone when a rewound hero re-crosses it', () => {
+    it('re-grants a milestone when a rewound hero re-crosses it', { timeout: 30_000 }, () => {
       // Deliberate and spec-stated: `metrics.deepestDepth` rides the blob, so it rewinds with the
       // run and the rewound hero genuinely re-earns the point by diving again.
       const storage = memoryStorage();
