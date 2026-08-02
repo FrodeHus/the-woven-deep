@@ -1739,20 +1739,32 @@ describe('GuestSession', () => {
     }
 
     it('rewinds tempering wholesale with a wanderer checkpoint', () => {
+      // Milestone depths are [3, 6, 9, 12, ...], so a checkpoint written anywhere between two
+      // milestones (e.g. depth 4) has IDENTICAL tempering to whatever is still live at death --
+      // spending never changes it again before the next milestone, so a rewind that wrongly kept
+      // the pre-rise `hero.tempering` instead of the checkpoint's would still coincidentally pass.
+      // Reaching depth 6 banks a SECOND point into the checkpoint itself, then spending it before
+      // dying makes live state diverge from the checkpoint on purpose, so only a genuine rewind of
+      // `hero.tempering` (not merely a state swap that happens to leave it alone) satisfies this.
       const storage = memoryStorage();
       let session = wandererSession(storage);
       session = descendToDepth(session, storage, 3); // banks the depth-3 milestone point
       temper(session, 'vitality'); // spend it
-      const afterSpend = session.getSnapshot().projection.hero.tempering;
-      expect(afterSpend.banked).toBe(0);
-      expect(afterSpend.spent.vitality).toBe(1);
+      session = descendToDepth(session, storage, 6); // checkpoint: banks depth-6's point too
+      const atCheckpoint = session.getSnapshot().projection.hero.tempering;
+      expect(atCheckpoint.banked).toBe(1);
+      expect(atCheckpoint.spent.vitality).toBe(1);
 
-      session = descendToDepth(session, storage, 4); // writes a checkpoint that already has the spend baked in
+      temper(session, 'vitality'); // spend the depth-6 point too -- diverges live state from the checkpoint
+      const liveAfterSecondSpend = session.getSnapshot().projection.hero.tempering;
+      expect(liveAfterSecondSpend.banked).toBe(0);
+      expect(liveAfterSecondSpend.spent.vitality).toBe(2);
+
       session = killHero(storage);
       expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
 
       expect(session.riseAgain()).toBe(true);
-      expect(session.getSnapshot().projection.hero.tempering).toEqual(afterSpend);
+      expect(session.getSnapshot().projection.hero.tempering).toEqual(atCheckpoint);
     });
 
     it('re-grants a milestone when a rewound hero re-crosses it', () => {
