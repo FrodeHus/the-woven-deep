@@ -188,13 +188,34 @@ export function guaranteedUniqueItemIds(content: CompiledContentPack): ReadonlyS
   );
 }
 
+interface ArtifactIndex {
+  readonly ids: ReadonlySet<OpaqueId>;
+  readonly byId: ReadonlyMap<OpaqueId, ArtifactDefinition>;
+}
+
+// Both lookups below sit on hot per-command paths (`validateContentBoundRun`, `consumeFuel`'s
+// per-item loop), so the pack scan runs once per pack object rather than per call. Keyed by pack
+// identity: packs are immutable once compiled, so the derived index can never go stale, and a
+// WeakMap keeps the cache invisible to determinism (pure function of the pack) and to memory.
+const artifactIndexCache = new WeakMap<CompiledContentPack, ArtifactIndex>();
+
+function artifactIndex(content: CompiledContentPack): ArtifactIndex {
+  const cached = artifactIndexCache.get(content);
+  if (cached) return cached;
+  const byId = new Map<OpaqueId, ArtifactDefinition>();
+  for (const entry of content.entries) {
+    if (entry.kind === 'item' && entry.artifact !== null) {
+      byId.set(entry.id, entry.artifact);
+    }
+  }
+  const index: ArtifactIndex = { ids: new Set(byId.keys()), byId };
+  artifactIndexCache.set(content, index);
+  return index;
+}
+
 /** Content IDs of items carrying an `artifact` block. */
 export function artifactItemIds(content: CompiledContentPack): ReadonlySet<OpaqueId> {
-  return new Set(
-    content.entries.flatMap((entry) =>
-      entry.kind === 'item' && entry.artifact !== null ? [entry.id] : [],
-    ),
-  );
+  return artifactIndex(content).ids;
 }
 
 /** The `artifact` definition for a content ID, or null when the item is not an artifact. */
@@ -202,10 +223,7 @@ export function artifactById(
   content: CompiledContentPack,
   contentId: OpaqueId,
 ): ArtifactDefinition | null {
-  const entry = content.entries.find(
-    (candidate) => candidate.kind === 'item' && candidate.id === contentId,
-  ) as ItemContentEntry | undefined;
-  return entry?.artifact ?? null;
+  return artifactIndex(content).byId.get(contentId) ?? null;
 }
 
 /**
