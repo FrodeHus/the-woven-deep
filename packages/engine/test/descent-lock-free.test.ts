@@ -193,4 +193,38 @@ describe('every floor of a run descends without a key or a lockpick', () => {
       expect(locksSeen).toBeGreaterThan(0);
     },
   );
+
+  // Task 12 (hero-power-curve) regression pin: this whole file already re-runs the no-hard-gates
+  // proof against a save-schema-v17 run (`createNewRun` now carries `hero.tempering` and every
+  // item can carry an `enchantment`) -- named explicitly here so the pin is traceable to the
+  // feature that motivated it, and pinned against a fresh, wholly untouched hero: no milestone
+  // point spent, nothing enchanted, exactly the starting shape every earlier no-hard-gates run in
+  // this file already assumed.
+  it('keeps every descent reachable with no tempering spent and no enchantment', () => {
+    const seed = seeds[0]!;
+    let state = createNewRun({ pack, seed, hero: DEFAULT_GUEST_HERO });
+    expect(Object.values(state.hero.tempering.spent).every((spent) => spent === 0)).toBe(true);
+    expect(state.hero.tempering.banked).toBe(0);
+    expect(state.items.some((item) => item.enchantment !== null)).toBe(false);
+
+    for (;;) {
+      const floor = activeFloor(state);
+      const hero = heroActor(state);
+      const arrival: Point = { x: hero.x, y: hero.y };
+      const target = objective(floor);
+
+      const route = lockFreeRoute(state, floor, arrival, target);
+      expect(route, diagnostic(seed, floor, arrival, target, state)).not.toBeNull();
+
+      if (floor.depth === FINAL_CHAMBER_DEPTH) break;
+      state = descendToNextFloor(teleportHeroTo(state, target), { content: pack }).state;
+    }
+
+    // Tempering milestones bank on the way down (the seed crosses depth 3 at minimum) but nothing
+    // here ever spends one, and nothing here ever enchants -- the descent stays lock-free either
+    // way, which is the actual claim: reachability never depends on either system.
+    expect(state.hero.tempering.banked).toBeGreaterThan(0);
+    expect(Object.values(state.hero.tempering.spent).every((spent) => spent === 0)).toBe(true);
+    expect(state.items.some((item) => item.enchantment !== null)).toBe(false);
+  });
 });

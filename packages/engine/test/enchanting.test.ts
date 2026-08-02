@@ -10,12 +10,16 @@ import type {
 import {
   createDemoContentPack,
   createDemoRun,
+  deriveRngStreams,
   drawEnchantment,
   enchantable,
   ENCHANTABLE_CATEGORIES,
   heroActor,
+  resolveCommand,
   rollDie,
   synchronizeDerivedMaxima,
+  type ActiveRun,
+  type GameCommand,
   type ItemInstance,
   type Uint32State,
 } from '../src/index.js';
@@ -276,5 +280,37 @@ describe('shipping content', () => {
     };
     const synchronized = synchronizeDerivedMaxima(withRing, shippingPack);
     expect(heroActor(synchronized).maxHealth).toBe(heroActor(baseline).maxHealth + 3);
+  });
+});
+
+describe('RNG stream isolation (Task 12, hero-power-curve regression pin)', () => {
+  /** Drives fifty ordinary `wait` turns -- no enchanting, no tempering, no spell casting, and the
+   * demo fixture's floor has no monsters and no loot to trip anything incidental either. Only
+   * `drawEnchantment`'s two call sites (an `effect.enchant`-bearing effect and the Armorer trade
+   * service) ever draw the `enchanting` stream; neither runs here. */
+  function playFiftyTurns(
+    run: ActiveRun,
+    content: ReturnType<typeof createDemoContentPack>,
+  ): ActiveRun {
+    let state = run;
+    for (let index = 0; index < 50; index += 1) {
+      const command: GameCommand = {
+        type: 'wait',
+        commandId: `command.turn-${String(index)}`,
+        expectedRevision: state.revision,
+      };
+      const resolution = resolveCommand(state, command, { content });
+      if (resolution.result.status !== 'applied') {
+        throw new Error(`turn ${String(index)} did not apply: ${resolution.result.status}`);
+      }
+      state = resolution.state;
+    }
+    return state;
+  }
+
+  it('never advances the enchanting stream in a run that never enchants', () => {
+    const content = createDemoContentPack();
+    const played = playFiftyTurns(createDemoRun(), content);
+    expect(played.rng.enchanting).toEqual(deriveRngStreams(played.runSeed).enchanting);
   });
 });

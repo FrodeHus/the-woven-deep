@@ -15,6 +15,7 @@ import {
   SaveLoadError,
   type ActiveRun,
   type ActorState,
+  type AttributeName,
   type ItemInstance,
   type NewRunRecordsInput,
   type RunRecordRepository,
@@ -1670,6 +1671,114 @@ describe('GuestSession', () => {
       });
 
       expect(storage.get(CHECKPOINT_KEY)).toBeNull();
+    });
+
+    /**
+     * Task 12 (hero-power-curve) regression pins: a Wanderer rewind must carry `hero.tempering`
+     * along wholesale, and re-crossing a milestone after a rewind must genuinely re-earn its point
+     * (both explicitly spec-stated deliberate behavior, not accidents of `decodeActiveRun`).
+     *
+     * `descendToDepth` reaches a target depth through real, engine-driven floor-entry transitions
+     * (so every one writes its own genuine Wanderer checkpoint, exactly like `walkAndDescend`) --
+     * it just skips the maze walk by teleporting the hero onto each floor's stair-down before the
+     * real `descend` dispatch, the same shortcut `depth1Run` above takes at the engine level. Each
+     * teleport-then-descend rewrites `storage` and reboots the session over it (a plain `restored`
+     * boot, like a page reload), so the return value is always the live, current session -- callers
+     * must keep using whatever `descendToDepth` returns, exactly like `killHero`'s callers already
+     * do.
+     */
+    function currentSavedRun(storage: FakeStorage): ActiveRun {
+      return decodeActiveRun(storage.peek()!, pack);
+    }
+
+    function teleportToStairDown(storage: FakeStorage): void {
+      const run = currentSavedRun(storage);
+      const floor = run.floors.find((candidate) => candidate.floorId === run.activeFloorId)!;
+      const hero = run.actors.find((actor) => actor.playerControlled)!;
+      storage.set(
+        SAVE_KEY,
+        encodeActiveRun({
+          ...run,
+          actors: run.actors.map((actor) =>
+            actor.actorId === hero.actorId
+              ? { ...actor, x: floor.stairDown!.x, y: floor.stairDown!.y }
+              : actor,
+          ),
+          // `recentCommands` retains a position chain validated against the hero's actual
+          // position (`validateSemantics`'s "wait position does not match the retained position
+          // chain") -- a teleport that bypasses real movement commands has nothing consistent to
+          // leave in that chain, so it is cleared here exactly as it would be by the time an
+          // ordinary save aged past `RECENT_COMMAND_LIMIT`.
+          recentCommands: [],
+        }),
+      );
+    }
+
+    function descendToDepth(
+      session: GuestSession,
+      storage: FakeStorage,
+      depth: number,
+    ): GuestSession {
+      // Forces a persist so `storage` reflects `session`'s live state even when nothing has been
+      // dispatched yet (e.g. immediately after `wandererSession`, whose constructor never writes
+      // `SAVE_KEY` -- only a dispatch does).
+      let current = session;
+      current.dispatch({ type: 'wait' });
+      for (;;) {
+        const run = currentSavedRun(storage);
+        const floor = run.floors.find((candidate) => candidate.floorId === run.activeFloorId)!;
+        if (floor.depth >= depth) return current;
+        teleportToStairDown(storage);
+        current = new GuestSession({ pack, storage });
+        current.dispatch({ type: 'descend' });
+      }
+    }
+
+    function temper(session: GuestSession, attribute: AttributeName): void {
+      session.dispatch({ type: 'temper', attribute });
+    }
+
+    it('rewinds tempering wholesale with a wanderer checkpoint', () => {
+      const storage = memoryStorage();
+      let session = wandererSession(storage);
+      session = descendToDepth(session, storage, 3); // banks the depth-3 milestone point
+      temper(session, 'vitality'); // spend it
+      const afterSpend = session.getSnapshot().projection.hero.tempering;
+      expect(afterSpend.banked).toBe(0);
+      expect(afterSpend.spent.vitality).toBe(1);
+
+      session = descendToDepth(session, storage, 4); // writes a checkpoint that already has the spend baked in
+      session = killHero(storage);
+      expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
+
+      expect(session.riseAgain()).toBe(true);
+      expect(session.getSnapshot().projection.hero.tempering).toEqual(afterSpend);
+    });
+
+    it('re-grants a milestone when a rewound hero re-crosses it', () => {
+      // Deliberate and spec-stated: `metrics.deepestDepth` rides the blob, so it rewinds with the
+      // run and the rewound hero genuinely re-earns the point by diving again.
+      const storage = memoryStorage();
+      let session = wandererSession(storage);
+      session = descendToDepth(session, storage, 2); // checkpoint stops here...
+      expect(session.getSnapshot().projection.hero.tempering.banked).toBe(0);
+
+      // ...because the transition INTO depth 3 is what both banks the milestone point AND kills
+      // the hero on arrival, in the same command -- `writeRiseCheckpoint` skips writing a
+      // checkpoint for a transition that concludes the run (see `armLethalFloorEntry`'s doc
+      // comment above), so the last real checkpoint left standing is depth 2's, pre-milestone.
+      session.dispatch({ type: 'wait' });
+      armLethalFloorEntry(storage);
+      teleportToStairDown(storage);
+      session = new GuestSession({ pack, storage });
+      session.dispatch({ type: 'descend' });
+      expect(session.getSnapshot().projection.conclusion?.completionType).toBe('died');
+
+      expect(session.riseAgain()).toBe(true);
+      expect(session.getSnapshot().projection.hero.tempering.banked).toBe(0);
+
+      session = descendToDepth(session, storage, 3);
+      expect(session.getSnapshot().projection.hero.tempering.banked).toBe(1);
     });
   });
 
