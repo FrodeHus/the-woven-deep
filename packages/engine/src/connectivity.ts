@@ -7,6 +7,14 @@ export interface ConnectivityInput {
   readonly tiles: readonly TileId[];
   readonly start?: Readonly<{ x: number; y: number }>;
   readonly target?: Readonly<{ x: number; y: number }>;
+  /**
+   * Which edges the walk follows. `'orthogonal'` (the default) is the conservative 4-way graph
+   * every generation-time cull uses. `'movement'` is the graph the hero actually walks: 8-way
+   * with the corner rule (a diagonal step needs at least one traversable orthogonal flank) --
+   * `movementAction`'s truth, restated over tiles. Routes differ between the two; components do
+   * not (a diagonal edge always implies a two-step orthogonal detour through a flank).
+   */
+  readonly graph?: 'orthogonal' | 'movement';
 }
 
 export interface RequiredRouteInput {
@@ -34,6 +42,38 @@ function candidateNeighbors(index: number, width: number, height: number): reado
   if (x + 1 < width) result.push(index + 1);
   if (y + 1 < height) result.push(index + width);
   if (x > 0) result.push(index - 1);
+  return result;
+}
+
+/**
+ * The hero's step graph from `index`: the four orthogonals plus each diagonal whose corner rule
+ * holds -- the diagonal target may be entered only when at least one of its two orthogonal flanks
+ * is itself traversable (`movementAction`'s `blocked.corner`). Orthogonal candidates are emitted
+ * unfiltered like `candidateNeighbors` (the caller re-checks traversability); diagonals must be
+ * flank-checked here because the rule reads two OTHER cells the caller never looks at.
+ */
+function movementNeighbors(
+  index: number,
+  width: number,
+  height: number,
+  traversable: (index: number) => boolean,
+): readonly number[] {
+  const x = index % width;
+  const y = Math.floor(index / width);
+  const result: number[] = [...candidateNeighbors(index, width, height)];
+  for (const [dx, dy] of [
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+    [-1, -1],
+  ] as const) {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+    if (traversable(y * width + nx) || traversable(ny * width + x)) {
+      result.push(ny * width + nx);
+    }
+  }
   return result;
 }
 
@@ -92,10 +132,16 @@ export function analyzeConnectivity(input: ConnectivityInput): ConnectivityAnaly
   const queue = [start];
   distance[start] = 0;
   visitedWords[start >>> 5] = (visitedWords[start >>> 5]! | ((1 << (start & 31)) >>> 0)) >>> 0;
+  const traversable = (index: number): boolean =>
+    tileDefinition(tiles[index]!).potentiallyTraversable;
+  const neighbors =
+    input.graph === 'movement'
+      ? (index: number): readonly number[] => movementNeighbors(index, width, height, traversable)
+      : (index: number): readonly number[] => candidateNeighbors(index, width, height);
   for (let cursor = 0; cursor < queue.length; cursor += 1) {
     const current = queue[cursor]!;
-    for (const next of candidateNeighbors(current, width, height)) {
-      if (distance[next] !== -1 || !tileDefinition(tiles[next]!).potentiallyTraversable) continue;
+    for (const next of neighbors(current)) {
+      if (distance[next] !== -1 || !traversable(next)) continue;
       distance[next] = distance[current]! + 1;
       previous[next] = current;
       visitedWords[next >>> 5] = (visitedWords[next >>> 5]! | ((1 << (next & 31)) >>> 0)) >>> 0;
@@ -129,9 +175,15 @@ export function analyzeConnectivity(input: ConnectivityInput): ConnectivityAnaly
  *
  * The graph is the `potentiallyTraversable` one `analyzeConnectivity` walks, not the `walkable` one:
  * doors open, so a closed door must not be read as a cut in the floor.
+ *
+ * `blockedIndexes` overlays cells that already hold a permanent movement block (a committed locked
+ * chest, an earlier placement in the same pass) as walls: two placements can jointly seal a
+ * two-wide passage with neither cell a cut of the BARE graph, so each subsequent placement must
+ * analyze the graph its predecessors actually left behind (#194).
  */
 export function articulationIndexes(
   input: Readonly<{ width: number; height: number; tiles: readonly TileId[] }>,
+  blockedIndexes?: ReadonlySet<number>,
 ): ReadonlySet<number> {
   const { width, height, tiles } = input;
   if (
@@ -144,7 +196,7 @@ export function articulationIndexes(
     throw new RangeError('articulation dimensions and dense tile count must agree');
   }
   const traversable = (index: number): boolean =>
-    tileDefinition(tiles[index]!).potentiallyTraversable;
+    tileDefinition(tiles[index]!).potentiallyTraversable && !(blockedIndexes?.has(index) ?? false);
   const discovered = new Int32Array(tiles.length).fill(-1);
   const low = new Int32Array(tiles.length).fill(-1);
   const result = new Set<number>();
@@ -255,12 +307,16 @@ export function protectedRouteIndexes(floor: FloorSnapshot): ReadonlySet<number>
   const start = points[0];
   if (!start) return protectedIndexes;
   for (const target of points.slice(1)) {
+    // The movement graph, not the 4-way one: the protected route exists so the hero can actually
+    // walk between the required points, and the hero steps diagonally under the corner rule. A
+    // 4-way route protects a staircase shape the hero never walks (#194).
     const route = analyzeConnectivity({
       width: floor.width,
       height: floor.height,
       tiles: floor.tiles,
       start,
       target,
+      graph: 'movement',
     }).route;
     for (const point of route) protectedIndexes.add(point.y * floor.width + point.x);
   }

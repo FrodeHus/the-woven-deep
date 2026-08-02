@@ -78,4 +78,40 @@ describe('articulation cells', () => {
     const sealed = articulationIndexes(grid(['#####', '#.#.#', '#####']));
     expect(sealed.size).toBe(0);
   });
+
+  it('treats blocked cells as walls: the partner of a blocked corridor cell becomes a cut', () => {
+    const corridor = grid(['#######', '#.....#', '#.....#', '#######']);
+    // Bare graph: every corridor cell has the other row as a bypass, so nothing is a cut.
+    expect(articulationIndexes(corridor).size).toBe(0);
+    // With (3,1) blocked (a committed chest), (3,2) is the only remaining strand.
+    const cells = articulationIndexes(corridor, new Set([at(7, 3, 1)]));
+    expect(cells.has(at(7, 3, 2))).toBe(true);
+  });
+});
+
+describe('movement-graph connectivity', () => {
+  it('routes diagonally where the hero actually walks', () => {
+    const room = grid(['######', '#....#', '#....#', '#....#', '#....#', '######']);
+    const result = analyzeConnectivity({
+      ...room,
+      graph: 'movement',
+      start: { x: 1, y: 1 },
+      target: { x: 4, y: 4 },
+    });
+    // Chebyshev distance: three diagonal steps, four route cells.
+    expect(result.distance).toBe(3);
+    expect(result.route).toHaveLength(4);
+  });
+
+  it('honors the corner rule: a diagonal squeeze with both flanks blocked is no edge', () => {
+    const pinch = grid(['####', '#.##', '##.#', '####']);
+    const result = analyzeConnectivity({
+      ...pinch,
+      graph: 'movement',
+      start: { x: 1, y: 1 },
+      target: { x: 2, y: 2 },
+    });
+    expect(result.distance).toBeNull();
+    expect(result.connected).toBe(false);
+  });
 });
