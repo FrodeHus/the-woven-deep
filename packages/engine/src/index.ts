@@ -91,6 +91,7 @@ export * from './feature-model.js';
 export * from './features.js';
 export * from './survival-model.js';
 export * from './survival.js';
+export * from './tempering.js';
 export * from './model.js';
 export * from './knowledge.js';
 export * from './random.js';

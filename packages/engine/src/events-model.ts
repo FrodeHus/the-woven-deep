@@ -220,6 +220,14 @@ export interface SpellLearnedEvent {
   readonly actorId: OpaqueId;
   readonly spellId: OpaqueId;
 }
+/** One depth milestone banked a tempering point. The hero's own progress, so it is hero-visible in
+ * full: `depth` is the milestone crossed, `banked` the running total after this grant. */
+export interface HeroTemperingBankedEvent {
+  readonly type: 'hero.tempering-banked';
+  readonly eventId: OpaqueId;
+  readonly depth: number;
+  readonly banked: number;
+}
 export interface HeroRecalledEvent {
   readonly type: 'hero.recalled';
   readonly eventId: OpaqueId;
@@ -853,6 +861,7 @@ export type DomainEvent =
   | ItemThrownEvent
   | ItemUsedEvent
   | SpellLearnedEvent
+  | HeroTemperingBankedEvent
   | HeroRecalledEvent
   | FloorEnteredEvent
   | SpellCastEvent

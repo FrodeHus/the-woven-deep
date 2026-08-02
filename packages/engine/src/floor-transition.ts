@@ -18,6 +18,7 @@ import { refreshKnowledge } from './perception.js';
 import { recordFloorEntered } from './run-metrics.js';
 import { validateActiveRun } from './save-schema.js';
 import { compareCodeUnits } from './stable-json.js';
+import { grantTemperingMilestones } from './tempering.js';
 import { tileDefinition } from './terrain.js';
 import { TOWN_FLOOR_ID } from './town-floor.js';
 import {
@@ -196,10 +197,23 @@ function applyFloorEntryTriggers(
     content: CompiledContentPack;
     entryEvent: FloorEnteredEvent;
     revision: number;
+    /** The high-water mark this transition started from, before the caller's own metrics update. */
+    previousDeepestDepth: number;
   }>,
 ): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
-  const triggered = applyCurseTriggers({
+  // Milestone banking reads the metrics the caller has already updated, so it runs first -- and in
+  // particular before the maxima refresh below, which is what a spent point ultimately feeds. Only
+  // the descent paths can raise `deepestDepth`; on every other entry the grant derives zero owed and
+  // returns the state untouched, which is why this sits in the shared helper rather than being
+  // duplicated across six call sites.
+  const banked = grantTemperingMilestones({
     state: input.state,
+    content: input.content,
+    previousDeepestDepth: input.previousDeepestDepth,
+    eventId: input.entryEvent.eventId,
+  });
+  const triggered = applyCurseTriggers({
+    state: banked.state,
     content: input.content,
     events: [input.entryEvent],
     eventId: input.entryEvent.eventId,
@@ -209,8 +223,8 @@ function applyFloorEntryTriggers(
   // generated descent, stored re-descent, the Final Chamber, ascent and both recalls. Same position
   // as in the reducer: after the curse post-pass, before the conclusion boundary.
   const state = synchronizeDerivedMaxima(triggered.state, input.content);
-  if (triggered.events.length === 0) return { state, events: [] };
-  return concludeRunOnHeroDeath({
+  if (triggered.events.length === 0) return { state, events: banked.events };
+  const concluded = concludeRunOnHeroDeath({
     state,
     content: input.content,
     events: triggered.events,
@@ -218,6 +232,7 @@ function applyFloorEntryTriggers(
     turn: input.state.turn,
     eventId: input.entryEvent.eventId,
   });
+  return { state: concluded.state, events: [...banked.events, ...concluded.events] };
 }
 
 /**
@@ -272,6 +287,7 @@ export function descendToNextFloor(
       content: context.content,
       entryEvent,
       revision,
+      previousDeepestDepth: run.metrics.deepestDepth,
     });
     return {
       state: triggered.state,
@@ -330,6 +346,7 @@ export function descendToNextFloor(
       content: context.content,
       entryEvent,
       revision,
+      previousDeepestDepth: run.metrics.deepestDepth,
     });
     return {
       state: triggered.state,
@@ -389,6 +406,7 @@ export function descendToNextFloor(
     content: context.content,
     entryEvent,
     revision,
+    previousDeepestDepth: run.metrics.deepestDepth,
   });
   return {
     state: triggered.state,
@@ -500,6 +518,7 @@ export function ascendToPreviousFloor(
     content: context.content,
     entryEvent,
     revision,
+    previousDeepestDepth: run.metrics.deepestDepth,
   });
   return { state: triggered.state, events: [entryEvent, ...triggered.events] };
 }
@@ -534,6 +553,7 @@ export function recallToTown(
     content: context.content,
     entryEvent,
     revision,
+    previousDeepestDepth: run.metrics.deepestDepth,
   });
   return { state: triggered.state, events: [entryEvent, ...triggered.events] };
 }
@@ -572,6 +592,7 @@ export function recallReturn(
     content: context.content,
     entryEvent,
     revision,
+    previousDeepestDepth: run.metrics.deepestDepth,
   });
   return { state: triggered.state, events: [entryEvent, ...triggered.events] };
 }
