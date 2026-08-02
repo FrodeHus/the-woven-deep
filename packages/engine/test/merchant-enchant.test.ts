@@ -211,6 +211,36 @@ describe('trade-service enchant projection', () => {
     expect(targets).not.toContain('item.hero.potion');
   });
 
+  it('excludes a heirloom-provenance equipment item from the service target list', () => {
+    const run = openedRun();
+    // A recovered heirloom's identity IS its recorded provenance -- the Armorer must never
+    // re-forge it. Placed directly (bypassing the haunts drop machinery, which this test does not
+    // need to exercise) since `serviceTargetItemIds` is a pure filter over `run.items`.
+    const heirloomItem: ItemInstance = item(
+      'item.hero.heirloom-sword',
+      sword.id,
+      { type: 'equipped', actorId: HERO_ID, slot: 'main-hand' },
+      {
+        heirloom: {
+          displayName: 'Ancestral Blade',
+          glyph: ')',
+          color: '#ddeeff',
+          originatingHallRecordId: `record.${'a'.repeat(32)}.${'b'.repeat(16)}`,
+          originatingRank: 1,
+          sourceItemId: 'item.original.0001',
+        },
+      },
+    );
+    const withHeirloom: ActiveRun = { ...run, items: [...run.items, heirloomItem] };
+    const targets = serviceTargetItemIds({
+      state: withHeirloom,
+      content,
+      serviceId: 'merchant-service.enchant',
+    });
+    expect(targets).not.toContain('item.hero.heirloom-sword');
+    expect(targets).toContain('item.hero.sword');
+  });
+
   it('the trade projection agrees with serviceTargetItemIds', () => {
     const run = openedRun();
     const projection = projectGameplayState({ state: run, content }).trade!;
@@ -239,6 +269,39 @@ describe('trade-service enchant', () => {
         price,
       }),
     );
+  });
+
+  it('identifies completely and reveals the curse when enchanting an unrevealed-cursed item, never leaving identified: true with curse.revealed: false', () => {
+    const runWithTrade = openedRun({ currency: 1000 });
+    const unrevealedCursedSwordId = 'item.hero.unrevealed-cursed-sword';
+    const before: ActiveRun = {
+      ...runWithTrade,
+      items: [
+        ...runWithTrade.items,
+        item(
+          unrevealedCursedSwordId,
+          sword.id,
+          { type: 'backpack', actorId: HERO_ID },
+          { identified: false, curse: { curseId: CURSE_ID, revealed: false } },
+        ),
+      ],
+    };
+    const resolved = resolveCommand(
+      before,
+      enchantCommand({ targetItemId: unrevealedCursedSwordId }),
+      context(),
+    );
+    expect(resolved.result).toMatchObject({ status: 'applied' });
+    const enchanted = itemOf(resolved.state, unrevealedCursedSwordId);
+    // The #121 invariant every identify path reveals: identified and curse.revealed rise
+    // together, never `identified: true` with a hidden curse.
+    expect(enchanted.identified).toBe(true);
+    expect(enchanted.curse).toEqual({ curseId: CURSE_ID, revealed: true });
+    expect(enchanted.enchantment).not.toBeNull();
+    // item.iron-sword identifies per-instance (mode: instance, no shared appearance pool), so the
+    // Armorer's identify pass has nothing to touch here -- appearance bookkeeping stays exactly
+    // as it was, the same as it would for the identify service on this same item.
+    expect(resolved.state.identification).toEqual(before.identification);
   });
 
   it('re-enchants an already-enchanted item at double price, replacing the old draw', () => {

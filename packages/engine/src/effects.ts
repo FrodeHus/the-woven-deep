@@ -460,9 +460,15 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
           state: enchantingState,
         });
         enchantingState = drawn.state;
+        // Only the enchantment field is set here -- the item-level fold has no route to
+        // `run.identification` (the appearance half of a complete identify), so the caller
+        // finishes the reveal via `identifyItemCompletely` once this fold returns a full
+        // `ActiveRun` again (see action-dispatch.ts's `use` handler). Leaving `identified`
+        // untouched here, rather than flipping it raw, is what keeps that caller-side pass from
+        // ever observing (or masking) an `identified: true` / `curse.revealed: false` state.
         items = items.map((candidate) =>
           candidate.itemId === targetItemId
-            ? { ...candidate, enchantment: drawn.enchantment, identified: true }
+            ? { ...candidate, enchantment: drawn.enchantment }
             : candidate,
         );
       }

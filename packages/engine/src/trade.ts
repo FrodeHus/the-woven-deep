@@ -799,14 +799,25 @@ export function resolveTradeCommand(
       // accepted enchants alone -- never touched by a purchase attempt that didn't go through.
       const item = charged.items.find((candidate) => candidate.itemId === targetItemId)!;
       const drawn = drawEnchantment({ content, item, state: charged.rng.enchanting });
+      // The Armorer's craft reveals what it touches: enchanting identifies the item completely --
+      // appearance, instance, and any curse -- exactly as the identify service would, so a curse
+      // can never survive hidden behind `identified: true` (the #121 invariant every identify path
+      // reveals). `identifyItemCompletely` draws no randomness, so this does not touch any stream
+      // the enchanting draw above doesn't already touch.
+      const identified = identifyItemCompletely({
+        run: charged,
+        content,
+        itemId: targetItemId,
+        eventId: command.commandId,
+      });
       const nextState: ActiveRun = {
-        ...charged,
-        items: charged.items.map((candidate) =>
+        ...identified.state,
+        items: identified.state.items.map((candidate) =>
           candidate.itemId === targetItemId
-            ? { ...candidate, enchantment: drawn.enchantment, identified: true }
+            ? { ...candidate, enchantment: drawn.enchantment }
             : candidate,
         ),
-        rng: { ...charged.rng, enchanting: drawn.state },
+        rng: { ...identified.state.rng, enchanting: drawn.state },
       };
       return {
         state: nextState,
@@ -821,6 +832,7 @@ export function resolveTradeCommand(
             currency: plan.plan.currency,
             remainingUses,
           },
+          ...identified.events,
         ],
       };
     }

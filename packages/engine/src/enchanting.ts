@@ -27,15 +27,21 @@ export const ENCHANTABLE_CATEGORIES: readonly ItemCategory[] = [
 
 /**
  * True for an item the enchant service and scroll may target: an ordinary equipment category, not
- * an artifact, and not carrying a REVEALED curse. An unrevealed curse is invisible to hero and
- * merchant alike, which is the same gamble the identify service exists to resolve.
+ * an artifact, not carrying a REVEALED curse, and not heirloom provenance. An unrevealed curse is
+ * invisible to hero and merchant alike, which is the same gamble the identify service exists to
+ * resolve. Heirloom exclusion mirrors `merchantAcceptsItem`'s exclusion and the haunts offer
+ * guard: a relic's identity IS its recorded provenance, so the Armorer must never re-forge a dead
+ * hero's recorded heirloom or a haunt's dropped piece -- doing so would both destroy the recorded
+ * enchantment and break the haunts `materializedPieceMatches` invariant, which pins a champion
+ * reward's `enchantment` field against the record it was created from.
  */
 export function enchantable(content: CompiledContentPack, item: ItemInstance): boolean {
   const definition = requireItem(content, item.contentId);
   return (
     (ENCHANTABLE_CATEGORIES as readonly string[]).includes(definition.category) &&
     definition.artifact === null &&
-    item.curse?.revealed !== true
+    item.curse?.revealed !== true &&
+    item.heirloom === undefined
   );
 }
 

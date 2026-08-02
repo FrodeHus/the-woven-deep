@@ -6,12 +6,14 @@ import {
   createDemoRun,
   createGameplayDemoRun,
   expandLegacySeed,
+  firstEnchantableItemId,
   resolveCommand,
   resolveEffectSequence,
   stableJson,
   RNG_STREAM_NAMES,
   type ActiveRun,
   type ActorState,
+  type HeirloomItemMetadata,
   type ItemInstance,
 } from '../src/index.js';
 import type { CompiledContentPack, ConditionContentEntry } from '@woven-deep/content';
@@ -520,6 +522,59 @@ describe('effect.item.enchant', () => {
     expect(enchantmentOf(resolved, ironSwordId)).not.toBeNull();
     expect(enchantmentOf(resolved, artifactId)).toBeNull();
     expect(enchantmentOf(resolved, revealedCursedSwordId)).toBeNull();
+  });
+
+  it('skips a wielded heirloom-provenance item and targets the next eligible item', () => {
+    const heirloomSwordId = 'item.hero.heirloom-sword';
+    const ironSwordId = 'item.hero.sword';
+    // A recovered heirloom the hero is WIELDING is otherwise the scroll's preferred target
+    // (equipped-first ordering) -- its identity IS its recorded provenance, so it must never be
+    // the one the scroll touches. Exercised directly against the pure targeting function: a
+    // hand-placed `.heirloom` item cannot round-trip `resolveCommand`'s content-bound haunts
+    // provenance cross-check (it only recognizes items the haunts drop machinery itself created),
+    // and that check is orthogonal to what this test is proving.
+    const heirloom: HeirloomItemMetadata = {
+      displayName: 'Ancestral Blade',
+      glyph: ')',
+      color: '#ddeeff',
+      originatingHallRecordId: `record.${'a'.repeat(32)}.${'b'.repeat(16)}`,
+      originatingRank: 1,
+      sourceItemId: 'item.original.0001',
+    };
+    const items: readonly ItemInstance[] = [
+      item(
+        heirloomSwordId,
+        SWORD_CONTENT_ID,
+        { type: 'equipped', actorId: HERO_ID, slot: 'main-hand' },
+        { heirloom },
+      ),
+      item(ironSwordId, SWORD_CONTENT_ID, { type: 'backpack', actorId: HERO_ID }),
+    ];
+    expect(firstEnchantableItemId(pack, items, HERO_ID)).toBe(ironSwordId);
+  });
+
+  it('identifies completely and reveals the curse when enchanting an unrevealed-cursed item, never leaving identified: true with curse.revealed: false', () => {
+    const unrevealedCursedSwordId = 'item.hero.unrevealed-cursed-sword';
+    const run = heroRun([
+      item(
+        unrevealedCursedSwordId,
+        SWORD_CONTENT_ID,
+        { type: 'equipped', actorId: HERO_ID, slot: 'main-hand' },
+        { identified: false, curse: { curseId: CURSE_ID, revealed: false } },
+      ),
+    ]);
+    const resolved = readScroll(run);
+    const enchanted = resolved.items.find(
+      (candidate) => candidate.itemId === unrevealedCursedSwordId,
+    )!;
+    // The #121 invariant every identify path reveals: identified and curse.revealed rise
+    // together, never `identified: true` with a hidden curse.
+    expect(enchanted.identified).toBe(true);
+    expect(enchanted.curse).toEqual({ curseId: CURSE_ID, revealed: true });
+    expect(enchanted.enchantment).not.toBeNull();
+    // item.iron-sword identifies per-instance (mode: instance, no shared appearance pool), so
+    // there is nothing for the appearance step to touch -- bookkeeping stays exactly as it was.
+    expect(resolved.identification).toEqual(run.identification);
   });
 
   it('rejects the read and consumes nothing when no item is eligible', () => {
