@@ -427,8 +427,19 @@ describe('createNewRun records input', () => {
     // derived-stat set -- no RNG stream moves (enchanting is drawn only by the enchant service and
     // the tempering-steel scroll, neither reachable from run creation). This is expected
     // content-authoring drift, not an engine regression.
+    // Re-pinned again for the Town Armorer's new `merchant-service.enchant` offer
+    // (content/encounters/town-merchants.yaml, basePrice 80) plus the matching `neutral`/`trusted`
+    // faction `serviceIds` grant (content/npc-factions/town-merchants.yaml): the same
+    // `materializeMerchant` mechanism as the remove-curse re-pin above -- one `rollDie` per
+    // authored service (packages/engine/src/merchant-stock.ts:120-129) -- means the armorer's
+    // now-one-entry `services` list consumes one additional `merchant-stock` roll during town
+    // materialization, shifting the shared stream for every merchant materialized afterward.
+    // Verified by diffing the decoded run objects field-by-field against the prior pin: only
+    // `contentHash`, `items`, `populations`, and `rng['merchant-stock']` differ -- the `populations`
+    // delta is exactly the armorer's new `services` entry, nothing else moved. Expected
+    // content-authoring drift from adding a merchant service, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '601b032058d4c20340298f44356c62200948a848e4b5bf8858713c6aa72419fd',
+      '654cf31e575a750a3e43e6f642a87ca3946c1f6b3ddf7c3de0b3fc58ea6a6eea',
     );
   });
 
