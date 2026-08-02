@@ -1,0 +1,5499 @@
+{
+  "events": {
+    "hero.moved": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "hero.moved"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "heroId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "from": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "to": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "heroId",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "hero.waited": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "hero.waited"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "heroId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "heroId",
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "action.invalid": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "action.invalid"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "blocked.bounds",
+            "blocked.wall",
+            "blocked.door",
+            "blocked.door-locked",
+            "blocked.chest",
+            "blocked.pillar",
+            "blocked.void",
+            "blocked.corner",
+            "blocked.actor",
+            "action.unavailable",
+            "inventory.full",
+            "item.missing",
+            "item.unavailable",
+            "item.quantity",
+            "item.incompatible",
+            "item.id-conflict",
+            "item.cursed",
+            "light.inextinguishable",
+            "signature.no-charges",
+            "target.not_visible",
+            "target.out_of_range",
+            "target.blocked",
+            "target.invalid",
+            "cast.insufficient-weave",
+            "cast.no-aptitude",
+            "recall.already-town",
+            "learn.no-aptitude",
+            "learn.already-known",
+            "trade.active",
+            "trade.required",
+            "merchant.unavailable",
+            "merchant.out-of-range",
+            "merchant.refuses",
+            "trade.merchant-mismatch",
+            "trade.insufficient-funds",
+            "trade.stock-unavailable",
+            "trade.item-unacceptable",
+            "trade.capacity",
+            "trade.service-unavailable",
+            "trade.target-invalid",
+            "run.concluded",
+            "offer.refused",
+            "temper.unavailable",
+            "temper.capped",
+            "town.truce",
+            "town.rest",
+            "house.full",
+            "door.missing",
+            "door.not-adjacent",
+            "door.locked",
+            "door.already-open",
+            "door.already-closed",
+            "door.occupied",
+            "final-chamber.unavailable",
+            "final-chamber.fragments-required",
+            "final-chamber.boss-active",
+            "dialogue.unavailable",
+            "dialogue.out-of-range",
+            "dialogue.invalid-topic"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "commandId",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "attack.missed": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "targetActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "naturalRoll": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "total": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "defense": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "attack.missed"
+        }
+      },
+      "required": [
+        "eventId",
+        "actorId",
+        "targetActorId",
+        "naturalRoll",
+        "total",
+        "defense",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "attack.hit": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "targetActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "naturalRoll": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "total": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "defense": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "attack.hit"
+        },
+        "critical": {
+          "type": "boolean"
+        },
+        "rolledDice": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "rolledDamage": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "effectiveDamage": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "damageType": {
+          "type": "string",
+          "enum": [
+            "physical",
+            "fire",
+            "cold",
+            "lightning",
+            "poison",
+            "arcane"
+          ]
+        }
+      },
+      "required": [
+        "eventId",
+        "actorId",
+        "targetActorId",
+        "naturalRoll",
+        "total",
+        "defense",
+        "type",
+        "critical",
+        "rolledDice",
+        "rolledDamage",
+        "effectiveDamage",
+        "damageType"
+      ],
+      "additionalProperties": false
+    },
+    "actor.damaged": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.damaged"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "sourceActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "health": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "sourceActorId",
+        "amount",
+        "health"
+      ],
+      "additionalProperties": false
+    },
+    "actor.died": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.died"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "contentId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "killerActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "contentId",
+        "killerActorId"
+      ],
+      "additionalProperties": false
+    },
+    "actor.healed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.healed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "sourceActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "health": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "sourceActorId",
+        "amount",
+        "health"
+      ],
+      "additionalProperties": false
+    },
+    "loot.dropped": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "loot.dropped"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "contentId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "itemIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "contentId",
+        "x",
+        "y",
+        "itemIds"
+      ],
+      "additionalProperties": false
+    },
+    "condition.applied": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "condition.applied"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "sourceActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "conditionId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "stacks": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "expiresAt": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "sourceActorId",
+        "conditionId",
+        "stacks",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "condition.removed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "condition.removed",
+            "condition.expired"
+          ]
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "conditionId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "conditionId"
+      ],
+      "additionalProperties": false
+    },
+    "condition.expired": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "condition.removed",
+            "condition.expired"
+          ]
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "conditionId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "conditionId"
+      ],
+      "additionalProperties": false
+    },
+    "actor.forced-move": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.forced-move"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "from": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "to": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "reaction.triggered": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "reaction.triggered"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "targetActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "targetActorId"
+      ],
+      "additionalProperties": false
+    },
+    "relationship.changed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "relationship.changed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "targetActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "relationship": {
+          "type": "string",
+          "enum": [
+            "friendly",
+            "neutral",
+            "hostile"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "targetActorId",
+        "relationship"
+      ],
+      "additionalProperties": false
+    },
+    "actor.turn.started": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.turn.started"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId"
+      ],
+      "additionalProperties": false
+    },
+    "actor.turn.completed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.turn.completed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actionType": {
+          "type": "string",
+          "enum": [
+            "move",
+            "wait",
+            "bump-attack",
+            "pickup",
+            "drop",
+            "split-stack",
+            "fire",
+            "throw-item",
+            "use-item",
+            "cast",
+            "equip",
+            "unequip",
+            "toggle-light",
+            "refuel",
+            "open-door",
+            "close-door",
+            "search",
+            "disarm",
+            "pick-lock",
+            "open-chest",
+            "offer",
+            "swarm-spawn"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "actionType"
+      ],
+      "additionalProperties": false
+    },
+    "actor.moved": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.moved"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "from": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        },
+        "to": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "item.picked-up": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.picked-up"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "currency.collected": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "currency.collected"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "currency": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "amount",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "item.dropped": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.dropped"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "item.stack-split": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.stack-split"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "newItemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "newItemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "item.consumed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.consumed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "item.thrown": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.thrown"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "to": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "quantity",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "item.used": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.used"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "targetActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "targetActorId"
+      ],
+      "additionalProperties": false
+    },
+    "spell.learned": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "spell.learned"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "spellId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "spellId"
+      ],
+      "additionalProperties": false
+    },
+    "hero.tempered": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "hero.tempered"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "attribute": {
+          "type": "string",
+          "enum": [
+            "might",
+            "agility",
+            "vitality",
+            "wits",
+            "resolve"
+          ]
+        },
+        "value": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "remaining": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "attribute",
+        "value",
+        "remaining"
+      ],
+      "additionalProperties": false
+    },
+    "hero.recalled": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "hero.recalled"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "anchorFloorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "anchorFloorId"
+      ],
+      "additionalProperties": false
+    },
+    "floor.entered": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "floor.entered"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "floorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "firstEntry": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "floorId",
+        "depth",
+        "firstEntry"
+      ],
+      "additionalProperties": false
+    },
+    "spell.cast": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "spell.cast"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "spellId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "spellId"
+      ],
+      "additionalProperties": false
+    },
+    "item.equipped": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.equipped"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "slot": {
+          "type": "string",
+          "enum": [
+            "main-hand",
+            "off-hand",
+            "body",
+            "head",
+            "hands",
+            "feet",
+            "neck",
+            "left-ring",
+            "right-ring"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "slot"
+      ],
+      "additionalProperties": false
+    },
+    "item.unequipped": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.unequipped"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "slot": {
+          "type": "string",
+          "enum": [
+            "main-hand",
+            "off-hand",
+            "body",
+            "head",
+            "hands",
+            "feet",
+            "neck",
+            "left-ring",
+            "right-ring"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "slot"
+      ],
+      "additionalProperties": false
+    },
+    "item.light-toggled": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.light-toggled"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "enabled"
+      ],
+      "additionalProperties": false
+    },
+    "item.refueled": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.refueled"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "fuelItemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "fuel": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "fuelItemId",
+        "quantity",
+        "fuel"
+      ],
+      "additionalProperties": false
+    },
+    "identification.appearance-revealed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "identification.appearance-revealed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "appearanceId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "contentId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "appearanceId",
+        "contentId"
+      ],
+      "additionalProperties": false
+    },
+    "item.identified": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.identified"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "itemId"
+      ],
+      "additionalProperties": false
+    },
+    "curse.revealed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "curse.revealed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "curseId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "revealText": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "itemId",
+        "curseId",
+        "revealText"
+      ],
+      "additionalProperties": false
+    },
+    "curse.removed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "curse.removed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "curseId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "itemId",
+        "curseId"
+      ],
+      "additionalProperties": false
+    },
+    "hunger.stage-changed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "hunger.stage-changed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "previousStage": {
+          "type": "string",
+          "enum": [
+            "sated",
+            "hungry",
+            "weak",
+            "starving"
+          ]
+        },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "sated",
+            "hungry",
+            "weak",
+            "starving"
+          ]
+        },
+        "reserve": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "previousStage",
+        "stage",
+        "reserve"
+      ],
+      "additionalProperties": false
+    },
+    "hunger.restored": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "hunger.restored"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reserve": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "amount",
+        "reserve"
+      ],
+      "additionalProperties": false
+    },
+    "fuel.warning": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "fuel.warning"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "threshold": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "fuel": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "itemId",
+        "threshold",
+        "fuel"
+      ],
+      "additionalProperties": false
+    },
+    "item.light-extinguished": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.light-extinguished"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "itemId"
+      ],
+      "additionalProperties": false
+    },
+    "door.opened": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "door.opened"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "door.closed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "door.closed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "feature.revealed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "feature.revealed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "feature.searched": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "feature.searched"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId"
+      ],
+      "additionalProperties": false
+    },
+    "trap.triggered": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "trap.triggered"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "trap.disarmed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "trap.disarmed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "trap.disarm-failed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "trap.disarm-failed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "lock.picked": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "lock.picked",
+            "lock.pick-failed",
+            "door.unlocked",
+            "chest.jammed"
+          ]
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "lock.pick-failed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "lock.picked",
+            "lock.pick-failed",
+            "door.unlocked",
+            "chest.jammed"
+          ]
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "door.unlocked": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "lock.picked",
+            "lock.pick-failed",
+            "door.unlocked",
+            "chest.jammed"
+          ]
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "chest.jammed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "lock.picked",
+            "lock.pick-failed",
+            "door.unlocked",
+            "chest.jammed"
+          ]
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "item.damaged": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "item.damaged"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "condition": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "itemId",
+        "amount",
+        "condition"
+      ],
+      "additionalProperties": false
+    },
+    "actor.intent-changed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.intent-changed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "intent": {
+          "type": "string",
+          "enum": [
+            "approach",
+            "attack",
+            "hold",
+            "regroup",
+            "flee",
+            "protect",
+            "spawn",
+            "phase-change"
+          ]
+        },
+        "presentation": {
+          "type": "string",
+          "enum": [
+            "intent.approach",
+            "intent.attack",
+            "intent.hold",
+            "intent.regroup",
+            "intent.flee",
+            "intent.protect",
+            "intent.spawn",
+            "intent.phase-change"
+          ]
+        },
+        "targetCategory": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "hero",
+                "leader",
+                "source",
+                "position"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "intent",
+        "presentation",
+        "targetCategory"
+      ],
+      "additionalProperties": false
+    },
+    "population.encountered": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "population.encountered"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "encounterId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "encounterId",
+        "actorId"
+      ],
+      "additionalProperties": false
+    },
+    "population.placement-skipped": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "population.placement-skipped"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "encounterId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "floorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "no-eligible-encounter",
+            "no-valid-placement",
+            "required-route-blocked"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "encounterId",
+        "floorId",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "group.awareness-shared": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "group.awareness-shared"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "targetActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "floorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "x": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "y": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "observedAt": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "observerActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "targetActorId",
+        "floorId",
+        "x",
+        "y",
+        "observedAt",
+        "observerActorId"
+      ],
+      "additionalProperties": false
+    },
+    "group.leader-created": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "group.leader-created"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "roleId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "roleId"
+      ],
+      "additionalProperties": false
+    },
+    "group.leader-defeated": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "group.leader-defeated"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId"
+      ],
+      "additionalProperties": false
+    },
+    "group.outcome-applied": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "group.outcome-applied"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "response": {
+          "type": "string",
+          "enum": [
+            "weaken",
+            "panic",
+            "disband",
+            "surrender",
+            "frenzy",
+            "collapse"
+          ]
+        },
+        "individualRewards": {
+          "type": "boolean"
+        },
+        "collapsedMemberCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "response",
+        "individualRewards",
+        "collapsedMemberCount"
+      ],
+      "additionalProperties": false
+    },
+    "swarm.members-created": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "swarm.members-created"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "sourceActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorIds": {
+          "readOnly": true,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        },
+        "quantity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "sourceActorId",
+        "actorIds",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "swarm.cap-reached": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "swarm.cap-reached"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "sourceActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "level": {
+          "type": "string",
+          "enum": [
+            "source",
+            "encounter",
+            "floor"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "sourceActorId",
+        "level"
+      ],
+      "additionalProperties": false
+    },
+    "swarm.source-destroyed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "swarm.source-destroyed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "sourceActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "response": {
+          "type": "string",
+          "enum": [
+            "stop",
+            "flee",
+            "decay",
+            "frenzy"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "sourceActorId",
+        "response"
+      ],
+      "additionalProperties": false
+    },
+    "boss.encountered": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "boss.encountered"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "encounterId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "encounterId"
+      ],
+      "additionalProperties": false
+    },
+    "boss.phase-changed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "boss.phase-changed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "encounterId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "phaseId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "encounterId",
+        "phaseId"
+      ],
+      "additionalProperties": false
+    },
+    "boss.recovered": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "boss.recovered"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "encounterId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "health": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "encounterId",
+        "amount",
+        "health"
+      ],
+      "additionalProperties": false
+    },
+    "boss.defeated": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "boss.defeated"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "encounterId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "encounterId"
+      ],
+      "additionalProperties": false
+    },
+    "boss.reward-created": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "boss.reward-created"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "encounterId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "uniqueItemId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "itemIds": {
+          "readOnly": true,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "encounterId",
+        "uniqueItemId",
+        "itemIds"
+      ],
+      "additionalProperties": false
+    },
+    "champion.encountered": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "champion.encountered"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "hallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "rank": {
+          "type": "number",
+          "const": 1
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "hallRecordId",
+        "rank"
+      ],
+      "additionalProperties": false
+    },
+    "champion.defeated": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "champion.defeated"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "hallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "rank": {
+          "type": "number",
+          "const": 1
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "hallRecordId",
+        "rank"
+      ],
+      "additionalProperties": false
+    },
+    "champion.heirloom-created": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "champion.heirloom-created"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "hallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "rank": {
+          "type": "number",
+          "const": 1
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "contentId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "originatingHallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "glyph": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9a-fA-F]{6}$"
+        },
+        "fallback": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "hallRecordId",
+        "rank",
+        "itemId",
+        "contentId",
+        "originatingHallRecordId",
+        "displayName",
+        "glyph",
+        "color",
+        "fallback"
+      ],
+      "additionalProperties": false
+    },
+    "champion.death-inventory-created": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "champion.death-inventory-created"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "hallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemIds": {
+          "readOnly": true,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "hallRecordId",
+        "itemIds"
+      ],
+      "additionalProperties": false
+    },
+    "echo.encountered": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "echo.encountered"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "hallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "hallRecordId",
+        "rank"
+      ],
+      "additionalProperties": false
+    },
+    "echo.defeated": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "echo.defeated"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "hallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 10
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "hallRecordId",
+        "rank"
+      ],
+      "additionalProperties": false
+    },
+    "echo.loot-created": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "echo.loot-created"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "hallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 10
+        },
+        "itemIds": {
+          "readOnly": true,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "hallRecordId",
+        "rank",
+        "itemIds"
+      ],
+      "additionalProperties": false
+    },
+    "echo.death-inventory-created": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "echo.death-inventory-created"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "hallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 10
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "hallRecordId",
+        "rank",
+        "itemId"
+      ],
+      "additionalProperties": false
+    },
+    "sound.heard": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "sound.heard"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "combat",
+            "movement",
+            "mechanism"
+          ]
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "north",
+            "northeast",
+            "east",
+            "southeast",
+            "south",
+            "southwest",
+            "west",
+            "northwest",
+            "here"
+          ]
+        },
+        "distanceBand": {
+          "type": "string",
+          "enum": [
+            "near",
+            "medium",
+            "far"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "category",
+        "direction",
+        "distanceBand"
+      ],
+      "additionalProperties": false
+    },
+    "hero.damaged": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "hero.damaged"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "damageType": {
+          "type": "string",
+          "enum": [
+            "physical",
+            "fire",
+            "cold",
+            "lightning",
+            "poison",
+            "arcane"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "amount",
+        "damageType"
+      ],
+      "additionalProperties": false
+    },
+    "combat.observed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "combat.observed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "hit",
+            "missed"
+          ]
+        },
+        "attackerActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "targetActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "attackerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "targetName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "outcome",
+        "attackerActorId",
+        "targetActorId"
+      ],
+      "additionalProperties": false
+    },
+    "actor.movement-observed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.movement-observed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "north",
+            "northeast",
+            "east",
+            "southeast",
+            "south",
+            "southwest",
+            "west",
+            "northwest"
+          ]
+        },
+        "visibility": {
+          "type": "string",
+          "enum": [
+            "entered",
+            "left"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "direction",
+        "visibility"
+      ],
+      "additionalProperties": false
+    },
+    "actor.damage-observed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.damage-observed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "health": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "amount",
+        "health"
+      ],
+      "additionalProperties": false
+    },
+    "actor.death-observed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "actor.death-observed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "contentId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "contentId"
+      ],
+      "additionalProperties": false
+    },
+    "population.notice": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "population.notice"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "created",
+            "encountered",
+            "leader-created",
+            "leader-defeated",
+            "group-outcome",
+            "swarm-growth",
+            "swarm-cap",
+            "source-destroyed",
+            "boss-encountered",
+            "boss-phase",
+            "boss-recovery",
+            "boss-defeated",
+            "boss-reward",
+            "champion-encountered",
+            "champion-defeated",
+            "champion-heirloom",
+            "champion-death-inventory",
+            "echo-encountered",
+            "echo-defeated",
+            "echo-loot",
+            "echo-death-inventory",
+            "merchant-departure-warning",
+            "merchant-departed",
+            "merchant-provoked",
+            "merchant-stock-dropped",
+            "merchant-died",
+            "merchant-restocked"
+          ]
+        },
+        "actorId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "presentation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "category",
+        "actorId",
+        "presentation"
+      ],
+      "additionalProperties": false
+    },
+    "haunt.sighted": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "haunt.sighted"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "hallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "champion",
+            "echo"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "hallRecordId",
+        "role"
+      ],
+      "additionalProperties": false
+    },
+    "haunt.appeased": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "haunt.appeased"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "hallRecordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "champion",
+            "echo"
+          ]
+        },
+        "offeredItemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemIds": {
+          "readOnly": true,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "actorId",
+        "hallRecordId",
+        "role",
+        "offeredItemId",
+        "itemIds"
+      ],
+      "additionalProperties": false
+    },
+    "rest.completed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "rest.completed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": [
+            "full-health",
+            "maximum-duration",
+            "visible-danger",
+            "aware-hostile",
+            "damage",
+            "meaningful-sound",
+            "hunger-warning",
+            "fuel-warning",
+            "condition-change",
+            "decision-required",
+            "hero-death"
+          ]
+        },
+        "elapsed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "effectiveHealing": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "stopReason",
+        "elapsed",
+        "effectiveHealing"
+      ],
+      "additionalProperties": false
+    },
+    "population.created": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "population.created"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "encounterId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "floorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "model": {
+          "type": "string",
+          "enum": [
+            "individual",
+            "group",
+            "swarm",
+            "boss",
+            "champion",
+            "echo",
+            "merchant"
+          ]
+        },
+        "actorIds": {
+          "readOnly": true,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "encounterId",
+        "floorId",
+        "model",
+        "actorIds"
+      ],
+      "additionalProperties": false
+    },
+    "reputation.changed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "reputation.changed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "factionId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "previous": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "delta": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "value": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "commerce",
+            "aggression",
+            "death",
+            "dialogue"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "factionId",
+        "previous",
+        "delta",
+        "value",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "trade.opened": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "trade.opened"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "merchantPopulationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "merchantActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "merchantPopulationId",
+        "merchantActorId"
+      ],
+      "additionalProperties": false
+    },
+    "trade.bought": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "trade.bought"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "merchantPopulationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "contentId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "unitPrice": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "currency": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "merchantPopulationId",
+        "itemId",
+        "contentId",
+        "quantity",
+        "unitPrice",
+        "total",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "trade.sold": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "trade.sold"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "merchantPopulationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "contentId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "unitPrice": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "currency": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "merchantPopulationId",
+        "itemId",
+        "contentId",
+        "quantity",
+        "unitPrice",
+        "total",
+        "currency"
+      ],
+      "additionalProperties": false
+    },
+    "trade.service-purchased": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "trade.service-purchased"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "merchantPopulationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "serviceId": {
+          "type": "string",
+          "enum": [
+            "merchant-service.identify",
+            "merchant-service.remove-curse",
+            "merchant-service.strongbox",
+            "merchant-service.enchant"
+          ]
+        },
+        "targetItemId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "price": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "currency": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "remainingUses": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "merchantPopulationId",
+        "serviceId",
+        "targetItemId",
+        "price",
+        "currency",
+        "remainingUses"
+      ],
+      "additionalProperties": false
+    },
+    "trade.closed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "trade.closed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "merchantPopulationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "player",
+            "aggression",
+            "death",
+            "unavailable",
+            "departure"
+          ]
+        },
+        "completedCommerce": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "merchantPopulationId",
+        "reason",
+        "completedCommerce"
+      ],
+      "additionalProperties": false
+    },
+    "merchant.departure-warning": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "merchant.departure-warning"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "threshold": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "remaining": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "threshold",
+        "remaining"
+      ],
+      "additionalProperties": false
+    },
+    "merchant.departed": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "merchant.departed"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "stockItemIds": {
+          "readOnly": true,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "stockItemIds"
+      ],
+      "additionalProperties": false
+    },
+    "merchant.provoked": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "merchant.provoked"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "sourceActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "response": {
+          "type": "string",
+          "enum": [
+            "flee",
+            "self-defense"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "sourceActorId",
+        "response"
+      ],
+      "additionalProperties": false
+    },
+    "merchant.stock-dropped": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "merchant.stock-dropped"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemIds": {
+          "readOnly": true,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        },
+        "units": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "itemIds",
+        "units"
+      ],
+      "additionalProperties": false
+    },
+    "merchant.died": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "merchant.died"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "killerActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "destroyedStockItemIds": {
+          "readOnly": true,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "killerActorId",
+        "destroyedStockItemIds"
+      ],
+      "additionalProperties": false
+    },
+    "merchant.restocked": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "merchant.restocked"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "populationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "actorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "stockItemIds": {
+          "readOnly": true,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "populationId",
+        "actorId",
+        "stockItemIds"
+      ],
+      "additionalProperties": false
+    },
+    "run.concluded": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "run.concluded"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "completionType": {
+          "type": "string",
+          "enum": [
+            "died",
+            "became-heart",
+            "refused",
+            "broke-cycle"
+          ]
+        },
+        "cause": {
+          "type": "object",
+          "properties": {
+            "killerContentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "depth": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "turn": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "worldTime": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "killerContentId",
+            "depth",
+            "turn",
+            "worldTime"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "completionType",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "run.finalized": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "run.finalized"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "recordId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "completionType": {
+          "type": "string",
+          "enum": [
+            "died",
+            "became-heart",
+            "refused",
+            "broke-cycle"
+          ]
+        },
+        "scoreTotal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "recordId",
+        "completionType",
+        "scoreTotal"
+      ],
+      "additionalProperties": false
+    },
+    "achievement.granted": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "achievement.granted"
+        },
+        "eventId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "achievementId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "eventId",
+        "achievementId",
+        "name"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "commands": {
+    "move": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "move"
+        },
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "north",
+            "northeast",
+            "east",
+            "southeast",
+            "south",
+            "southwest",
+            "west",
+            "northwest"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "commandId",
+        "expectedRevision",
+        "direction"
+      ],
+      "additionalProperties": false
+    },
+    "wait": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "wait"
+        },
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "commandId",
+        "expectedRevision"
+      ],
+      "additionalProperties": false
+    },
+    "attack": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "attack"
+        },
+        "targetActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "targetActorId"
+      ],
+      "additionalProperties": false
+    },
+    "fire": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "fire"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "cast": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "cast"
+        },
+        "spellId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "y": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "spellId",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "throw-item": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "throw-item"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "target": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "y": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "x",
+            "y"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "quantity",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "use-item": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "use-item"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "y": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "x",
+                "y"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "equip": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "equip"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "slot": {
+          "type": "string",
+          "enum": [
+            "main-hand",
+            "off-hand",
+            "body",
+            "head",
+            "hands",
+            "feet",
+            "neck",
+            "left-ring",
+            "right-ring"
+          ]
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "slot"
+      ],
+      "additionalProperties": false
+    },
+    "unequip": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "unequip"
+        },
+        "slot": {
+          "type": "string",
+          "enum": [
+            "main-hand",
+            "off-hand",
+            "body",
+            "head",
+            "hands",
+            "feet",
+            "neck",
+            "left-ring",
+            "right-ring"
+          ]
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "slot"
+      ],
+      "additionalProperties": false
+    },
+    "pickup": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "pickup"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "drop": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "drop"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "offer": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "offer"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "targetActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "targetActorId"
+      ],
+      "additionalProperties": false
+    },
+    "temper": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "temper"
+        },
+        "attribute": {
+          "type": "string",
+          "enum": [
+            "might",
+            "agility",
+            "vitality",
+            "wits",
+            "resolve"
+          ]
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "attribute"
+      ],
+      "additionalProperties": false
+    },
+    "split-stack": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "split-stack"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "newItemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "quantity",
+        "newItemId"
+      ],
+      "additionalProperties": false
+    },
+    "refuel": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "refuel"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "fuelItemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "fuelItemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "toggle-light": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "toggle-light"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "enabled"
+      ],
+      "additionalProperties": false
+    },
+    "open-door": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "open-door"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "close-door": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "close-door"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "search": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "search"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "disarm": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "disarm"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "pick-lock": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "pick-lock"
+        },
+        "featureId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "featureId"
+      ],
+      "additionalProperties": false
+    },
+    "rest": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "rest"
+        },
+        "until": {
+          "type": "string",
+          "enum": [
+            "healed",
+            "interrupted"
+          ]
+        },
+        "maximumDuration": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "until",
+        "maximumDuration"
+      ],
+      "additionalProperties": false
+    },
+    "trade-open": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "trade-open"
+        },
+        "merchantActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "merchantActorId"
+      ],
+      "additionalProperties": false
+    },
+    "trade-buy": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "trade-buy"
+        },
+        "merchantPopulationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "merchantPopulationId",
+        "itemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "trade-sell": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "trade-sell"
+        },
+        "merchantPopulationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "merchantPopulationId",
+        "itemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "trade-close": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "trade-close"
+        },
+        "merchantPopulationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "merchantPopulationId"
+      ],
+      "additionalProperties": false
+    },
+    "trade-service": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "trade-service"
+        },
+        "merchantPopulationId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "serviceId": {
+          "type": "string",
+          "enum": [
+            "merchant-service.identify",
+            "merchant-service.remove-curse",
+            "merchant-service.strongbox",
+            "merchant-service.enchant"
+          ]
+        },
+        "targetItemId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "merchantPopulationId",
+        "serviceId",
+        "targetItemId"
+      ],
+      "additionalProperties": false
+    },
+    "house-deposit": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "house-deposit"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "house-withdraw": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "house-withdraw"
+        },
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "quantity": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "itemId",
+        "quantity"
+      ],
+      "additionalProperties": false
+    },
+    "final-chamber-choice": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "final-chamber-choice"
+        },
+        "choice": {
+          "type": "string",
+          "enum": [
+            "become-heart",
+            "turn-away",
+            "break-cycle"
+          ]
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "choice"
+      ],
+      "additionalProperties": false
+    },
+    "dialogue-consequence": {
+      "type": "object",
+      "properties": {
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "expectedRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "type": {
+          "type": "string",
+          "const": "dialogue-consequence"
+        },
+        "npcActorId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "topicId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision",
+        "type",
+        "npcActorId",
+        "topicId"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "results": {
+    "applied": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "applied"
+        },
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "turn": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "status",
+        "commandId",
+        "revision",
+        "turn"
+      ],
+      "additionalProperties": false
+    },
+    "invalid": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "invalid"
+        },
+        "commandId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "turn": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "blocked.bounds",
+            "blocked.wall",
+            "blocked.door",
+            "blocked.door-locked",
+            "blocked.chest",
+            "blocked.pillar",
+            "blocked.void",
+            "blocked.corner",
+            "blocked.actor",
+            "action.unavailable",
+            "inventory.full",
+            "item.missing",
+            "item.unavailable",
+            "item.quantity",
+            "item.incompatible",
+            "item.id-conflict",
+            "item.cursed",
+            "light.inextinguishable",
+            "signature.no-charges",
+            "target.not_visible",
+            "target.out_of_range",
+            "target.blocked",
+            "target.invalid",
+            "cast.insufficient-weave",
+            "cast.no-aptitude",
+            "recall.already-town",
+            "learn.no-aptitude",
+            "learn.already-known",
+            "trade.active",
+            "trade.required",
+            "merchant.unavailable",
+            "merchant.out-of-range",
+            "merchant.refuses",
+            "trade.merchant-mismatch",
+            "trade.insufficient-funds",
+            "trade.stock-unavailable",
+            "trade.item-unacceptable",
+            "trade.capacity",
+            "trade.service-unavailable",
+            "trade.target-invalid",
+            "run.concluded",
+            "offer.refused",
+            "temper.unavailable",
+            "temper.capped",
+            "town.truce",
+            "town.rest",
+            "house.full",
+            "door.missing",
+            "door.not-adjacent",
+            "door.locked",
+            "door.already-open",
+            "door.already-closed",
+            "door.occupied",
+            "final-chamber.unavailable",
+            "final-chamber.fragments-required",
+            "final-chamber.boss-active",
+            "dialogue.unavailable",
+            "dialogue.out-of-range",
+            "dialogue.invalid-topic"
+          ]
+        }
+      },
+      "required": [
+        "status",
+        "commandId",
+        "revision",
+        "turn",
+        "reason"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
