@@ -102,6 +102,13 @@ export interface EffectSequenceInput {
   readonly mitigationByActorId?: Readonly<
     Record<OpaqueId, Readonly<{ armor: number; resistance: number; immune: boolean }>>
   >;
+  /**
+   * The caster's spell bonus, added to every `effect.damage` and `effect.heal` amount this
+   * sequence rolls. Defaults to 0, which is how "not item triggers, not curses" is enforced
+   * STRUCTURALLY: only the spell seams pass it, so every other call site gets zero by omission
+   * rather than by a runtime check somebody could later remove.
+   */
+  readonly spellPower?: number;
 }
 
 /**
@@ -251,6 +258,8 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
   let floors = [...(input.floors ?? [])];
   const balance = input.content.entries.find((entry) => entry.kind === 'balance');
   if (!balance) throw new Error('internal invariant: balance definition does not exist');
+  // Zero unless a spell seam supplied it -- see `EffectSequenceInput.spellPower`.
+  const spellPower = checkedSafeInteger('spell power', input.spellPower ?? 0);
   let survival = input.survival;
   for (const effect of input.effects) {
     const target = findActor(actors, input.targetActorId);
@@ -264,7 +273,14 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
         resistance: 0,
         immune: false,
       };
-      const resolvedDamage = resolveEffectDamage(rolled.value, mitigation);
+      // The caster's bonus lands on the rolled total BEFORE mitigation, so armor and resistance
+      // still subtract from the scaled number -- matching `combat.ts`, where the weapon's flat
+      // bonus is folded into `rolledDamage` and mitigated afterwards.
+      const scaledRoll = Math.max(
+        0,
+        checkedSafeInteger('spell-scaled damage', rolled.value + spellPower),
+      );
+      const resolvedDamage = resolveEffectDamage(scaledRoll, mitigation);
       const health = Math.max(0, target.health - resolvedDamage);
       actors = [...replaceActor(actors, { ...target, health })];
       events.push(
@@ -278,7 +294,7 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
           defense: 0,
           critical: false,
           rolledDice: parameters.dice.count,
-          rolledDamage: rolled.value,
+          rolledDamage: scaledRoll,
           effectiveDamage: resolvedDamage,
           damageType: parameters.damageType,
         },
@@ -302,11 +318,17 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
     } else if (effect.effectId === 'effect.heal') {
       const rolled = rollDice(state, parseEffectParameters(effect, 'effect.heal').dice);
       state = rolled.state;
+      // Scaled before `applyHealing`'s missing-health clamp, so the bonus can close a wound the
+      // bare roll would have left open rather than being trimmed away first.
+      const scaledHeal = Math.max(
+        0,
+        checkedSafeInteger('spell-scaled heal', rolled.value + spellPower),
+      );
       const result = applyHealing({
         actors,
         targetActorId: target.actorId,
         sourceActorId: input.sourceActorId,
-        amount: rolled.value,
+        amount: scaledHeal,
         eventId: input.eventId,
       });
       actors = [...result.actors];

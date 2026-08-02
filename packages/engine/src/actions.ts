@@ -7,6 +7,7 @@ import { dropItem, pickupItem, splitStack } from './inventory.js';
 import { validateTarget } from './targeting.js';
 import { firstEnchantableItemId, resolveEffectSequence, resolveEffectSweep } from './effects.js';
 import { heroCasterAptitude, spellLearnTarget } from './caster.js';
+import { spellPowerFor } from './spell-power.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
 import { artifactById } from './commerce.js';
@@ -155,6 +156,7 @@ function validateItemSpellUse(
         actors: state.actors,
         items: state.items,
         content,
+        spellPower: spellPowerFor({ state, content, actor }),
         sourceActorId: actor.actorId,
         casterActorId: actor.actorId,
         includeCaster: false,
@@ -209,6 +211,7 @@ function validateItemSpellUse(
       actors: state.actors,
       items: state.items,
       content,
+      spellPower: spellPowerFor({ state, content, actor }),
       sourceActorId: actor.actorId,
       targetActorId: candidate.actorId,
       effectsState: state.rng.effects,
@@ -849,6 +852,11 @@ export function validatePlayerAction(
           actors: input.state.actors,
           items: input.state.items,
           content: input.context.content,
+          spellPower: spellPowerFor({
+            state: input.state,
+            content: input.context.content,
+            actor,
+          }),
           sourceActorId: actor.actorId,
           casterActorId: actor.actorId,
           includeCaster: false,
@@ -905,6 +913,11 @@ export function validatePlayerAction(
         actors: input.state.actors,
         items: input.state.items,
         content: input.context.content,
+        spellPower: spellPowerFor({
+          state: input.state,
+          content: input.context.content,
+          actor,
+        }),
         sourceActorId: actor.actorId,
         targetActorId: candidate.actorId,
         effectsState: input.state.rng.effects,

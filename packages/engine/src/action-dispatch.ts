@@ -18,6 +18,7 @@ import {
 } from './equipment.js';
 import { identifyAppearance } from './identification.js';
 import { deriveRunActorStats } from './stats.js';
+import { spellPowerFor } from './spell-power.js';
 import {
   closeDoor,
   disarmTrap,
@@ -108,6 +109,7 @@ function resolveItemSpell(
       actors: state.actors,
       items: state.items,
       content,
+      spellPower: spellPowerFor({ state, content, actor }),
       sourceActorId: actor.actorId,
       casterActorId: actor.actorId,
       includeCaster: false,
@@ -127,6 +129,7 @@ function resolveItemSpell(
     actors: state.actors,
     items: state.items,
     content,
+    spellPower: spellPowerFor({ state, content, actor }),
     sourceActorId: actor.actorId,
     targetActorId: target.actorId,
     effectsState: state.rng.effects,
@@ -620,6 +623,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
         actors: next.actors,
         items: next.items,
         content,
+        spellPower: spellPowerFor({ state: next, content, actor }),
         sourceActorId: actor.actorId,
         casterActorId: actor.actorId,
         includeCaster: false,
@@ -653,6 +657,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       actors: next.actors,
       items: next.items,
       content,
+      spellPower: spellPowerFor({ state: next, content, actor }),
       sourceActorId: actor.actorId,
       targetActorId: target.actorId,
       effectsState: next.rng.effects,
