@@ -10,10 +10,9 @@
  */
 export const PLAY_ROUTE = '/play';
 
-/** The handoff's "Be Woven In" registration CTA describes milestone-6 (registered accounts),
- * which does not exist yet. Its target is an inert anchor, not a route to a page that isn't
- * built — this keeps the card sellable without pretending registration works today. */
-export const REGISTRATION_COMING_SOON_HREF = '#registration-coming-soon';
+/** The "Be Woven In" registration CTA: email sign-in ships (6A), and it lives in the play
+ * app's title menu, so the card routes into the app rather than to a dead anchor. */
+export const REGISTRATION_SIGN_IN_HREF = '/play';
 
 export const TAGLINE = 'Many enter · Few return · All are woven in';
 

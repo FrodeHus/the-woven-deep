@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import { ACCESS, PLAY_ROUTE, REGISTRATION_COMING_SOON_HREF } from '../copy.js';
+import { ACCESS, PLAY_ROUTE, REGISTRATION_SIGN_IN_HREF } from '../copy.js';
 
 export function Access(): JSX.Element {
   return (
@@ -55,7 +55,7 @@ export function Access(): JSX.Element {
           </ul>
           {/* Milestone 6 (registered accounts) doesn't exist yet: point at a "coming soon" anchor
            * rather than a route to a page that isn't built. */}
-          <a href={REGISTRATION_COMING_SOON_HREF} className="wd-cta-primary wd-cta-block">
+          <a href={REGISTRATION_SIGN_IN_HREF} className="wd-cta-primary wd-cta-block">
             {ACCESS.member.cta}
           </a>
         </div>
