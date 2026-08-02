@@ -576,6 +576,17 @@ export function recordedHeirloomContentId(
     input.content.entries.some(
       (entry) => entry.kind === 'curse' && entry.id === input.snapshot.curse!.curseId,
     );
+  // A recorded heirloom round-trips whatever enchantment its record held, which may name an id an
+  // enchantment-less pre-registry save minted or a later content edit removed -- exactly the
+  // reasoning the curse check above already applies. `content-bound-validation` now requires every
+  // surviving `enchantment.enchantmentId` to resolve, so an unresolvable one must degrade here
+  // rather than materialize into a state that validation would then reject.
+  const enchantmentCompatible =
+    input.snapshot.enchantment === null ||
+    input.content.entries.some(
+      (entry) =>
+        entry.kind === 'enchantment' && entry.id === input.snapshot.enchantment!.enchantmentId,
+    );
   // An artifact travels in the backpack as readily as in a slot, so it is absent from the record's
   // equipped list as often as not. Requiring membership would silently degrade every recovered
   // backpack artifact to the fallback relic; the remaining compatibility checks still apply.
@@ -587,7 +598,8 @@ export function recordedHeirloomContentId(
     recorded.equipment !== null &&
     fuelCompatible &&
     modifiersCompatible &&
-    curseCompatible
+    curseCompatible &&
+    enchantmentCompatible
     ? input.snapshot.contentId
     : input.fallbackItemId;
 }

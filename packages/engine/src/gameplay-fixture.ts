@@ -453,7 +453,7 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
       item(contentEntry(pack, 'item.leather-armor', 'item'), IDS.armor, backpack()),
       item(contentEntry(pack, 'item.lamp-oil', 'item'), IDS.oil, backpack(), { quantity: 4 }),
       item(contentEntry(pack, 'item.etched-ring', 'item'), IDS.ring, onFloor(floorItemCells[1]!), {
-        enchantment: { enchantmentId: 'enchantment.guard', modifiers: { defense: 1 } },
+        enchantment: { enchantmentId: 'enchantment.deep-lungs', modifiers: { maxHealth: 3 } },
       }),
       item(
         contentEntry(pack, 'item.ember-scroll', 'item'),
@@ -544,6 +544,10 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
       currency: balance.startingCurrency,
       classTags: [],
       statModifiers: {},
+      tempering: {
+        banked: 0,
+        spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+      },
     },
     actors,
     items,

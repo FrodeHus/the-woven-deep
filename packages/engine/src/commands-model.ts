@@ -1,5 +1,5 @@
 import type { OpaqueId, Direction, Point } from './model.js';
-import type { EquipmentSlot } from './actor-model.js';
+import type { AttributeName, EquipmentSlot } from './actor-model.js';
 import type { MerchantServiceId } from '@woven-deep/content';
 
 export interface CommandEnvelope {
@@ -59,6 +59,10 @@ export interface DropCommand extends CommandEnvelope {
   readonly type: 'drop';
   readonly itemId: OpaqueId;
   readonly quantity: number;
+}
+export interface TemperCommand extends CommandEnvelope {
+  readonly type: 'temper';
+  readonly attribute: AttributeName;
 }
 export interface OfferCommand extends CommandEnvelope {
   readonly type: 'offer';
@@ -177,6 +181,7 @@ export type GameCommand =
   | PickupCommand
   | DropCommand
   | OfferCommand
+  | TemperCommand
   | SplitStackCommand
   | RefuelCommand
   | ToggleLightCommand
@@ -253,6 +258,11 @@ export type InvalidActionReason =
   // A haunt declining an offering outside its need. Deliberately inert: the item stays in the
   // pack and the haunt's disposition is untouched, so guessing wrong costs nothing but a turn.
   | 'offer.refused'
+  // No banked tempering point to spend.
+  | 'temper.unavailable'
+  // That attribute already sits at the authored `attributeMaximum`. With every attribute capped,
+  // every choice answers this and the points bank harmlessly forever.
+  | 'temper.capped'
   | 'final-chamber.unavailable'
   | 'final-chamber.fragments-required'
   | 'final-chamber.boss-active';

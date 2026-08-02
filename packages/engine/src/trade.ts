@@ -18,7 +18,9 @@ import {
   quoteMerchantSale,
   quoteMerchantService,
   reputationTier,
+  scaledServiceBasePrice,
 } from './commerce.js';
+import { drawEnchantment, enchantable } from './enchanting.js';
 import { identifyItemCompletely } from './identification.js';
 import { depositIntoBackpack } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
@@ -362,6 +364,9 @@ function planSell(
  * targets hero-owned items whose curse exists and has been revealed -- an unrevealed curse stays
  * invisible to this list the same way it stays invisible to the merchant's sell offer;
  * `merchant-service.strongbox` takes no target and always returns an empty list.
+ * `merchant-service.enchant` targets hero-owned items `enchantable` for the pack: an ordinary
+ * equipment category, not an artifact, and not carrying a revealed curse -- the same gamble rule
+ * the identify service exists to resolve keeps an unrevealed curse invisible here too.
  */
 export function serviceTargetItemIds(
   input: Readonly<{ state: ActiveRun; content: CompiledContentPack; serviceId: MerchantServiceId }>,
@@ -377,6 +382,12 @@ export function serviceTargetItemIds(
   if (serviceId === 'merchant-service.remove-curse') {
     return heroOwned
       .filter((item) => item.curse !== undefined && item.curse.revealed)
+      .map((item) => item.itemId)
+      .sort(compareCodeUnits);
+  }
+  if (serviceId === 'merchant-service.enchant') {
+    return heroOwned
+      .filter((item) => enchantable(content, item))
       .map((item) => item.itemId)
       .sort(compareCodeUnits);
   }
@@ -410,6 +421,11 @@ type ServicePlanResult =
  * - `merchant-service.identify` and `merchant-service.remove-curse` both require a `targetItemId`
  *   naming a hero-owned item that appears in `serviceTargetItemIds` for that service -- identify
  *   for an item with something left to identify, remove-curse for an item whose curse is revealed.
+ * - `merchant-service.enchant` also requires a `targetItemId` in `serviceTargetItemIds`, but prices
+ *   differently: the authored base price for a first enchant, doubled for a re-enchant (the item
+ *   already carries an `enchantment`) -- a fresh draw replacing the old one, a gamble that may
+ *   legitimately land worse. `enchantable` is re-run directly against the resolved item rather than
+ *   trusted from the target list alone: the list is a convenience, never a trust boundary.
  * - `merchant-service.strongbox` is a single, run-wide house-capacity upgrade: it requires no
  *   target (`targetItemId` must be `null`) and is rejected once `house.upgradesPurchased` has
  *   already reached 1, even if the offer's own remaining-uses count would otherwise still allow
@@ -443,6 +459,29 @@ function planService(
     try {
       price = quoteMerchantService({
         basePrice: service.basePrice,
+        factionBps: session.tier.purchasePriceBps,
+      });
+    } catch {
+      return { ok: false, reason: 'trade.insufficient-funds' };
+    }
+    if (state.hero.currency < price) return { ok: false, reason: 'trade.insufficient-funds' };
+    return { ok: true, plan: { service, price, currency: state.hero.currency - price } };
+  }
+  if (command.serviceId === 'merchant-service.enchant') {
+    if (command.targetItemId === null) return { ok: false, reason: 'trade.target-invalid' };
+    const targets = serviceTargetItemIds({ state, content, serviceId: command.serviceId });
+    if (!targets.includes(command.targetItemId))
+      return { ok: false, reason: 'trade.target-invalid' };
+    const item = state.items.find((candidate) => candidate.itemId === command.targetItemId);
+    // `serviceTargetItemIds` above already re-derives eligibility from the live state, but the
+    // eligibility rule is re-run directly here too: the target list is a convenience for callers,
+    // never a trust boundary planService relies on.
+    if (!item || !enchantable(content, item)) return { ok: false, reason: 'trade.target-invalid' };
+    const scaledBase = scaledServiceBasePrice(service.basePrice, item.enchantment === null ? 1 : 2);
+    let price: number;
+    try {
+      price = quoteMerchantService({
+        basePrice: scaledBase,
         factionBps: session.tier.purchasePriceBps,
       });
     } catch {
@@ -749,6 +788,51 @@ export function resolveTradeCommand(
             currency: plan.plan.currency,
             remainingUses,
           },
+        ],
+      };
+    }
+    if (command.serviceId === 'merchant-service.enchant') {
+      const targetItemId = command.targetItemId!;
+      // The draw happens here, strictly after `charged` above has already deducted the price: the
+      // "cannot pay" path returns before this branch is ever reached (planService's insufficient-
+      // funds rejection short-circuits resolution), so the enchanting stream is a function of
+      // accepted enchants alone -- never touched by a purchase attempt that didn't go through.
+      const item = charged.items.find((candidate) => candidate.itemId === targetItemId)!;
+      const drawn = drawEnchantment({ content, item, state: charged.rng.enchanting });
+      // The Armorer's craft reveals what it touches: enchanting identifies the item completely --
+      // appearance, instance, and any curse -- exactly as the identify service would, so a curse
+      // can never survive hidden behind `identified: true` (the #121 invariant every identify path
+      // reveals). `identifyItemCompletely` draws no randomness, so this does not touch any stream
+      // the enchanting draw above doesn't already touch.
+      const identified = identifyItemCompletely({
+        run: charged,
+        content,
+        itemId: targetItemId,
+        eventId: command.commandId,
+      });
+      const nextState: ActiveRun = {
+        ...identified.state,
+        items: identified.state.items.map((candidate) =>
+          candidate.itemId === targetItemId
+            ? { ...candidate, enchantment: drawn.enchantment }
+            : candidate,
+        ),
+        rng: { ...identified.state.rng, enchanting: drawn.state },
+      };
+      return {
+        state: nextState,
+        events: [
+          {
+            type: 'trade.service-purchased',
+            eventId: command.commandId,
+            merchantPopulationId: trade.merchantPopulationId,
+            serviceId: command.serviceId,
+            targetItemId,
+            price: plan.plan.price,
+            currency: plan.plan.currency,
+            remainingUses,
+          },
+          ...identified.events,
         ],
       };
     }

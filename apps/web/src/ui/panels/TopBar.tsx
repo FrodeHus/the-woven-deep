@@ -9,11 +9,17 @@ import type { PanelProps } from './types.js';
  * so the whole bar is `pointer-events-none` -- clicks fall through to the playfield beneath it.
  * The location string reuses the same town/depth logic the retired `StatusBar` used, rendered in the
  * design's uppercase style.
+ *
+ * While the hero holds one or more banked tempering points, a non-blocking "N banked" badge joins
+ * the bar -- a passive reminder that the temper overlay has something to spend, never a modal
+ * prompt (the log line, `hero.tempering-banked`'s `'The Deep tempers those who dare it.'`, already
+ * announced the point the moment it banked).
  */
 export function TopBar({ snapshot }: PanelProps): JSX.Element {
   const { floor, metrics } = snapshot.projection;
   const hero = heroOf(snapshot.projection);
   const location = floor.town ? 'Town' : `DEPTH ${floor.depth}`;
+  const { banked } = hero.tempering;
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-baseline gap-5 bg-gradient-to-b from-black/85 to-transparent px-4 pb-10 pt-3 text-sm">
       <span className="font-serif tracking-[0.24em] text-fg-strong">THE WOVEN DEEP</span>
@@ -23,6 +29,11 @@ export function TopBar({ snapshot }: PanelProps): JSX.Element {
       >
         {location}
       </span>
+      {banked > 0 && (
+        <span className="font-mono text-accent-strong" data-testid="top-bar-tempering-banked">
+          {`⚒ ${banked} banked`}
+        </span>
+      )}
       <span className="ml-auto font-mono text-accent" data-testid="top-bar-gold">
         {`⛁ ${hero.currency} gold`}
       </span>

@@ -27,9 +27,11 @@ import {
   validateDialogueCommand,
 } from './dialogue.js';
 import { isHouseCommand, resolveHouseCommand, validateHouseCommand } from './house.js';
+import { resolveTemper, validateTemperCommand } from './tempering.js';
 import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
 import { foldRunMetrics } from './run-metrics.js';
+import { synchronizeDerivedMaxima } from './derived-maxima.js';
 import { concludeRunOnChoice, concludeRunOnHeroDeath } from './run-conclusion.js';
 import { applyCurseTriggers } from './curse-triggers.js';
 import { isTownFloorActive } from './town-floor.js';
@@ -69,12 +71,31 @@ function record(
 ): ActiveRun {
   const next: RecordedCommand = { command, result, events, publicEvents };
   const turnAdvanced = result.status === 'applied' && result.turn > state.turn;
+  // Every applied branch -- world, trade, dialogue, house, and any branch a later task adds --
+  // funnels through here, so this is where the hero's stored maxima are refreshed from the
+  // derivation. Placing it at the choke point rather than per-branch is deliberate: the trade
+  // branch alone can change a maximum without a world step (`merchant-service.remove-curse` strips
+  // a curse whose `maxWeave` drawback is live, and identify does the same for a drawback the
+  // character sheet was hiding), and a paid service must show its effect in the same command the
+  // player bought it. The world branch syncs once more of its own accord, BEFORE its conclusion
+  // boundary, which this idempotent pass then leaves untouched.
+  //
+  // Rejected commands are deliberately excluded: they change nothing else about the world, and with
+  // the sync at this choke point a maximum can never be stale by the time one arrives.
+  const synchronized =
+    result.status === 'applied' ? synchronizeDerivedMaxima(state, content) : state;
   return {
-    ...state,
+    ...synchronized,
     revision: result.revision,
     turn: result.turn,
-    recentCommands: [...state.recentCommands, next].slice(-RECENT_COMMAND_LIMIT),
-    metrics: foldRunMetrics({ metrics: state.metrics, state, content, events, turnAdvanced }),
+    recentCommands: [...synchronized.recentCommands, next].slice(-RECENT_COMMAND_LIMIT),
+    metrics: foldRunMetrics({
+      metrics: synchronized.metrics,
+      state: synchronized,
+      content,
+      events,
+      turnAdvanced,
+    }),
   };
 }
 
@@ -329,6 +350,55 @@ export function resolveCommand(
     };
   }
 
+  if (command.type === 'temper') {
+    const attribute = command.attribute;
+    const validation = validateTemperCommand({
+      state: current,
+      content: context.content,
+      attribute,
+    });
+    if (!validation.ok) {
+      return recordInvalid(
+        current,
+        context.content,
+        command,
+        validation.reason,
+        preEvents,
+        prePublicEvents,
+      );
+    }
+    assertCountersCanAdvance(current, false);
+    // Revision only: tempering is a reflection, not an action. No turn, no world time, no energy,
+    // no survival tick, and no randomness -- exactly the trade/dialogue/house posture.
+    const result = {
+      status: 'applied',
+      commandId: command.commandId,
+      revision: current.revision + 1,
+      turn: current.turn,
+    } as const;
+    const resolved = resolveTemper({
+      state: current,
+      content: context.content,
+      attribute,
+      eventId: command.commandId,
+    });
+    const events = [...preEvents, ...resolved.events];
+    const publicEvents = [
+      ...prePublicEvents,
+      ...projectDomainEvents({
+        state: resolved.state,
+        content: context.content,
+        heroId: resolved.state.hero.actorId,
+        events: resolved.events,
+      }),
+    ];
+    return {
+      state: record(resolved.state, context.content, command, result, events, publicEvents),
+      result,
+      events: publicEvents,
+    };
+  }
+
   if (isHouseCommand(command)) {
     const validation = validateHouseCommand({ state: current, command, content: context.content });
     if (!validation.ok) {
@@ -434,11 +504,18 @@ export function resolveCommand(
           heroId: triggered.state.hero.actorId,
           events: triggered.events,
         });
+  // The hero's stored maxima are a cache of the derived stats, refreshed here -- after the world
+  // step and the curse post-pass have finished moving equipment, conditions and hunger, and BEFORE
+  // the conclusion boundary below. Placing it here is what makes a +maxHealth item apply at all,
+  // and it is what keeps a DROPPING maximum (an expiring condition, a removed ring) from leaving
+  // the recorded state with `health > maxHealth`, which the save schema rejects. It also means the
+  // conclusion sees exactly the numbers the player will.
+  const synchronized = synchronizeDerivedMaxima(triggered.state, context.content);
   // The conclusion boundary runs inside this same transition: a hero killed by the world branch
   // above is concluded here, before the command is recorded, so the recorded event stream and the
   // resulting state agree on whether (and how) the run ended.
   const concluded = concludeRunOnHeroDeath({
-    state: triggered.state,
+    state: synchronized,
     content: context.content,
     events: worldEvents,
     revision: result.revision,

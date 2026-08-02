@@ -33,6 +33,7 @@ export const DERIVED_STAT_LABELS: Readonly<Record<DerivedStatName, string>> = {
   lightOutMemoryPersists: 'Light-out memory persists',
   lightOutCommitsMemory: 'Light-out commits memory',
   weaveRegen: 'Weave regen',
+  spellPower: 'Spell power',
 };
 
 /** Display label for each base attribute, in `ATTRIBUTE_ORDER`, used by any player-facing

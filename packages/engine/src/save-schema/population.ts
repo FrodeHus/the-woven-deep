@@ -42,6 +42,16 @@ export const heroV6 = z.strictObject({
 export const hero = heroV6.extend({
   classTags: z.array(z.string().trim().min(1)).readonly(),
   statModifiers: z.partialRecord(z.enum(DERIVED_STAT_NAMES), safeInteger),
+  tempering: z.strictObject({
+    banked: safeNonNegative,
+    spent: z.strictObject({
+      might: safeNonNegative,
+      agility: safeNonNegative,
+      vitality: safeNonNegative,
+      wits: safeNonNegative,
+      resolve: safeNonNegative,
+    }),
+  }),
   knownSpellIds: z.array(identifier).readonly().optional(),
 });
 export const probability = z.number().finite().min(0).max(1);

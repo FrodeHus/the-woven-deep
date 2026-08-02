@@ -70,6 +70,7 @@ export function createDemoContentPack(): CompiledContentPack {
           lightOutRevealRadius: { base: 1 },
           lightOutMemoryPersists: { base: 0 },
           lightOutCommitsMemory: { base: 0 },
+          spellPower: { base: -10, wits: 1 },
         },
         actionCosts: { 'action.move': 100, 'action.wait': 100, 'action.spawn': 100 },
         pointBuy: {
@@ -121,6 +122,11 @@ export function createDemoContentPack(): CompiledContentPack {
         },
         fragmentSpawnRollDenominator: 40,
         generation: { doorTilePercent: 35, artifactOfferPercent: 12 },
+        tempering: { depths: [3, 6, 9, 12, 15, 18] },
+        spellPowerDivisor: 4,
+        enchanting: {
+          rarityMagnitudeBps: { common: 10000, uncommon: 12500, rare: 15000, legendary: 20000 },
+        },
         floorLoot: {
           scatterCount: { minimum: 2, maximum: 4 },
           chestCount: { minimum: 0, maximum: 2 },
@@ -256,6 +262,10 @@ export function createDemoRun(): ActiveRun {
     currency: 40,
     classTags: [],
     statModifiers: {},
+    tempering: {
+      banked: 0,
+      spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+    },
   } as const;
   const heroActor: ActorState = {
     actorId: hero.actorId,
@@ -265,6 +275,13 @@ export function createDemoRun(): ActiveRun {
     x: 1,
     y: 1,
     attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+    // CAUTION for fixtures built on the DEMO pack: these stored maxima match the shipping balance
+    // (`maxHealth: base 10 + vitality`), not `createDemoContentPack`'s own formula
+    // (`base 8 + 2 * vitality`), which derives 28. Since `synchronizeDerivedMaxima` makes the
+    // derivation authoritative, a demo-pack run's hero silently becomes WOUNDED (20 of 28) on its
+    // first command rather than starting at full health. Tests that care about full health should
+    // set health/maxHealth themselves; the values here are left alone because every shipping-pack
+    // fixture is exactly consistent with them.
     health: 20,
     maxHealth: 20,
     weave: 14,

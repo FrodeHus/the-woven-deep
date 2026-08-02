@@ -21,6 +21,7 @@ import type { ItemInstance } from './item-model.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { consumeItemQuantityFromItems } from './inventory.js';
 import { compareCodeUnits } from './stable-json.js';
+import { drawEnchantment, enchantable } from './enchanting.js';
 import type { SurvivalState } from './survival-model.js';
 import { restoreHunger } from './survival.js';
 import type { DungeonFeature } from './feature-model.js';
@@ -32,6 +33,7 @@ export interface EffectSequenceResult {
   readonly features: readonly DungeonFeature[];
   readonly floors: readonly FloorSnapshot[];
   readonly effectsState: Uint32State;
+  readonly enchantingState?: Uint32State;
   readonly events: readonly DomainEvent[];
 }
 
@@ -41,14 +43,21 @@ export function withRngStream(state: ActiveRun, name: RngStreamName, next: Uint3
 
 export function applyEffectResult(
   state: ActiveRun,
-  resolved: Pick<EffectSequenceResult, 'actors' | 'items' | 'survival' | 'effectsState'>,
+  resolved: Pick<
+    EffectSequenceResult,
+    'actors' | 'items' | 'survival' | 'effectsState' | 'enchantingState'
+  >,
 ): ActiveRun {
   return {
     ...state,
     actors: resolved.actors,
     items: resolved.items,
     survival: resolved.survival,
-    rng: { ...state.rng, effects: resolved.effectsState },
+    rng: {
+      ...state.rng,
+      effects: resolved.effectsState,
+      ...(resolved.enchantingState === undefined ? {} : { enchanting: resolved.enchantingState }),
+    },
   };
 }
 
@@ -79,6 +88,7 @@ export interface EffectSequenceInput {
   readonly sourceActorId: OpaqueId;
   readonly targetActorId: OpaqueId;
   readonly effectsState: Uint32State;
+  readonly enchantingState?: Uint32State;
   readonly worldTime: number;
   readonly eventId: OpaqueId;
   readonly forceMoveDirection: Point;
@@ -92,6 +102,13 @@ export interface EffectSequenceInput {
   readonly mitigationByActorId?: Readonly<
     Record<OpaqueId, Readonly<{ armor: number; resistance: number; immune: boolean }>>
   >;
+  /**
+   * The caster's spell bonus, added to every `effect.damage` and `effect.heal` amount this
+   * sequence rolls. Defaults to 0, which is how "not item triggers, not curses" is enforced
+   * STRUCTURALLY: only the spell seams pass it, so every other call site gets zero by omission
+   * rather than by a runtime check somebody could later remove.
+   */
+  readonly spellPower?: number;
 }
 
 /**
@@ -108,9 +125,31 @@ export const DIRECT_EFFECT_IDS: ReadonlySet<string> = new Set([
   'effect.item.consume',
   'effect.hunger.restore',
   'effect.curse.remove',
+  'effect.item.enchant',
 ]);
 
 const RUN_LEVEL_EFFECTS = new Set<EffectId>(['effect.spell.learn', 'effect.recall']);
+
+/** Equipped first, then backpack; within each, `compareCodeUnits(itemId)` order. The equipped-first
+ * rule matches the scroll's fiction (the steel you are holding) and is what the sundering scroll's
+ * own convention establishes for item-targeted effects: deterministic, never a command argument. */
+export function firstEnchantableItemId(
+  content: CompiledContentPack,
+  items: readonly ItemInstance[],
+  actorId: OpaqueId,
+): OpaqueId | undefined {
+  const owned = (type: 'equipped' | 'backpack') =>
+    items
+      .filter(
+        (item) =>
+          item.location.type === type &&
+          item.location.actorId === actorId &&
+          enchantable(content, item),
+      )
+      .map((item) => item.itemId)
+      .sort(compareCodeUnits);
+  return owned('equipped')[0] ?? owned('backpack')[0];
+}
 
 function checkedSafeInteger(label: string, value: number): number {
   if (!Number.isSafeInteger(value)) throw new RangeError(`${label} must be a safe integer`);
@@ -212,12 +251,15 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
   }
   let actors = [...input.actors];
   let state = input.effectsState;
+  let enchantingState = input.enchantingState;
   const events: DomainEvent[] = [];
   let items = [...(input.items ?? [])];
   let features = [...(input.features ?? [])];
   let floors = [...(input.floors ?? [])];
   const balance = input.content.entries.find((entry) => entry.kind === 'balance');
   if (!balance) throw new Error('internal invariant: balance definition does not exist');
+  // Zero unless a spell seam supplied it -- see `EffectSequenceInput.spellPower`.
+  const spellPower = checkedSafeInteger('spell power', input.spellPower ?? 0);
   let survival = input.survival;
   for (const effect of input.effects) {
     const target = findActor(actors, input.targetActorId);
@@ -231,7 +273,14 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
         resistance: 0,
         immune: false,
       };
-      const resolvedDamage = resolveEffectDamage(rolled.value, mitigation);
+      // The caster's bonus lands on the rolled total BEFORE mitigation, so armor and resistance
+      // still subtract from the scaled number -- matching `combat.ts`, where the weapon's flat
+      // bonus is folded into `rolledDamage` and mitigated afterwards.
+      const scaledRoll = Math.max(
+        0,
+        checkedSafeInteger('spell-scaled damage', rolled.value + spellPower),
+      );
+      const resolvedDamage = resolveEffectDamage(scaledRoll, mitigation);
       const health = Math.max(0, target.health - resolvedDamage);
       actors = [...replaceActor(actors, { ...target, health })];
       events.push(
@@ -245,7 +294,7 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
           defense: 0,
           critical: false,
           rolledDice: parameters.dice.count,
-          rolledDamage: rolled.value,
+          rolledDamage: scaledRoll,
           effectiveDamage: resolvedDamage,
           damageType: parameters.damageType,
         },
@@ -269,11 +318,17 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
     } else if (effect.effectId === 'effect.heal') {
       const rolled = rollDice(state, parseEffectParameters(effect, 'effect.heal').dice);
       state = rolled.state;
+      // Scaled before `applyHealing`'s missing-health clamp, so the bonus can close a wound the
+      // bare roll would have left open rather than being trimmed away first.
+      const scaledHeal = Math.max(
+        0,
+        checkedSafeInteger('spell-scaled heal', rolled.value + spellPower),
+      );
       const result = applyHealing({
         actors,
         targetActorId: target.actorId,
         sourceActorId: input.sourceActorId,
-        amount: rolled.value,
+        amount: scaledHeal,
         eventId: input.eventId,
       });
       actors = [...result.actors];
@@ -389,6 +444,35 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
         });
       }
       continue;
+    } else if (effect.effectId === 'effect.item.enchant') {
+      // Unreachable for compiled content: ITEM_ONLY_EFFECT_IDS bars effect.item.enchant from
+      // spell/trap/condition effect lists at compile time, so only use-item ever reaches here,
+      // and use-item always supplies enchantingState.
+      if (!enchantingState) {
+        throw new TypeError('effect.item.enchant requires enchantingState');
+      }
+      const targetItemId = firstEnchantableItemId(input.content, items, input.targetActorId);
+      if (targetItemId) {
+        const enchantItem = items.find((candidate) => candidate.itemId === targetItemId)!;
+        const drawn = drawEnchantment({
+          content: input.content,
+          item: enchantItem,
+          state: enchantingState,
+        });
+        enchantingState = drawn.state;
+        // Only the enchantment field is set here -- the item-level fold has no route to
+        // `run.identification` (the appearance half of a complete identify), so the caller
+        // finishes the reveal via `identifyItemCompletely` once this fold returns a full
+        // `ActiveRun` again (see action-dispatch.ts's `use` handler). Leaving `identified`
+        // untouched here, rather than flipping it raw, is what keeps that caller-side pass from
+        // ever observing (or masking) an `identified: true` / `curse.revealed: false` state.
+        items = items.map((candidate) =>
+          candidate.itemId === targetItemId
+            ? { ...candidate, enchantment: drawn.enchantment }
+            : candidate,
+        );
+      }
+      continue;
     } else if (RUN_LEVEL_EFFECTS.has(effect.effectId)) {
       // Run-level effects (learn, recall) mutate ActiveRun, which resolveEffectSequence does not
       // own. The cast/use-item dispatch handlers apply them. No actor mutation, no RNG here.
@@ -412,7 +496,16 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       events.push(...result.events);
     }
   }
-  return { actors, items, features, floors, survival, effectsState: state, events };
+  return {
+    actors,
+    items,
+    features,
+    floors,
+    survival,
+    effectsState: state,
+    ...(enchantingState === undefined ? {} : { enchantingState }),
+    events,
+  };
 }
 
 export interface EffectSweepInput extends Omit<EffectSequenceInput, 'targetActorId'> {

@@ -71,6 +71,9 @@ describe('heroOf', () => {
     expect(Array.isArray(hero.conditions)).toBe(true);
     expect(Array.isArray(hero.knownAppearanceIds)).toBe(true);
     expect(Object.keys(hero.equipment)).toContain('main-hand');
+    expect(typeof hero.tempering.banked).toBe('number');
+    expect(hero.tempering.spent).toMatchObject({ might: expect.any(Number) });
+    expect(Array.isArray(hero.tempering.temperable)).toBe(true);
   });
 
   it('reads owned-item fields off the backpack', () => {

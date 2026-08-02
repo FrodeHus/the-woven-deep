@@ -1,4 +1,4 @@
-import type { BaseContentEntry, CompletionType, DerivedStatName } from './common.js';
+import type { BaseContentEntry, CompletionType, DerivedStatName, ItemRarity } from './common.js';
 
 export interface PointBuyDefinition {
   readonly budget: number;
@@ -60,6 +60,12 @@ export interface BalanceContentEntry extends BaseContentEntry {
   }>;
   readonly fragmentSpawnRollDenominator: number;
   readonly generation: Readonly<{ doorTilePercent: number; artifactOfferPercent: number }>;
+  readonly tempering: Readonly<{ depths: readonly number[] }>;
+  readonly spellPowerDivisor: number;
+  readonly enchanting: Readonly<{
+    /** Magnitude scaling per item rarity, in basis points of the authored modifier. */
+    readonly rarityMagnitudeBps: Readonly<Record<ItemRarity, number>>;
+  }>;
   readonly floorLoot: Readonly<{
     scatterCount: Readonly<{ minimum: number; maximum: number }>;
     chestCount: Readonly<{ minimum: number; maximum: number }>;

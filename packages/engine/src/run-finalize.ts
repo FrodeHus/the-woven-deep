@@ -3,6 +3,7 @@ import type {
   AchievementCriteria,
   CompiledContentPack,
   EncounterContentEntry,
+  FallenChampionTemplateContentEntry,
 } from '@woven-deep/content';
 import { heroActor } from './actor-model.js';
 import type {
@@ -33,7 +34,54 @@ import type { ArtifactDeltas, ArtifactStint } from './artifact-ledger.js';
 import { fallenChampionTemplate } from './haunt-need.js';
 import { compareCodeUnits } from './stable-json.js';
 
-function buildSnapshot(run: ActiveRun): FallenHeroBuildSnapshot {
+/**
+ * The spells a hero is remembered for: their known spells, capped at the champion template's
+ * `abilityLimit`, chosen by HIGHEST weave cost first with the spell id as a deterministic
+ * tie-break.
+ *
+ * Cost is the proxy for signature: the expensive spells are the ones a hero was known for, not the
+ * cantrip they threw every turn. The tie-break is not cosmetic -- standings are ordered by
+ * `compareHallRecords` downstream and normalized into a haunt's ability list, so the selection
+ * needs a total order or two runs of the same hero could raise different champions.
+ *
+ * A spell the current pack no longer defines is dropped here rather than carried into the record:
+ * `normalizeFallenHero` would filter it anyway, and a record that names content nothing can resolve
+ * is a record that lies about what the haunt will do.
+ *
+ * Cost decides WHICH spells; the recorded list is then sorted by id, exactly like
+ * `equippedItemContentIds` beside it. That is not cosmetic: the save schema validates both
+ * `standing.signatureAbilityIds` and a placed haunt's `abilityIds` as unique and STRICTLY
+ * INCREASING, so a list left in cost order would make every run carrying that standing unsavable.
+ *
+ * Consumes no randomness.
+ */
+function signatureAbilityIds(
+  run: ActiveRun,
+  content: CompiledContentPack,
+  template: FallenChampionTemplateContentEntry,
+): readonly OpaqueId[] {
+  // Deduplicated first: `hero.knownSpellIds` is the only list on this path with no ordered-id
+  // validation behind it, and a duplicate would sail through recording and only throw on the first
+  // save of a LATER run that loaded the resulting standing.
+  return [...new Set(run.hero.knownSpellIds ?? [])]
+    .flatMap((spellId) => {
+      const spell = content.entries.find((entry) => entry.id === spellId);
+      return spell?.kind === 'spell' ? [{ spellId, weaveCost: spell.weaveCost }] : [];
+    })
+    .sort(
+      (left, right) =>
+        right.weaveCost - left.weaveCost || compareCodeUnits(left.spellId, right.spellId),
+    )
+    .slice(0, template.abilityLimit)
+    .map((candidate) => candidate.spellId)
+    .sort(compareCodeUnits);
+}
+
+function buildSnapshot(
+  run: ActiveRun,
+  content: CompiledContentPack,
+  template: FallenChampionTemplateContentEntry,
+): FallenHeroBuildSnapshot {
   const hero = heroActor(run);
   const equippedContentIds = run.items
     .filter((item) => item.location.type === 'equipped' && item.location.actorId === hero.actorId)
@@ -41,7 +89,7 @@ function buildSnapshot(run: ActiveRun): FallenHeroBuildSnapshot {
   return {
     attributes: hero.attributes,
     equippedItemContentIds: [...new Set(equippedContentIds)].sort(compareCodeUnits),
-    signatureAbilityIds: [],
+    signatureAbilityIds: signatureAbilityIds(run, content, template),
   };
 }
 
@@ -178,10 +226,11 @@ export function finalizeRun(
 
   const recordId = deriveHallRecordId(run.runSeed, run.contentHash);
   const heldArtifacts = heldArtifactIds(run, content);
+  const template = fallenChampionTemplate(content);
   const heirloom = selectRecordHeirloom({
     run,
     content,
-    template: fallenChampionTemplate(content),
+    template,
     recordId,
     heldArtifactIds: heldArtifacts,
   });
@@ -205,7 +254,7 @@ export function finalizeRun(
       const captured = equippedInstanceSnapshots({ run, content, recordId });
       return captured.length === 0 ? [heirloom.snapshot] : captured;
     })(),
-    build: buildSnapshot(run),
+    build: buildSnapshot(run, content, template),
     runSeed: encodeRunSeed(run.runSeed),
     contentHash: run.contentHash,
   };

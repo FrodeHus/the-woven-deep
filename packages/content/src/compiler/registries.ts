@@ -49,6 +49,7 @@ export const MERCHANT_SERVICE_IDS = [
   'merchant-service.identify',
   'merchant-service.remove-curse',
   'merchant-service.strongbox',
+  'merchant-service.enchant',
 ] as const;
 export const MERCHANT_AGGRESSION_RESPONSES = ['flee', 'self-defense'] as const;
 
@@ -88,6 +89,9 @@ export const EFFECT_PARAMETER_SCHEMAS = {
   'effect.spell.learn': z.strictObject({ spellId: stableIdSchema }),
   'effect.recall': z.strictObject({}),
   'effect.curse.remove': z.strictObject({}),
+  // The resolver (Task 8) picks its own target the same way `effect.curse.remove` does; the
+  // effect itself carries no parameters.
+  'effect.item.enchant': z.strictObject({}),
 } as const satisfies Record<EffectId, z.ZodTypeAny>;
 
 export type { BehaviorId, EffectId } from '../model.js';

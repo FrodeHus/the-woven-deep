@@ -10,6 +10,45 @@ import {
   type ScoreBreakdown,
 } from '../src/index.js';
 
+/** Two milestone tempering points spent on `vitality` -- `scoreRun` never reads `run.hero`, so
+ * this is inert as far as scoring is concerned; the regression this guards is a future score line
+ * accidentally keying off hero attributes instead of `run.metrics`/`run.conclusion`. */
+function temperTwice(run: ActiveRun): ActiveRun {
+  return {
+    ...run,
+    hero: {
+      ...run.hero,
+      tempering: {
+        banked: 0,
+        spent: { ...run.hero.tempering.spent, vitality: run.hero.tempering.spent.vitality + 2 },
+      },
+    },
+  };
+}
+
+/** An enchanted weapon added to the hero's equipped set -- `scoreRun` never reads `run.items`
+ * either, so this too must leave the breakdown untouched. */
+function enchantSword(run: ActiveRun): ActiveRun {
+  return {
+    ...run,
+    items: [
+      ...run.items,
+      {
+        itemId: 'item.demo-enchanted-sword',
+        contentId: 'item.demo-sword',
+        quantity: 1,
+        condition: 100,
+        enchantment: { enchantmentId: 'enchantment.demo-keen', modifiers: { meleeAccuracy: 1 } },
+        identified: true,
+        charges: null,
+        fuel: null,
+        enabled: null,
+        location: { type: 'equipped', actorId: run.hero.actorId, slot: 'main-hand' },
+      },
+    ],
+  };
+}
+
 function withMetrics(run: ActiveRun, metrics: Partial<ActiveRun['metrics']>): ActiveRun {
   return { ...run, metrics: { ...run.metrics, ...metrics } };
 }
@@ -111,6 +150,15 @@ describe('scoreRun', () => {
       expect(line.amount).toBeGreaterThanOrEqual(0);
     }
     expect(breakdown.total).toBeGreaterThanOrEqual(0);
+  });
+
+  // Task 12 (hero-power-curve) regression pin: tempering, enchanting, and spell power all reach
+  // into hero/item state that predates this feature's own `run.metrics`/`run.conclusion` reads --
+  // `scoreRun` must stay blind to every one of them.
+  it('leaves the score model untouched by tempering, enchanting, and spell power', () => {
+    const base = concludedRun(content);
+    const tempered = enchantSword(temperTwice(base));
+    expect(scoreRun({ run: tempered, content })).toEqual(scoreRun({ run: base, content }));
   });
 });
 

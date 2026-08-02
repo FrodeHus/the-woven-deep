@@ -234,6 +234,21 @@ describe('public event projection', () => {
     expect(json).not.toContain('"x"');
   });
 
+  it('passes a banked tempering milestone through untouched', () => {
+    // The hero's own progress: nothing about it is hidden, so it must survive projection verbatim
+    // rather than being redacted or folded into a notice. Task 11's UI builds against this contract.
+    const input = fixture();
+    const event: DomainEvent = {
+      type: 'hero.tempering-banked',
+      eventId: 'event.entered-1.temper-0',
+      depth: 3,
+      banked: 1,
+    };
+    expect(
+      projectDomainEvents({ ...input, events: [event], heroId: input.state.hero.actorId }),
+    ).toEqual([event]);
+  });
+
   it('describes unseen movement with eight-way direction and coarse distance only', () => {
     const input = fixture();
     const events: DomainEvent[] = [

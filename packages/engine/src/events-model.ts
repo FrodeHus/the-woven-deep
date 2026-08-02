@@ -1,6 +1,6 @@
 import type { OpaqueId, Direction, Point } from './model.js';
 import type { InvalidActionReason } from './commands-model.js';
-import type { EquipmentSlot } from './actor-model.js';
+import type { AttributeName, EquipmentSlot } from './actor-model.js';
 import type {
   CompletionType,
   DamageType,
@@ -219,6 +219,23 @@ export interface SpellLearnedEvent {
   readonly eventId: OpaqueId;
   readonly actorId: OpaqueId;
   readonly spellId: OpaqueId;
+}
+/** One depth milestone banked a tempering point. The hero's own progress, so it is hero-visible in
+ * full: `depth` is the milestone crossed, `banked` the running total after this grant. */
+export interface HeroTemperingBankedEvent {
+  readonly type: 'hero.tempering-banked';
+  readonly eventId: OpaqueId;
+  readonly depth: number;
+  readonly banked: number;
+}
+/** One banked point spent on an attribute. The hero's own choice, so it is hero-visible in full:
+ * `value` is the attribute's new value and `remaining` the points still banked after the spend. */
+export interface HeroTemperedEvent {
+  readonly type: 'hero.tempered';
+  readonly eventId: OpaqueId;
+  readonly attribute: AttributeName;
+  readonly value: number;
+  readonly remaining: number;
 }
 export interface HeroRecalledEvent {
   readonly type: 'hero.recalled';
@@ -853,6 +870,8 @@ export type DomainEvent =
   | ItemThrownEvent
   | ItemUsedEvent
   | SpellLearnedEvent
+  | HeroTemperingBankedEvent
+  | HeroTemperedEvent
   | HeroRecalledEvent
   | FloorEnteredEvent
   | SpellCastEvent
