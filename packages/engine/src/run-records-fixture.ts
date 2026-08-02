@@ -28,10 +28,14 @@ import type { HallRecord, LifetimeDeltas } from './run-records-model.js';
 import { decodeActiveRun, encodeActiveRun } from './save-codec.js';
 import { validateActiveRun } from './save-schema.js';
 import { compareCodeUnits, stableJson } from './stable-json.js';
+import { deriveRunActorStats } from './stats.js';
 import { movementBlockReason } from './terrain.js';
 
 const WIDTH = 19;
 const HEIGHT = 13;
+/** A scripted hero the demo's fights cannot kill -- the death boundary is staged deliberately. */
+const DEMO_HEALTH_POOL = 100_000;
+
 const HOME_FLOOR_ID = 'floor.run-records-demo';
 const BOSS_FLOOR_ID = 'floor.run-records-boss-demo';
 const HOME_DEPTH = 4;
@@ -205,6 +209,11 @@ export function createRunRecordsDemoRun(pack: CompiledContentPack): ActiveRun {
   const boss = encounter(pack, 'encounter.ashen-warden');
   const merchant = encounter(pack, 'encounter.travelling-lampwright');
   const base = createDemoRun();
+  const baseHeroStats = deriveRunActorStats({
+    state: base,
+    content: pack,
+    actor: base.actors[0]!,
+  });
   const identified = allocateIdentificationMap({ content: pack, rng: base.rng });
   const home = demoFloor(base, HOME_FLOOR_ID, HOME_DEPTH);
   const bossFloor = demoFloor(base, BOSS_FLOOR_ID, BOSS_DEPTH);
@@ -215,13 +224,24 @@ export function createRunRecordsDemoRun(pack: CompiledContentPack): ActiveRun {
     identification: identified.identification,
     rng: identified.rng,
     activeFloorId: HOME_FLOOR_ID,
+    // The scripted health pool rides `statModifiers` rather than a raw override of the stored
+    // maximum: `synchronizeDerivedMaxima` refreshes the stored fields from the derivation after
+    // every command, so a maximum the formulas cannot account for would be clamped away on the
+    // demo's first step and the scripted milestones would die with it.
+    hero: {
+      ...base.hero,
+      statModifiers: {
+        ...base.hero.statModifiers,
+        maxHealth: DEMO_HEALTH_POOL - baseHeroStats.maxHealth,
+      },
+    },
     actors: base.actors.map((actor) => ({
       ...actor,
       floorId: HOME_FLOOR_ID,
       x: 9,
       y: 6,
-      health: 100_000,
-      maxHealth: 100_000,
+      health: DEMO_HEALTH_POOL,
+      maxHealth: DEMO_HEALTH_POOL,
     })),
     floors: [home, bossFloor].sort((left, right) => compareCodeUnits(left.floorId, right.floorId)),
     encounterDecisions: pack.entries

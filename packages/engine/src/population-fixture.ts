@@ -35,6 +35,7 @@ import { recordFloorEntered } from './run-metrics.js';
 import { decodeActiveRun, encodeActiveRun } from './save-codec.js';
 import { validateActiveRun } from './save-schema.js';
 import { compareCodeUnits, stableJson } from './stable-json.js';
+import { deriveRunActorStats } from './stats.js';
 import { resolveSwarmSpawnAction } from './swarm-behavior.js';
 import { movementBlockReason } from './terrain.js';
 import { rollDie } from './random.js';
@@ -242,6 +243,9 @@ function publishPlacement(
 // forced group/swarm/boss land at seed-dependent cells. This fixed placement seed keeps the
 // demonstrated swarm source within the hero's opening view (a few tiles from the start at (1, 6))
 // with open room around it for the child-spawn cap, and the group and boss on their curated floors.
+/** A scripted hero the demo's fights cannot kill -- every milestone is staged deliberately. */
+const DEMO_HEALTH_POOL = 100_000;
+
 const POPULATION_DEMO_PLACEMENT_SEED: Uint32State = [31, 218, 406, 3012];
 
 export function createPopulationDemoRun(
@@ -254,6 +258,11 @@ export function createPopulationDemoRun(
   const boss = encounter(pack, 'encounter.ashen-warden');
   const template = championTemplate(pack);
   const base = createDemoRun();
+  const baseHeroStats = deriveRunActorStats({
+    state: base,
+    content: pack,
+    actor: base.actors[0]!,
+  });
   const identified = allocateIdentificationMap({ content: pack, rng: base.rng });
   const standings = [standing(1), standing(2)];
   const selected = createFallenHeroRunDecisions({
@@ -272,13 +281,24 @@ export function createPopulationDemoRun(
     // found and the bosses would withhold them.
     artifactsUndiscovered: [...artifactItemIds(pack)].sort(compareCodeUnits),
     activeFloorId: populationFloor.floorId,
+    // The scripted health pool rides `statModifiers` rather than a raw override of the stored
+    // maximum: `synchronizeDerivedMaxima` refreshes the stored fields from the derivation after
+    // every command, so a maximum the formulas cannot account for would be clamped away on the
+    // demo's first step and every scripted milestone with it.
+    hero: {
+      ...base.hero,
+      statModifiers: {
+        ...base.hero.statModifiers,
+        maxHealth: DEMO_HEALTH_POOL - baseHeroStats.maxHealth,
+      },
+    },
     actors: base.actors.map((actor) => ({
       ...actor,
       floorId: populationFloor.floorId,
       x: 1,
       y: 6,
-      health: 100_000,
-      maxHealth: 100_000,
+      health: DEMO_HEALTH_POOL,
+      maxHealth: DEMO_HEALTH_POOL,
     })),
     floors: [populationFloor, bossFloor].sort((left, right) =>
       compareCodeUnits(left.floorId, right.floorId),

@@ -25,6 +25,7 @@ import { refreshKnowledge } from './perception.js';
 import { projectGameplayState, type GameplayProjection } from './projection.js';
 import { resolveCommand } from './reducer.js';
 import { compareCodeUnits, stableJson } from './stable-json.js';
+import { deriveRunActorStats } from './stats.js';
 import { generateTownFloor } from './town-floor.js';
 import { validateActiveRun } from './save-schema.js';
 
@@ -33,6 +34,9 @@ const HEIGHT = 13;
 const FLOOR_ID = 'floor.magic-demo';
 const DEPTH = 3;
 const TOME_ITEM_ID = 'item.magic-demo.frost-shard-tome.1';
+/** Enough weave for every cast the demo scripts, several times over. */
+const DEMO_WEAVE_POOL = 200;
+
 const MONSTER_MAX_HEALTH = 60;
 
 const HERO_POINT: Point = { x: 9, y: 6 };
@@ -198,6 +202,7 @@ export function createMagicDemoRun(pack: CompiledContentPack): ActiveRun {
   const town = generateTownFloor(pack).floor;
   const heroActor = base.actors[0]!;
   const heroId = heroActor.actorId;
+  const baseHeroStats = deriveRunActorStats({ state: base, content: pack, actor: heroActor });
 
   const monsters: ActorState[] = [
     monsterActor(ratDefinition, SINGLE_TARGET_ACTOR_ID, SINGLE_TARGET_POINT),
@@ -216,9 +221,25 @@ export function createMagicDemoRun(pack: CompiledContentPack): ActiveRun {
     identification: identified.identification,
     rng: identified.rng,
     activeFloorId: FLOOR_ID,
-    hero: { ...base.hero, classTags: ['loomcaller'] },
+    // The scripted weave pool rides `statModifiers` rather than a raw override of the stored
+    // maximum: `synchronizeDerivedMaxima` refreshes the stored fields from the derivation after
+    // every command, so a maximum the formulas cannot account for would be clamped away on the
+    // demo's first step. This is the same channel a class or a trait uses, so the demo hero simply
+    // *has* 200 weave.
+    hero: {
+      ...base.hero,
+      classTags: ['loomcaller'],
+      statModifiers: { maxWeave: DEMO_WEAVE_POOL - baseHeroStats.maxWeave },
+    },
     actors: [
-      { ...heroActor, floorId: FLOOR_ID, ...HERO_POINT, weave: 200, maxWeave: 200, energy: 100 },
+      {
+        ...heroActor,
+        floorId: FLOOR_ID,
+        ...HERO_POINT,
+        weave: DEMO_WEAVE_POOL,
+        maxWeave: DEMO_WEAVE_POOL,
+        energy: 100,
+      },
       ...monsters,
     ].sort((left, right) => compareCodeUnits(left.actorId, right.actorId)),
     items: [tomeInstance(heroId)],

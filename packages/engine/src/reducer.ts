@@ -30,6 +30,7 @@ import { isHouseCommand, resolveHouseCommand, validateHouseCommand } from './hou
 import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
 import { foldRunMetrics } from './run-metrics.js';
+import { synchronizeDerivedMaxima } from './derived-maxima.js';
 import { concludeRunOnChoice, concludeRunOnHeroDeath } from './run-conclusion.js';
 import { applyCurseTriggers } from './curse-triggers.js';
 import { isTownFloorActive } from './town-floor.js';
@@ -434,11 +435,18 @@ export function resolveCommand(
           heroId: triggered.state.hero.actorId,
           events: triggered.events,
         });
+  // The hero's stored maxima are a cache of the derived stats, refreshed here -- after the world
+  // step and the curse post-pass have finished moving equipment, conditions and hunger, and BEFORE
+  // the conclusion boundary below. Placing it here is what makes a +maxHealth item apply at all,
+  // and it is what keeps a DROPPING maximum (an expiring condition, a removed ring) from leaving
+  // the recorded state with `health > maxHealth`, which the save schema rejects. It also means the
+  // conclusion sees exactly the numbers the player will.
+  const synchronized = synchronizeDerivedMaxima(triggered.state, context.content);
   // The conclusion boundary runs inside this same transition: a hero killed by the world branch
   // above is concluded here, before the command is recorded, so the recorded event stream and the
   // resulting state agree on whether (and how) the run ended.
   const concluded = concludeRunOnHeroDeath({
-    state: triggered.state,
+    state: synchronized,
     content: context.content,
     events: worldEvents,
     revision: result.revision,
