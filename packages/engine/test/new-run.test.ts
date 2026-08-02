@@ -427,8 +427,15 @@ describe('createNewRun records input', () => {
     // derived-stat set -- no RNG stream moves (enchanting is drawn only by the enchant service and
     // the tempering-steel scroll, neither reachable from run creation). This is expected
     // content-authoring drift, not an engine regression.
+    // Re-pinned again for the new `enchantment.guard` ring entry (content/enchantments/
+    // core-enchantments.yaml, added so `gameplay-fixture.ts`'s pre-existing test ring enchantment
+    // resolves against the registry now that `content-bound-validation.ts` requires every
+    // `enchantment.enchantmentId` to exist): `contentHash` moves because the compiled pack grew an
+    // entry; verified by diffing the decoded run object field-by-field against the prior pin --
+    // `items`, `populations`, and every RNG stream (including `enchanting`) are byte-identical, only
+    // `contentHash` differs. This is expected content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '601b032058d4c20340298f44356c62200948a848e4b5bf8858713c6aa72419fd',
+      'b967c420465be05b7338024455f3c33abda30d906207112783b2c786e7c1fed9',
     );
   });
 

@@ -37,6 +37,7 @@ export * from './population-placement.js';
 export * from './depth-band.js';
 export * from './loot-placement.js';
 export * from './curse-generation.js';
+export * from './enchanting.js';
 export * from './pathfinding.js';
 export * from './population-perception.js';
 export * from './population-intent.js';

@@ -1,6 +1,11 @@
 import { resolve } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { CompiledContentPack, CurseContentEntry, ItemContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack,
+  CurseContentEntry,
+  EnchantmentContentEntry,
+  ItemContentEntry,
+} from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
   applyCurseTriggers,
@@ -95,6 +100,16 @@ const belowHalfCurse: CurseContentEntry = {
   },
 };
 
+const testEnchantment: EnchantmentContentEntry = {
+  kind: 'enchantment',
+  id: 'enchantment.test',
+  name: 'Test enchantment',
+  tags: ['enchantment', 'ring'],
+  categories: ['ring'],
+  modifiers: { maxHealth: 1 },
+  weight: 1,
+};
+
 function pack(): CompiledContentPack {
   const base = createDemoContentPack();
   return {
@@ -105,6 +120,7 @@ function pack(): CompiledContentPack {
       ring(CURSED_RING),
       potion,
       belowHalfCurse,
+      testEnchantment,
       {
         ...ring(WITS_RING),
         equipment: { slots: ['right-ring'], handedness: 'one-handed', reservedSlots: [] },
@@ -414,7 +430,7 @@ describe('the readers a non-world command reaches', () => {
 
   /** The shipping pack plus the test ring, so a merchant scenario can carry one. */
   function shippingWithRing(): CompiledContentPack {
-    return { ...shipping, entries: [...shipping.entries, ring(VITALITY_RING)] };
+    return { ...shipping, entries: [...shipping.entries, ring(VITALITY_RING), testEnchantment] };
   }
 
   it('refreshes the stored maximum on a trade command, which never runs a world step', () => {

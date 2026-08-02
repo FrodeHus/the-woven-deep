@@ -337,7 +337,7 @@ describe('house deposit/withdraw legality matrix', () => {
       1,
       hero.actorId,
       {
-        enchantment: { enchantmentId: 'enchantment.test', modifiers: { defense: 2 } },
+        enchantment: { enchantmentId: 'enchantment.keen-edge', modifiers: { defense: 2 } },
         condition: 87,
       },
     );

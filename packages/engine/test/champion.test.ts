@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type {
   CompiledContentPack,
+  EnchantmentContentEntry,
   EncounterContentEntry,
   FallenChampionTemplateContentEntry,
   ItemContentEntry,
@@ -147,6 +148,16 @@ const template: FallenChampionTemplateContentEntry = {
   },
 };
 
+const honedEnchantment: EnchantmentContentEntry = {
+  kind: 'enchantment',
+  id: 'enchantment.honed',
+  name: 'Honed',
+  tags: ['enchantment', 'weapon'],
+  categories: ['weapon'],
+  modifiers: { meleeDamageBonus: 2 },
+  weight: 1,
+};
+
 function pack(): CompiledContentPack {
   const base = createDemoContentPack();
   return {
@@ -154,6 +165,7 @@ function pack(): CompiledContentPack {
     entries: [
       ...base.entries,
       monster,
+      honedEnchantment,
       item('item.heirloom', {
         combat: {
           accuracy: 3,

@@ -47,3 +47,11 @@ entries:
     categories: [light]
     modifiers: { lightOutRevealRadius: 1 }
     weight: 8
+
+  - kind: enchantment
+    id: enchantment.guard
+    name: Guard
+    tags: [enchantment, ring]
+    categories: [ring]
+    modifiers: { defense: 1 }
+    weight: 6

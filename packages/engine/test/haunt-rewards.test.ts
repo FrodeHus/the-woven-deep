@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { CompiledContentPack, CurseContentEntry, ItemContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack,
+  CurseContentEntry,
+  EnchantmentContentEntry,
+  ItemContentEntry,
+} from '@woven-deep/content';
 import {
   createDemoContentPack,
   hauntDropSnapshots,
@@ -46,6 +51,16 @@ const leadenWeight: CurseContentEntry = {
   revealText: 'It grows heavier the longer you carry it.',
   drawbackModifiers: { defense: -1 },
   trigger: null,
+};
+
+const honedEnchantment: EnchantmentContentEntry = {
+  kind: 'enchantment',
+  id: 'enchantment.honed',
+  name: 'Honed',
+  tags: ['enchantment', 'weapon'],
+  categories: ['weapon'],
+  modifiers: { meleeDamageBonus: 2 },
+  weight: 1,
 };
 
 function pack(): CompiledContentPack {
@@ -96,6 +111,7 @@ function pack(): CompiledContentPack {
         equipment: { slots: ['neck'], handedness: 'one-handed', reservedSlots: [] },
       }),
       leadenWeight,
+      honedEnchantment,
     ],
   };
 }

@@ -789,6 +789,16 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
         );
       }
     }
+    if (item.enchantment !== null) {
+      const enchantment = pack.entries.find(
+        (entry) => entry.kind === 'enchantment' && entry.id === item.enchantment!.enchantmentId,
+      );
+      if (!enchantment) {
+        throw new Error(
+          `content-bound validation: item ${item.itemId} carries unknown enchantment ${item.enchantment.enchantmentId}`,
+        );
+      }
+    }
   }
   for (const entry of pack.entries) {
     if (entry.kind !== 'item' || !entry.equipment) continue;
