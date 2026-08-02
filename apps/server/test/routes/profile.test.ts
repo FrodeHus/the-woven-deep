@@ -59,8 +59,10 @@ async function verifyAndGetCookies(
     createdAt: now.toISOString(),
   });
   const response = await app.inject({
-    method: 'GET',
-    url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}`,
+    method: 'POST',
+    url: '/api/auth/verify',
+    headers: { origin: PUBLIC_URL, 'content-type': 'application/x-www-form-urlencoded' },
+    payload: new URLSearchParams({ token: rawToken }).toString(),
   });
   const setCookie = response.headers['set-cookie'];
   return Array.isArray(setCookie) ? setCookie : [String(setCookie)];

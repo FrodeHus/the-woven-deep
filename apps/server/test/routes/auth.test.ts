@@ -160,36 +160,82 @@ describe('auth routes', () => {
     expect(response.statusCode).toBe(403);
   });
 
-  it('verify with a valid token sets a session cookie and redirects to ?auth=ok, and reuse redirects to ?auth=failed with no cookie', async () => {
+  function insertToken(email: string): string {
     const rawToken = generateToken();
     const tokens = new LoginTokenRepository(database);
     tokens.insert({
       tokenHash: hashToken(rawToken),
-      normalizedEmail: 'verify@example.com',
+      normalizedEmail: email,
       expiresAt: '2026-07-17T00:15:00.000Z',
       createdAt: '2026-07-17T00:00:00.000Z',
     });
+    return rawToken;
+  }
+
+  it('GET verify with a valid token serves the continue page WITHOUT consuming the token or setting a cookie', async () => {
+    const rawToken = insertToken('verify@example.com');
+
+    // A mail scanner prefetching the link must not burn the single-use token: repeated GETs all
+    // serve the interstitial, and the token stays usable for the real POST afterwards.
+    for (let i = 0; i < 2; i += 1) {
+      const scan = await app.inject({
+        method: 'GET',
+        url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}`,
+      });
+      expect(scan.statusCode).toBe(200);
+      expect(String(scan.headers['content-type'])).toContain('text/html');
+      expect(scan.headers['set-cookie']).toBeUndefined();
+      expect(scan.body).toContain('method="post"');
+      expect(scan.body).toContain(rawToken);
+    }
+
+    const complete = await app.inject({
+      method: 'POST',
+      url: '/api/auth/verify',
+      headers: { origin: PUBLIC_URL, 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ token: rawToken }).toString(),
+    });
+    expect(complete.statusCode).toBe(303);
+    expect(complete.headers.location).toBe(`${PUBLIC_URL}/?auth=ok`);
+    expect(String(complete.headers['set-cookie'])).toContain('wd_session=');
+  });
+
+  it('POST verify consumes the token: reuse redirects to ?auth=failed with no cookie', async () => {
+    const rawToken = insertToken('reuse@example.com');
 
     const first = await app.inject({
-      method: 'GET',
-      url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}`,
+      method: 'POST',
+      url: '/api/auth/verify',
+      headers: { origin: PUBLIC_URL, 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ token: rawToken }).toString(),
     });
     expect(first.statusCode).toBe(303);
     expect(first.headers.location).toBe(`${PUBLIC_URL}/?auth=ok`);
-    expect(first.headers['set-cookie']).toBeDefined();
-    expect(String(first.headers['set-cookie'])).toContain('wd_session=');
 
     const second = await app.inject({
-      method: 'GET',
-      url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}`,
+      method: 'POST',
+      url: '/api/auth/verify',
+      headers: { origin: PUBLIC_URL, 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ token: rawToken }).toString(),
     });
     expect(second.statusCode).toBe(303);
     expect(second.headers.location).toBe(`${PUBLIC_URL}/?auth=failed`);
     expect(second.headers['set-cookie']).toBeUndefined();
   });
 
-  it('verify with an unknown token redirects to ?auth=failed', async () => {
+  it('GET verify with an unknown token redirects straight to ?auth=failed', async () => {
     const response = await app.inject({ method: 'GET', url: '/api/auth/verify?token=garbage' });
+    expect(response.statusCode).toBe(303);
+    expect(response.headers.location).toBe(`${PUBLIC_URL}/?auth=failed`);
+  });
+
+  it('POST verify with an unknown token redirects to ?auth=failed', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/auth/verify',
+      headers: { origin: PUBLIC_URL, 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ token: 'garbage' }).toString(),
+    });
     expect(response.statusCode).toBe(303);
     expect(response.headers.location).toBe(`${PUBLIC_URL}/?auth=failed`);
   });
@@ -201,17 +247,12 @@ describe('auth routes', () => {
   });
 
   async function verifyAndGetCookies(email: string): Promise<string[]> {
-    const rawToken = generateToken();
-    const tokens = new LoginTokenRepository(database);
-    tokens.insert({
-      tokenHash: hashToken(rawToken),
-      normalizedEmail: email,
-      expiresAt: '2026-07-17T00:15:00.000Z',
-      createdAt: '2026-07-17T00:00:00.000Z',
-    });
+    const rawToken = insertToken(email);
     const response = await app.inject({
-      method: 'GET',
-      url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}`,
+      method: 'POST',
+      url: '/api/auth/verify',
+      headers: { origin: PUBLIC_URL, 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ token: rawToken }).toString(),
     });
     const setCookie = response.headers['set-cookie'];
     return Array.isArray(setCookie) ? setCookie : [String(setCookie)];
@@ -415,18 +456,13 @@ describe('auth routes', () => {
   });
 
   it('verify sets the session cookie with HttpOnly, SameSite=Lax, and (localhost) no Secure flag', async () => {
-    const rawToken = generateToken();
-    const tokens = new LoginTokenRepository(database);
-    tokens.insert({
-      tokenHash: hashToken(rawToken),
-      normalizedEmail: 'cookie-flags@example.com',
-      expiresAt: '2026-07-17T00:15:00.000Z',
-      createdAt: '2026-07-17T00:00:00.000Z',
-    });
+    const rawToken = insertToken('cookie-flags@example.com');
 
     const response = await app.inject({
-      method: 'GET',
-      url: `/api/auth/verify?token=${encodeURIComponent(rawToken)}`,
+      method: 'POST',
+      url: '/api/auth/verify',
+      headers: { origin: PUBLIC_URL, 'content-type': 'application/x-www-form-urlencoded' },
+      payload: new URLSearchParams({ token: rawToken }).toString(),
     });
     const setCookie = response.headers['set-cookie'];
     const cookies = Array.isArray(setCookie) ? setCookie : [String(setCookie)];

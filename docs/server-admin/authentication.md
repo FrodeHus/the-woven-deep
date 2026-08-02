@@ -48,10 +48,15 @@ secret store). Never bake real secrets into the image.
 3. If the email is allowed to sign in, the server mints a 256-bit single-use token, stores only its
    SHA-256 hash with a 15-minute expiry, and emails a link of the form
    `PUBLIC_URL/api/auth/verify?token=…`.
-4. The player opens the link. `GET /api/auth/verify` looks up the token by hash, and on success sets
-   the session cookie and redirects to `PUBLIC_URL/?auth=ok` (a failed or expired token redirects to
-   `?auth=failed`). The token is consumed — it cannot be reused.
-5. The now-authenticated client loads the profile and roams settings: the server copy wins when it
+4. The player opens the link. `GET /api/auth/verify` looks up the token by hash **without consuming
+   it** and serves a minimal "Continue sign-in" page — mail providers (Outlook SafeLinks, corporate
+   link scanners) prefetch every link in a message, and a consuming GET would burn the single-use
+   token before the player ever clicked. An unknown, expired, or already-consumed token redirects
+   straight to `PUBLIC_URL/?auth=failed` (the rejection reason is logged server-side).
+5. Pressing the button `POST`s the token back to `/api/auth/verify`, which consumes it, sets the
+   session cookie, and redirects to `PUBLIC_URL/?auth=ok` (a failed or reused token redirects to
+   `?auth=failed`). The token cannot be redeemed twice.
+6. The now-authenticated client loads the profile and roams settings: the server copy wins when it
    already holds settings; an empty profile is seeded from whatever the client currently has.
 
 ## Dev mode: the echo endpoint
@@ -74,13 +79,16 @@ unconfigured**, so it never exists in a correctly configured production deployme
   against a stored value), so guessing a valid token requires defeating SHA-256 pre-image resistance,
   not winning a timing race.
 - **Single-use, short-lived links.** Magic-link tokens expire after 15 minutes and are consumed on
-  first successful verification.
+  first successful redemption. Redemption requires the `POST` from the continue page — the emailed
+  `GET` never consumes, so mail-scanner prefetches cannot invalidate a link before the player uses
+  it.
 - **Session cookie flags.** The session cookie is `HttpOnly`, `SameSite=Lax`, signed with
   `COOKIE_SECRET`, and `Secure` whenever `PUBLIC_URL` uses `https`. Sessions are revocable and expire
   after 30 days of inactivity.
 - **Origin + CSRF.** `POST /api/auth/login` is checked against the `PUBLIC_URL` origin (it carries no
   CSRF token because it is pre-session and email-initiated). `GET /api/auth/verify` is the magic-link
-  target, where the single-use high-entropy token is itself the credential. Every other authenticated
+  target and `POST /api/auth/verify` (origin-checked) redeems it; in both, the single-use
+  high-entropy token is itself the credential. Every other authenticated
   state-changing request (sign-out, settings writes) requires both a valid session and a CSRF token.
 - **Rate limiting.** Login requests are throttled per normalized email and per source address using
   the two `LOGIN_RATE_LIMIT_*` values above.

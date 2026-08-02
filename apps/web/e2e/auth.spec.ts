@@ -41,9 +41,11 @@ test('sign in by magic link, roam a setting to a fresh device, and sign out', as
   const { link } = (await linkResponse.json()) as { link: string };
   expect(link).toContain('/api/auth/verify?token=');
 
-  // --- Follow the link: the server sets the session cookie and 303-redirects to `/?auth=ok`.
-  // Booting the app at /play then picks up the fresh session and the title shows the email. ---
+  // --- Follow the link: the GET serves the scanner-safe continue page; pressing the button POSTs
+  // the token, and the server sets the session cookie and 303-redirects to `/?auth=ok`. Booting
+  // the app at /play then picks up the fresh session and the title shows the email. ---
   await page.goto(link);
+  await page.getByRole('button', { name: 'Continue sign-in' }).click();
   await page.goto('/play');
   await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
 
