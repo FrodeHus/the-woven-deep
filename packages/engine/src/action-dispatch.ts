@@ -28,6 +28,7 @@ import {
   closeDoor,
   disarmTrap,
   featureTiles,
+  openClosedChest,
   openDoor,
   pickLock,
   searchFeatures,
@@ -48,6 +49,7 @@ import { resolveSwarmSpawnAction } from './swarm-behavior.js';
 import { relationshipBetween, resolveOpportunityAttacks, setRelationship } from './reactions.js';
 import { provokeMerchant } from './merchant-behavior.js';
 import { resolveOffer } from './haunt.js';
+import { compareCodeUnits } from './stable-json.js';
 import type { MerchantPopulation } from './merchant-model.js';
 import { combat, profile } from './combat-profile.js';
 import { entryById, requireItem } from './content-index.js';
@@ -257,6 +259,38 @@ const resolveBumpAttack: ActionResolver<Extract<GameAction, { type: 'bump-attack
   next = { ...next, actors: resolved.actors, rng: { ...next.rng, combat: resolved.combatState } };
   events.push(...resolved.events);
   return { state: next, chargeEnergy: true };
+};
+
+const resolveOpenChest: ActionResolver<Extract<GameAction, { type: 'open-chest' }>> = ({
+  state,
+  action,
+  actor,
+  content,
+  eventId,
+  events,
+}) => {
+  const transition = openClosedChest({
+    run: state,
+    content,
+    actorId: actor.actorId,
+    featureId: action.featureId,
+  });
+  if (!transition.ok)
+    throw new Error(`internal invariant: validated chest action failed with ${transition.reason}`);
+  // Emitted unconditionally, empty `itemIds` and all: the chest is now terminal either way, and a
+  // recorded applied command must carry an event the save codec can match it against. There is no
+  // new event type here on purpose -- the state change itself reaches the client through the
+  // features projection.
+  events.push({
+    type: 'loot.dropped',
+    eventId,
+    actorId: actor.actorId,
+    contentId: actor.contentId,
+    x: transition.chest.x,
+    y: transition.chest.y,
+    itemIds: transition.created.map((item) => item.itemId).sort(compareCodeUnits),
+  });
+  return { state: transition.run, chargeEnergy: true };
 };
 
 const resolveDoor: ActionResolver<Extract<GameAction, { type: 'open-door' | 'close-door' }>> = ({
@@ -1028,6 +1062,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       });
     return { state, chargeEnergy: true };
   },
+  'open-chest': resolveOpenChest,
   'bump-attack': resolveBumpAttack,
 };
 

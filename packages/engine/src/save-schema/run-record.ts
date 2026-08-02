@@ -1617,6 +1617,12 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                   // and the hero stays put.
                   recordValue.events.find(
                     (entry) => entry.type === 'door.opened' && entry.actorId === run.hero.actorId,
+                  ) ??
+                  // The same bump-to-open rule for a closed chest (`bumpedClosedChest`): the move
+                  // resolves as opening it, the hero stays put, and the chest's contents -- which
+                  // may legitimately be nothing -- are what the event carries.
+                  recordValue.events.find(
+                    (entry) => entry.type === 'loot.dropped' && entry.actorId === run.hero.actorId,
                   ))
                 : recordValue.command.type === 'attack'
                   ? recordValue.events.find(
@@ -1863,6 +1869,13 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       ) {
         // Bump-to-open: the hero opens the door instead of entering the cell, so there is no
         // destination to check -- the resulting door geometry lives on the feature.
+      } else if (
+        recordValue.command.type === 'move' &&
+        eventValue.type === 'loot.dropped' &&
+        eventValue.actorId === run.hero.actorId
+      ) {
+        // Bump-to-open a chest: same shape, and the loot's own cell is validated with every other
+        // floor item rather than here.
       } else if (
         recordValue.command.type === 'move' &&
         eventValue.type === 'reaction.triggered' &&
@@ -2116,6 +2129,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
               ) ??
               recordValue.events.find(
                 (entry) => entry.type === 'door.opened' && entry.actorId === run.hero.actorId,
+              ) ??
+              // Bump-to-open a chest: the hero stays put, same as the door bump above.
+              //
+              // ORDER IS LOAD-BEARING. `hero.moved` must stay first in this chain: a move that
+              // both walked the hero AND dropped loot (stepping onto a cell that spills something)
+              // has to be checked as a MOVE against the retained position chain below. Hoisting
+              // `loot.dropped` above it would select the drop instead, and the `continue` it takes
+              // in that chain would silently stop verifying where the hero ended up.
+              recordValue.events.find(
+                (entry) => entry.type === 'loot.dropped' && entry.actorId === run.hero.actorId,
               )!)
             : (recordValue.events.find(
                 (entry) =>
@@ -2344,8 +2367,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       eventValue.type === 'attack.hit' ||
       eventValue.type === 'attack.missed' ||
       eventValue.type === 'reaction.triggered' ||
-      // Bump-to-open leaves the hero where it stood, so the retained position chain is unchanged.
-      eventValue.type === 'door.opened'
+      // Bump-to-open leaves the hero where it stood, so the retained position chain is unchanged --
+      // for a chest (`loot.dropped`) exactly as for a door.
+      eventValue.type === 'door.opened' ||
+      eventValue.type === 'loot.dropped'
     )
       continue;
     if (eventValue.type !== 'hero.moved')
