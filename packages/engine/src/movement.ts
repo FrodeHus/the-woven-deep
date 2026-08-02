@@ -44,16 +44,26 @@ export function directionDelta(direction: Direction): Point {
   return DIRECTION_DELTAS[direction];
 }
 
-function blockReasonAt(
-  input: MovementActionInput,
-  point: Point,
+/**
+ * Why a single cell refuses an entrant, terrain and features together, or `undefined` when it is
+ * enterable. Exported so callers that must re-derive the corner rule outside a full movement
+ * resolution (the chest bump-to-open guard in `actions.ts`) read the same truth this module moves
+ * on, rather than a second copy that could drift from it.
+ */
+export function cellBlockReason(
+  input: Readonly<{
+    floor: MovementActionInput['floor'];
+    features: MovementActionInput['features'];
+    point: Point;
+  }>,
 ): MovementInvalidReason | undefined {
-  const index = tileIndex(input.floor, point.x, point.y);
+  const { floor, features, point } = input;
+  const index = tileIndex(floor, point.x, point.y);
   if (index === undefined) return 'blocked.bounds';
-  const feature = input.features.find(
+  const feature = features.find(
     (candidate) =>
       (candidate.type === 'door' || candidate.type === 'secret' || candidate.type === 'chest') &&
-      candidate.floorId === input.floor.floorId &&
+      candidate.floorId === floor.floorId &&
       candidate.x === point.x &&
       candidate.y === point.y,
   );
@@ -61,7 +71,14 @@ function blockReasonAt(
   if (feature?.type === 'door')
     return feature.state === 'locked' ? 'blocked.door-locked' : 'blocked.door';
   if (feature?.type === 'chest') return 'blocked.chest';
-  return movementBlockReason(input.floor.tiles[index]!);
+  return movementBlockReason(floor.tiles[index]!);
+}
+
+function blockReasonAt(
+  input: MovementActionInput,
+  point: Point,
+): MovementInvalidReason | undefined {
+  return cellBlockReason({ floor: input.floor, features: input.features, point });
 }
 
 function relationship(input: MovementActionInput, target: ActorState): ActorState['disposition'] {

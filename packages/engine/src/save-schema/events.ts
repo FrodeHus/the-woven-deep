@@ -151,6 +151,7 @@ export const actorTurnCompletedEvent = z.strictObject({
     'search',
     'disarm',
     'pick-lock',
+    'open-chest',
     'offer',
     'swarm-spawn',
   ]),

@@ -588,6 +588,42 @@ function materialiseChestLoot(
   };
 }
 
+export type ChestOpenTransition =
+  | Readonly<{ ok: true; run: ActiveRun; created: readonly ItemInstance[]; chest: ChestFeature }>
+  | Readonly<{ ok: false; reason: 'chest.missing' | 'chest.not-adjacent' | 'chest.unopenable' }>;
+
+/**
+ * Opens an UNLOCKED closed chest for an adjacent actor: the chest goes terminal (`looted`) and its
+ * contents materialise on its own tile, exactly as the pick-lock success arm does. A locked chest
+ * is refused here and keeps the lockpick path; a `looted`/`jammed` chest is already terminal.
+ *
+ * Pure: the caller's run is never mutated, so `validatePlayerAction` can call this speculatively to
+ * decide whether a bump converts into an open, discard the result, and let `action-dispatch.ts`
+ * re-derive the identical transition at commit time. The loot draw in the discarded call costs
+ * nothing precisely because the new run (and its advanced `loot` stream) is thrown away with it.
+ */
+export function openClosedChest(
+  input: Readonly<{
+    run: ActiveRun;
+    content: CompiledContentPack;
+    actorId: OpaqueId;
+    featureId: OpaqueId;
+  }>,
+): ChestOpenTransition {
+  const actor = actorById(input.run, input.actorId);
+  const feature = input.run.features.find((candidate) => candidate.featureId === input.featureId);
+  if (!actor || !feature || feature.type !== 'chest' || feature.floorId !== actor.floorId) {
+    return { ok: false, reason: 'chest.missing' };
+  }
+  if (Math.max(Math.abs(feature.x - actor.x), Math.abs(feature.y - actor.y)) !== 1) {
+    return { ok: false, reason: 'chest.not-adjacent' };
+  }
+  if (feature.state !== 'closed') return { ok: false, reason: 'chest.unopenable' };
+  const looted = materialiseChestLoot(input.run, input.content, feature);
+  const chest = openedChest(feature, 'looted');
+  return { ok: true, run: replaceFeature(looted.run, chest), created: looted.created, chest };
+}
+
 export function pickLock(
   input: Readonly<{
     run: ActiveRun;

@@ -159,6 +159,12 @@ export interface OfferAction {
   readonly itemId: OpaqueId;
   readonly cost: number;
 }
+export interface OpenChestAction {
+  readonly type: 'open-chest';
+  readonly actorId: OpaqueId;
+  readonly featureId: OpaqueId;
+  readonly cost: number;
+}
 export interface RestAction {
   readonly type: 'rest';
   readonly actorId: OpaqueId;
@@ -187,6 +193,7 @@ export type GameAction =
   | SearchAction
   | DisarmAction
   | PickLockAction
+  | OpenChestAction
   | OfferAction
   | RestAction
   | FinalChamberChoiceAction;

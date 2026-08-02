@@ -1,7 +1,7 @@
 import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
 import { heroActor } from './actor-model.js';
 import { entryById } from './content-index.js';
-import { directionDelta, movementAction } from './movement.js';
+import { cellBlockReason, directionDelta, movementAction } from './movement.js';
 import { actorHasConditionTrait } from './conditions.js';
 import { dropItem, pickupItem, splitStack } from './inventory.js';
 import { validateTarget } from './targeting.js';
@@ -11,13 +11,14 @@ import { spellPowerFor } from './spell-power.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
 import { artifactById } from './commerce.js';
-import { closeDoor, openDoor } from './features.js';
+import { closeDoor, openClosedChest, openDoor } from './features.js';
 import { isTownFloorActive } from './town-floor.js';
 import { fallenChampionTemplate, hauntNeed } from './haunt-need.js';
 import type { ActorState } from './actor-model.js';
 import type {
   ActiveRun,
   Direction,
+  Point,
   GameCommand,
   MovementInvalidReason,
   OpaqueId,
@@ -96,6 +97,63 @@ function bumpedClosedDoor(
   // movement rejection instead of producing an action the dispatcher cannot apply.
   return openDoor({ run: state, actorId: actor.actorId, featureId: door.featureId }).ok
     ? door.featureId
+    : undefined;
+}
+
+/**
+ * Bump-to-open for chests, the door rule's twin: a hero move into a cell holding a CLOSED,
+ * unlocked chest resolves as opening it rather than as a rejected move. Without this an unlocked
+ * chest is a permanent wall -- `openedChest` was reachable only through `pickLock`, which requires
+ * a lock and a lockpick, so its loot could never be reached at all.
+ *
+ * Locked chests keep `blocked.chest` and the pick-lock path, and only the hero reaches here:
+ * non-hero movement is re-validated by `movementAction` inside the dispatcher, which still blocks.
+ *
+ * `blocked.corner` is answered when the step is diagonal and BOTH flanking orthogonals are
+ * blocked. `movementAction` reports the target cell's own reason before it ever reaches the corner
+ * rule, so a diagonal bump arrives here as `blocked.chest`; re-deriving the rule is what keeps the
+ * hero from reaching through a gap it could not walk through, and names the real cause.
+ */
+function bumpedClosedChest(
+  state: ActiveRun,
+  actor: ActorState,
+  content: CompiledContentPack,
+  direction: Direction,
+  reason: MovementInvalidReason,
+): Readonly<{ kind: 'open'; featureId: OpaqueId }> | Readonly<{ kind: 'corner' }> | undefined {
+  if (reason !== 'blocked.chest') return undefined;
+  const delta = directionDelta(direction);
+  const target = { x: actor.x + delta.x, y: actor.y + delta.y };
+  const chest = state.features.find(
+    (candidate) =>
+      candidate.type === 'chest' &&
+      candidate.state === 'closed' &&
+      candidate.floorId === actor.floorId &&
+      candidate.x === target.x &&
+      candidate.y === target.y,
+  );
+  if (!chest) return undefined;
+  if (delta.x !== 0 && delta.y !== 0) {
+    const floor = state.floors.find((candidate) => candidate.floorId === actor.floorId);
+    if (!floor) return undefined;
+    const blocked = (point: Point): boolean =>
+      cellBlockReason({ floor, features: state.features, point }) !== undefined;
+    if (
+      blocked({ x: actor.x + delta.x, y: actor.y }) &&
+      blocked({ x: actor.x, y: actor.y + delta.y })
+    ) {
+      return { kind: 'corner' };
+    }
+  }
+  // Mirror the explicit transition's guard so a chest the dispatcher would refuse keeps the
+  // movement rejection instead of producing an action that cannot be applied.
+  return openClosedChest({
+    run: state,
+    content,
+    actorId: actor.actorId,
+    featureId: chest.featureId,
+  }).ok
+    ? { kind: 'open', featureId: chest.featureId }
     : undefined;
 }
 
@@ -306,11 +364,28 @@ export function validatePlayerAction(
     });
     if (movement.status === 'invalid') {
       const bumped = bumpedClosedDoor(input.state, actor, input.command.direction, movement.reason);
-      if (!bumped) return movement;
+      if (bumped) {
+        return {
+          type: 'open-door',
+          actorId: actor.actorId,
+          featureId: bumped,
+          cost: actionCostFor(rules, 'action.open-door'),
+        };
+      }
+      const chest = bumpedClosedChest(
+        input.state,
+        actor,
+        input.context.content,
+        input.command.direction,
+        movement.reason,
+      );
+      if (chest?.kind === 'corner') return { status: 'invalid', reason: 'blocked.corner' };
+      if (!chest) return movement;
       return {
-        type: 'open-door',
+        // An offering of a turn for what the chest holds: the same cost the door bump charges.
+        type: 'open-chest',
         actorId: actor.actorId,
-        featureId: bumped,
+        featureId: chest.featureId,
         cost: actionCostFor(rules, 'action.open-door'),
       };
     }
