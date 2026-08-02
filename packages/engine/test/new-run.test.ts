@@ -438,8 +438,17 @@ describe('createNewRun records input', () => {
     // `contentHash`, `items`, `populations`, and `rng['merchant-stock']` differ -- the `populations`
     // delta is exactly the armorer's new `services` entry, nothing else moved. Expected
     // content-authoring drift from adding a merchant service, not an engine regression.
+    // Re-pinned again for the scroll of tempering steel (content/items/tempering-steel-scroll.yaml,
+    // a new `known`-identification item so it never touches the identification-pool sweep, plus its
+    // low-weight `loot-table.floor-scatter-deep` / `loot-table.chest-deep` choices): this is the
+    // content-schema-v14 re-pin's "neither reachable from run creation" prediction above made real
+    // -- the scroll now exists, but `createNewRun` still never draws on the `enchanting` stream
+    // (only the enchant merchant service and a *read* of this scroll do, and neither runs during run
+    // creation). Verified by diffing the decoded run objects field-by-field against the prior pin:
+    // only `contentHash` differs, nothing else -- confirming that chain held. Expected
+    // content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '654cf31e575a750a3e43e6f642a87ca3946c1f6b3ddf7c3de0b3fc58ea6a6eea',
+      '6e216b592149873d726ee4e1a175dcd6be067c5eba91e4a76f1a975bbe727fc4',
     );
   });
 

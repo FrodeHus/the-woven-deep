@@ -1,0 +1,29 @@
+schemaVersion: 14
+entries:
+  - kind: item
+    id: item.tempering-steel-scroll
+    name: Scroll of Tempering Steel
+    glyph: "?"
+    color: "#c98f3f"
+    description: Brittle vellum inked with a sigil of grain and edge. Reading it aloud coaxes a fresh temper into whatever gear is closest at hand.
+    lore: "It does not ask what the steel wants. It just gives it something new to be."
+    tags: [magic, utility, scroll]
+    minDepth: 8
+    maxDepth: 20
+    category: scroll
+    stackLimit: 3
+    price: 40
+    rarity: rare
+    actionCost: 100
+    equipment: null
+    combat: { accuracy: 0, defense: 0, armor: 0, damage: null, range: 6, ammunitionTag: null }
+    light: null
+    artifact: null
+    identification: { mode: known, poolId: null }
+    effects:
+      - effectId: effect.item.enchant
+        parameters: {}
+        requiresLivingTarget: false
+      - effectId: effect.item.consume
+        parameters: { quantity: 1 }
+        requiresLivingTarget: false

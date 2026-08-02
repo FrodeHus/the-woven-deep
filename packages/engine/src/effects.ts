@@ -21,6 +21,7 @@ import type { ItemInstance } from './item-model.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { consumeItemQuantityFromItems } from './inventory.js';
 import { compareCodeUnits } from './stable-json.js';
+import { drawEnchantment, enchantable } from './enchanting.js';
 import type { SurvivalState } from './survival-model.js';
 import { restoreHunger } from './survival.js';
 import type { DungeonFeature } from './feature-model.js';
@@ -32,6 +33,7 @@ export interface EffectSequenceResult {
   readonly features: readonly DungeonFeature[];
   readonly floors: readonly FloorSnapshot[];
   readonly effectsState: Uint32State;
+  readonly enchantingState?: Uint32State;
   readonly events: readonly DomainEvent[];
 }
 
@@ -41,14 +43,21 @@ export function withRngStream(state: ActiveRun, name: RngStreamName, next: Uint3
 
 export function applyEffectResult(
   state: ActiveRun,
-  resolved: Pick<EffectSequenceResult, 'actors' | 'items' | 'survival' | 'effectsState'>,
+  resolved: Pick<
+    EffectSequenceResult,
+    'actors' | 'items' | 'survival' | 'effectsState' | 'enchantingState'
+  >,
 ): ActiveRun {
   return {
     ...state,
     actors: resolved.actors,
     items: resolved.items,
     survival: resolved.survival,
-    rng: { ...state.rng, effects: resolved.effectsState },
+    rng: {
+      ...state.rng,
+      effects: resolved.effectsState,
+      ...(resolved.enchantingState === undefined ? {} : { enchanting: resolved.enchantingState }),
+    },
   };
 }
 
@@ -79,6 +88,7 @@ export interface EffectSequenceInput {
   readonly sourceActorId: OpaqueId;
   readonly targetActorId: OpaqueId;
   readonly effectsState: Uint32State;
+  readonly enchantingState?: Uint32State;
   readonly worldTime: number;
   readonly eventId: OpaqueId;
   readonly forceMoveDirection: Point;
@@ -108,9 +118,31 @@ export const DIRECT_EFFECT_IDS: ReadonlySet<string> = new Set([
   'effect.item.consume',
   'effect.hunger.restore',
   'effect.curse.remove',
+  'effect.item.enchant',
 ]);
 
 const RUN_LEVEL_EFFECTS = new Set<EffectId>(['effect.spell.learn', 'effect.recall']);
+
+/** Equipped first, then backpack; within each, `compareCodeUnits(itemId)` order. The equipped-first
+ * rule matches the scroll's fiction (the steel you are holding) and is what the sundering scroll's
+ * own convention establishes for item-targeted effects: deterministic, never a command argument. */
+export function firstEnchantableItemId(
+  content: CompiledContentPack,
+  items: readonly ItemInstance[],
+  actorId: OpaqueId,
+): OpaqueId | undefined {
+  const owned = (type: 'equipped' | 'backpack') =>
+    items
+      .filter(
+        (item) =>
+          item.location.type === type &&
+          item.location.actorId === actorId &&
+          enchantable(content, item),
+      )
+      .map((item) => item.itemId)
+      .sort(compareCodeUnits);
+  return owned('equipped')[0] ?? owned('backpack')[0];
+}
 
 function checkedSafeInteger(label: string, value: number): number {
   if (!Number.isSafeInteger(value)) throw new RangeError(`${label} must be a safe integer`);
@@ -212,6 +244,7 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
   }
   let actors = [...input.actors];
   let state = input.effectsState;
+  let enchantingState = input.enchantingState;
   const events: DomainEvent[] = [];
   let items = [...(input.items ?? [])];
   let features = [...(input.features ?? [])];
@@ -389,6 +422,26 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
         });
       }
       continue;
+    } else if (effect.effectId === 'effect.item.enchant') {
+      if (!enchantingState) {
+        throw new TypeError('effect.item.enchant requires enchantingState');
+      }
+      const targetItemId = firstEnchantableItemId(input.content, items, input.targetActorId);
+      if (targetItemId) {
+        const enchantItem = items.find((candidate) => candidate.itemId === targetItemId)!;
+        const drawn = drawEnchantment({
+          content: input.content,
+          item: enchantItem,
+          state: enchantingState,
+        });
+        enchantingState = drawn.state;
+        items = items.map((candidate) =>
+          candidate.itemId === targetItemId
+            ? { ...candidate, enchantment: drawn.enchantment, identified: true }
+            : candidate,
+        );
+      }
+      continue;
     } else if (RUN_LEVEL_EFFECTS.has(effect.effectId)) {
       // Run-level effects (learn, recall) mutate ActiveRun, which resolveEffectSequence does not
       // own. The cast/use-item dispatch handlers apply them. No actor mutation, no RNG here.
@@ -412,7 +465,16 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
       events.push(...result.events);
     }
   }
-  return { actors, items, features, floors, survival, effectsState: state, events };
+  return {
+    actors,
+    items,
+    features,
+    floors,
+    survival,
+    effectsState: state,
+    ...(enchantingState === undefined ? {} : { enchantingState }),
+    events,
+  };
 }
 
 export interface EffectSweepInput extends Omit<EffectSequenceInput, 'targetActorId'> {

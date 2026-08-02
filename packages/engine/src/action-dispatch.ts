@@ -535,6 +535,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       sourceItemId: source.itemId,
       targetActorId: target.actorId,
       effectsState: state.rng.effects,
+      enchantingState: state.rng.enchanting,
       worldTime: state.worldTime,
       eventId,
       survival: state.survival,

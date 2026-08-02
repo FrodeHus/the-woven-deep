@@ -5,7 +5,7 @@ import { directionDelta, movementAction } from './movement.js';
 import { actorHasConditionTrait } from './conditions.js';
 import { dropItem, pickupItem, splitStack } from './inventory.js';
 import { validateTarget } from './targeting.js';
-import { resolveEffectSequence, resolveEffectSweep } from './effects.js';
+import { firstEnchantableItemId, resolveEffectSequence, resolveEffectSweep } from './effects.js';
 import { heroCasterAptitude, spellLearnTarget } from './caster.js';
 import { parseEffectParameters } from './parameter-contracts.js';
 import { equipItem, refuelItem, toggleItemLight, unequipItem } from './equipment.js';
@@ -716,6 +716,15 @@ export function validatePlayerAction(
     ) {
       return { status: 'invalid', reason: 'target.invalid' };
     }
+    // effect.item.enchant targets the actor's own first enchantable item (equipped before
+    // backpack, see effects.ts's firstEnchantableItemId) -- same non-fallthrough rejection shape
+    // as effect.curse.remove immediately above, so an ineligible hero never consumes the scroll.
+    if (
+      definition.effects.some((effect) => effect.effectId === 'effect.item.enchant') &&
+      firstEnchantableItemId(input.context.content, input.state.items, actor.actorId) === undefined
+    ) {
+      return { status: 'invalid', reason: 'target.invalid' };
+    }
     let targetActor = actor;
     if (command.target !== null) {
       const candidate = input.state.actors.find(
@@ -751,6 +760,7 @@ export function validatePlayerAction(
         sourceItemId: source.itemId,
         targetActorId: targetActor.actorId,
         effectsState: input.state.rng.effects,
+        enchantingState: input.state.rng.enchanting,
         survival: input.state.survival,
         survivalActorId: input.state.hero.actorId,
         worldTime: input.state.worldTime,
