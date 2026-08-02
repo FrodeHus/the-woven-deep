@@ -242,6 +242,36 @@ describe('auto-explore', () => {
     expect(moves(session)).toHaveLength(2);
   });
 
+  it('refuses to start in the dark outside town: no walk, "too dark" note', async () => {
+    const { walls, unknownCells } = eastCorridor();
+    const lit = projectionOf({ hero: { x: 20, y: 10 }, walls, unknownCells });
+    const dark = {
+      ...lit,
+      hero: { ...lit.hero, equipment: { mainHand: null, offHand: null } },
+    } as unknown as GameplayProjection;
+    const session = new FakeSession(dark);
+    await renderPlay(session);
+
+    fireEvent.keyDown(window, { key: 'o' });
+    expect(session.dispatched).toEqual([]);
+    expect(session.notes).toEqual(['It is too dark to explore.']);
+  });
+
+  it('still starts in the dark inside town (town is always navigable)', async () => {
+    const { walls, unknownCells } = eastCorridor();
+    const lit = projectionOf({ hero: { x: 20, y: 10 }, walls, unknownCells });
+    const dark = {
+      ...lit,
+      floor: { ...lit.floor, town: true },
+      hero: { ...lit.hero, equipment: { mainHand: null, offHand: null } },
+    } as unknown as GameplayProjection;
+    const session = new FakeSession(dark);
+    await renderPlay(session);
+
+    fireEvent.keyDown(window, { key: 'o' });
+    expect(moves(session)).toEqual([{ type: 'move', direction: 'east' }]);
+  });
+
   it('reports a fully explored floor and dispatches nothing', async () => {
     const session = new FakeSession(projectionOf({ hero: { x: 20, y: 10 } }));
     await renderPlay(session);
