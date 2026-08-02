@@ -57,11 +57,9 @@ export function createLoginService(
 
       const link = `${config.publicUrl}/api/auth/verify?token=${encodeURIComponent(token)}`;
 
-      try {
-        await transport.sendLoginLink({ email: input.email, link });
-      } catch {
-        // A transport failure must not change the uniform response.
-      }
+      // A transport failure propagates: the route keeps the uniform response but logs it,
+      // so a misconfigured mail provider is visible in server logs instead of silent.
+      await transport.sendLoginLink({ email: input.email, link });
     },
   };
 }
