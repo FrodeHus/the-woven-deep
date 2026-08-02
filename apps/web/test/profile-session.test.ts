@@ -179,6 +179,101 @@ describe('ProfileSession', () => {
     );
   });
 
+  describe('in-flight gating (held-key navigation)', () => {
+    it('queues an intent dispatched while another awaits its reply, sending it with the fresh revision', async () => {
+      const { socket, connectPromise } = harness();
+      const run = freshRun();
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await connectPromise;
+
+      session.dispatch({ type: 'move', direction: 'east' });
+      // A held key repeats before the reply arrives. Sending it now would carry a stale
+      // expectedRevision and be rejected -- the very spam that made signed-in navigation crawl.
+      session.dispatch({ type: 'move', direction: 'east' });
+      expect(socket().sentMessages).toHaveLength(1);
+
+      const advanced: ActiveRun = { ...run, revision: run.revision + 1 };
+      socket().emit({ type: 'state', snapshot: snapshotOf(advanced) });
+
+      expect(socket().sentMessages).toHaveLength(2);
+      expect(socket().sentMessages.at(-1)).toMatchObject({
+        type: 'command',
+        expectedRevision: advanced.revision,
+        intent: { type: 'move', direction: 'east' },
+      });
+    });
+
+    it('keeps only the newest queued intent (latest-wins) so a released key never rubber-bands', async () => {
+      const { socket, connectPromise } = harness();
+      const run = freshRun();
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await connectPromise;
+
+      session.dispatch({ type: 'move', direction: 'east' });
+      session.dispatch({ type: 'move', direction: 'east' });
+      session.dispatch({ type: 'move', direction: 'south' });
+      expect(socket().sentMessages).toHaveLength(1);
+
+      const advanced: ActiveRun = { ...run, revision: run.revision + 1 };
+      socket().emit({ type: 'state', snapshot: snapshotOf(advanced) });
+
+      // Only the latest repeat went out; the backlog never replays.
+      expect(socket().sentMessages).toHaveLength(2);
+      expect(socket().sentMessages.at(-1)).toMatchObject({
+        intent: { type: 'move', direction: 'south' },
+      });
+      const settled: ActiveRun = { ...run, revision: run.revision + 2 };
+      socket().emit({ type: 'state', snapshot: snapshotOf(settled) });
+      expect(socket().sentMessages).toHaveLength(2);
+    });
+
+    it('a rejected reply also releases the queue', async () => {
+      const { socket, connectPromise } = harness();
+      const run = freshRun();
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await connectPromise;
+
+      session.dispatch({ type: 'pick-lock' });
+      session.dispatch({ type: 'move', direction: 'north' });
+      expect(socket().sentMessages).toHaveLength(1);
+
+      socket().emit({ type: 'rejected', reason: 'no lock here', snapshot: snapshotOf(run) });
+
+      expect(socket().sentMessages).toHaveLength(2);
+      expect(socket().sentMessages.at(-1)).toMatchObject({
+        intent: { type: 'move', direction: 'north' },
+      });
+    });
+
+    it('a decision-required reply drops the queued intent instead of firing it into the modal', async () => {
+      const { socket, connectPromise } = harness();
+      const run = freshRun();
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await connectPromise;
+
+      session.dispatch({ type: 'move', direction: 'north' });
+      session.dispatch({ type: 'move', direction: 'north' });
+      const decision: PublicDecision = {
+        kind: 'confirm-aggression',
+        targetActorId: 'actor.some-monster',
+      } as unknown as PublicDecision;
+      socket().emit({
+        type: 'decision-required',
+        decision,
+        snapshot: snapshotOf(run, { pendingDecision: decision }),
+      });
+
+      expect(socket().sentMessages).toHaveLength(1);
+      // The queue is also idle again: the next explicit dispatch goes straight out.
+      session.answerDecision(true);
+      expect(socket().sentMessages).toHaveLength(2);
+    });
+  });
+
   it('surfaces a rejected command as a log line without a pending decision', async () => {
     const { socket, connectPromise } = harness();
     const run = freshRun();

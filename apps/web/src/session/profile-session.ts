@@ -167,6 +167,10 @@ export class ProfileSession implements RunSession {
    * flips true once and never back to false, so it can't be read as a rising edge on its own; see
    * `setHouseOpen`'s doc comment for the full houseOpen design). Cleared on every reply. */
   private lastDispatchedIntentType: string | null = null;
+  /** Whether a `command` message is awaiting its server reply -- see `dispatch`'s doc comment. */
+  private commandInFlight = false;
+  /** The newest intent dispatched while a command was in flight (latest-wins, size 1). */
+  private queuedIntent: PlayerIntent | null = null;
   /** Set while a `rise-again` is in flight, so the state push that answers it can be read as
    * success or refusal: the server replies with the ordinary snapshot either way, and a snapshot
    * that is STILL concluded means it found no usable checkpoint. Without this the profile's
@@ -262,8 +266,25 @@ export class ProfileSession implements RunSession {
     this.ws.send(message);
   }
 
+  /**
+   * Sends at most ONE command at a time. An intent dispatched while another still awaits its
+   * server reply is queued (latest-wins, size 1) and sent with the FRESH revision when the reply
+   * lands. Without this, a held movement key repeats faster than the round trip, every repeat
+   * carries a stale `expectedRevision`, and the server rejects them all -- navigation crawls at
+   * one step per round trip while the log floods with "That action is out of date." Latest-wins
+   * (rather than a FIFO) means releasing the key never replays a backlog of queued steps.
+   */
   dispatch(intent: PlayerIntent): void {
     this.notice = null;
+    if (this.commandInFlight) {
+      this.queuedIntent = intent;
+      return;
+    }
+    this.sendIntent(intent);
+  }
+
+  private sendIntent(intent: PlayerIntent): void {
+    this.commandInFlight = true;
     this.lastDispatchedIntentType = intent.type;
     this.send({
       type: 'command',
@@ -271,6 +292,17 @@ export class ProfileSession implements RunSession {
       expectedRevision: this.serverSnapshot.revision,
       intent,
     });
+  }
+
+  /** Every server reply settles the in-flight command; a queued intent (if the reply did not open
+   * a decision modal) goes out immediately against the fresh revision. */
+  private settleInFlight(options: Readonly<{ dropQueued?: boolean }> = {}): void {
+    this.commandInFlight = false;
+    const queued = this.queuedIntent;
+    this.queuedIntent = null;
+    if (queued !== null && options.dropQueued !== true) {
+      this.sendIntent(queued);
+    }
   }
 
   answerDecision(confirmed: boolean): void {
@@ -426,9 +458,12 @@ export class ProfileSession implements RunSession {
         return;
       case 'state':
         this.applyServerState(message.snapshot, { foldEvents: true });
+        this.settleInFlight();
         return;
       case 'decision-required':
         this.applyServerState(message.snapshot, { foldEvents: false });
+        // Never fire a queued held-key repeat into the modal the server just opened.
+        this.settleInFlight({ dropQueued: true });
         return;
       case 'rejected':
         this.serverSnapshot = message.snapshot;
@@ -439,15 +474,20 @@ export class ProfileSession implements RunSession {
         this.syncSightings(true);
         this.snapshot = this.buildSnapshot();
         this.notify();
+        this.settleInFlight();
         return;
       case 'error':
         this.notice = { kind: 'protocol-error', code: message.code, message: message.message };
+        this.commandInFlight = false;
+        this.queuedIntent = null;
         this.ws.close();
         this.snapshot = this.buildSnapshot();
         this.notify();
         return;
       case 'superseded':
         this.notice = { kind: 'superseded' };
+        this.commandInFlight = false;
+        this.queuedIntent = null;
         this.ws.close();
         this.snapshot = this.buildSnapshot();
         this.notify();
