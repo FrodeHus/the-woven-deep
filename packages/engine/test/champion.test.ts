@@ -99,6 +99,8 @@ const spell: SpellContentEntry = {
   actionCost: 100,
   effects: [],
 };
+/** A second spell, so a multi-ability standing can be exercised. */
+const galeSpell: SpellContentEntry = { ...spell, id: 'spell.gale', name: 'Gale' };
 const echoLoot: LootTableContentEntry = {
   kind: 'loot-table',
   id: 'loot-table.echo',
@@ -188,6 +190,7 @@ function pack(): CompiledContentPack {
       item('item.fallback'),
       item('item.echo-loot', { heirloomEligible: false, rarity: 'common', equipment: null }),
       spell,
+      galeSpell,
       echoLoot,
       template,
     ],
@@ -1907,5 +1910,99 @@ describe('haunt drops never mint a second copy of an artifact', () => {
       ...bothHauntsKilled(true).rng,
       loot: null,
     });
+  });
+});
+
+describe('recorded signature abilities reach the placed haunt', () => {
+  function casterStanding(abilityIds: readonly string[]): FallenHeroStandingSnapshot {
+    return standing(1, { signatureAbilityIds: abilityIds });
+  }
+
+  it('gives a placed champion its recorded abilities', () => {
+    const run = withArena(initialized([casterStanding(['spell.ember'])]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    expect(population.abilityIds).toEqual(['spell.ember']);
+  });
+
+  it('drops an ability the current pack no longer defines', () => {
+    const run = withArena(initialized([casterStanding(['spell.deleted', 'spell.ember'])]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    expect(population.abilityIds).toEqual(['spell.ember']);
+  });
+
+  it('places a champion with no recorded abilities, casting nothing', () => {
+    // A pre-curve record (or a hero who never learned a spell) carries an empty list. The champion
+    // still appears -- it simply has nothing to cast.
+    const run = withArena(initialized([casterStanding([])]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    expect(population.abilityIds).toEqual([]);
+  });
+
+  it('skips the echo whose champion selection cannot be made strictly weaker', () => {
+    // `normalizeFallenHero` throws a RangeError when an echo's champion has no abilities to weaken
+    // from, and `placeFallenHeroEncounters` catches exactly that and omits the placement. This is
+    // pre-existing behavior that the recording half must not disturb: a haunt of a spell-less hero
+    // has no echo at all.
+    const standings = [standing(1), standing(2, { signatureAbilityIds: [] })];
+    const selected = initialized(standings);
+    const forced = {
+      ...selected,
+      fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) =>
+        decision.rank === 2 ? { ...decision, retained: true, gateRoll: 1 } : decision,
+      ),
+    };
+    const run = withArena(forced, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    expect(placed.populations.some((candidate) => candidate.model === 'echo')).toBe(false);
+  });
+
+  it('places an echo whose champion has abilities to weaken from', () => {
+    const standings = [standing(1), standing(2, { signatureAbilityIds: ['spell.ember'] })];
+    const selected = initialized(standings);
+    const forced = {
+      ...selected,
+      fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) =>
+        decision.rank === 2 ? { ...decision, retained: true, gateRoll: 1 } : decision,
+      ),
+    };
+    const run = withArena(forced, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const echo = placed.populations.find((candidate) => candidate.model === 'echo');
+    expect(echo).toBeDefined();
+    // Strictly weaker than its champion: one signature spell yields an echo that casts none.
+    expect(echo!.abilityIds).toEqual([]);
+  });
+});
+
+describe('a multi-ability haunt stays savable', () => {
+  it('rejects a standing whose abilities are not in canonical id order', () => {
+    // `save-schema/run-record.ts` validates BOTH `standing.signatureAbilityIds` and a placed
+    // population's `abilityIds` as unique and strictly increasing. A selection recorded in
+    // weave-cost order would therefore make the whole run unsavable the moment such a standing is
+    // loaded -- which is why the recorded list is stored sorted by id, exactly like
+    // `equippedItemContentIds` beside it.
+    const run = initialized([standing(1, { signatureAbilityIds: ['spell.gale', 'spell.ember'] })]);
+    expect(() => encodeActiveRun(run)).toThrow(/signature ability/i);
+  });
+
+  it('encodes a placed champion carrying two abilities in canonical order', () => {
+    const ordered = ['spell.ember', 'spell.gale'];
+    const run = withArena(initialized([standing(1, { signatureAbilityIds: ordered })]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    expect(population.abilityIds).toEqual(ordered);
+    const withHaunt = {
+      ...run,
+      actors: [...run.actors, ...placed.actors].sort((left, right) =>
+        left.actorId.localeCompare(right.actorId),
+      ),
+      populations: placed.populations,
+      fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor],
+    };
+    expect(decodeActiveRun(encodeActiveRun(withHaunt))).toEqual(withHaunt);
   });
 });

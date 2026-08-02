@@ -7,6 +7,7 @@ import type {
   EncounterContentEntry,
   FallenChampionTemplateContentEntry,
   ItemContentEntry,
+  SpellContentEntry,
 } from '@woven-deep/content';
 import {
   createDemoContentPack,
@@ -20,7 +21,9 @@ import {
   rollDie,
   scoreRun,
   selectHeirloom,
+  compareCodeUnits,
   selectRecordHeirloom,
+  standingsFromRecords,
   type ActiveRun,
   type EncounterRunDecision,
   type FallenHeroRunDecision,
@@ -806,5 +809,157 @@ describe('finalizeRun', () => {
     expect(finalized.deltas.discoveryProtectionUpdates.map((update) => update.encounterId)).toEqual(
       ['encounter.a-shrine', 'encounter.b-warden'],
     );
+  });
+});
+
+describe('signature abilities recorded on the build snapshot', () => {
+  function spellDef(id: string, weaveCost: number): SpellContentEntry {
+    return {
+      kind: 'spell',
+      id,
+      name: `Name of ${id}`,
+      description: '',
+      tags: [],
+      targetingId: 'target.actor',
+      range: 5,
+      actionCost: 100,
+      weaveCost,
+      effects: [],
+    };
+  }
+
+  const spells: readonly SpellContentEntry[] = [
+    spellDef('spell.gale', 5),
+    spellDef('spell.ember', 4),
+    spellDef('spell.mend', 2),
+    spellDef('spell.spark', 1),
+    spellDef('spell.a-tie', 3),
+    spellDef('spell.b-tie', 3),
+  ];
+
+  /** The shared pack plus the spell set, with the template's ability limit made explicit. */
+  function casterPack(abilityLimit: number): CompiledContentPack {
+    const base = pack(spells);
+    return {
+      ...base,
+      entries: base.entries.map((entry) =>
+        entry.kind === 'fallen-champion-template' ? { ...entry, abilityLimit } : entry,
+      ),
+    };
+  }
+
+  function concludedHeroKnowing(knownSpellIds: readonly string[]): ActiveRun {
+    const base = concludedRun();
+    return { ...base, hero: { ...base.hero, knownSpellIds } };
+  }
+
+  it('records the hero known spells as signature abilities', () => {
+    const { record } = finalizeRun({
+      run: concludedHeroKnowing(['spell.ember', 'spell.mend']),
+      content: casterPack(3),
+      lifetime: emptyLifetime(),
+    });
+    expect(record.build.signatureAbilityIds).toEqual(['spell.ember', 'spell.mend']);
+  });
+
+  it('caps the recorded abilities at the template limit, keeping the highest weave costs', () => {
+    const { record } = finalizeRun({
+      run: concludedHeroKnowing(['spell.spark', 'spell.mend', 'spell.ember', 'spell.gale']),
+      content: casterPack(3),
+      lifetime: emptyLifetime(),
+    });
+    // Selection is by cost (spark, the cheapest, is the one dropped); STORAGE is canonical id
+    // order, which the save schema requires of this list -- see the ordering test below.
+    expect(record.build.signatureAbilityIds).toEqual(['spell.ember', 'spell.gale', 'spell.mend']);
+  });
+
+  it('records the selection in canonical id order, which the save schema requires', () => {
+    // `save-schema/run-record.ts` validates `standing.signatureAbilityIds` (and a placed
+    // population's `abilityIds`) as unique and strictly increasing. A list recorded in weave-cost
+    // order would make every run carrying that standing unsavable.
+    const { record } = finalizeRun({
+      run: concludedHeroKnowing(['spell.gale', 'spell.ember', 'spell.mend']),
+      content: casterPack(3),
+      lifetime: emptyLifetime(),
+    });
+    const ids = [...record.build.signatureAbilityIds];
+    expect(ids).toEqual([...ids].sort(compareCodeUnits));
+    expect(ids).toEqual(['spell.ember', 'spell.gale', 'spell.mend']);
+  });
+
+  it('honors a smaller template limit', () => {
+    const { record } = finalizeRun({
+      run: concludedHeroKnowing(['spell.spark', 'spell.mend', 'spell.ember', 'spell.gale']),
+      content: casterPack(1),
+      lifetime: emptyLifetime(),
+    });
+    expect(record.build.signatureAbilityIds).toEqual(['spell.gale']);
+  });
+
+  it('breaks weave-cost ties deterministically by spell id', () => {
+    const { record } = finalizeRun({
+      run: concludedHeroKnowing(['spell.b-tie', 'spell.a-tie']),
+      content: casterPack(3),
+      lifetime: emptyLifetime(),
+    });
+    expect(record.build.signatureAbilityIds).toEqual(['spell.a-tie', 'spell.b-tie']);
+  });
+
+  it('records nothing for a hero who knew no spells', () => {
+    const { record } = finalizeRun({
+      run: concludedHeroKnowing([]),
+      content: casterPack(3),
+      lifetime: emptyLifetime(),
+    });
+    expect(record.build.signatureAbilityIds).toEqual([]);
+  });
+
+  it('records nothing for a hero with no knownSpellIds key at all', () => {
+    const { record } = finalizeRun({
+      run: concludedRun(),
+      content: casterPack(3),
+      lifetime: emptyLifetime(),
+    });
+    expect(record.build.signatureAbilityIds).toEqual([]);
+  });
+
+  it('drops a spell the current pack no longer defines', () => {
+    const { record } = finalizeRun({
+      run: concludedHeroKnowing(['spell.ember', 'spell.deleted']),
+      content: casterPack(3),
+      lifetime: emptyLifetime(),
+    });
+    expect(record.build.signatureAbilityIds).toEqual(['spell.ember']);
+  });
+
+  it('consumes no additional randomness', () => {
+    // The selection is a pure sort over content the run already carries -- a caster's finalization
+    // must leave every stream exactly where a non-caster's does.
+    const content = casterPack(3);
+    const caster = finalizeRun({
+      run: concludedHeroKnowing(['spell.ember', 'spell.mend', 'spell.gale']),
+      content,
+      lifetime: emptyLifetime(),
+    });
+    const silent = finalizeRun({
+      run: concludedHeroKnowing([]),
+      content,
+      lifetime: emptyLifetime(),
+    });
+    expect(caster.run.rng).toEqual(silent.run.rng);
+    expect(caster.record.build.signatureAbilityIds).not.toEqual([]);
+  });
+
+  it('round-trips the abilities through a standing', () => {
+    const { record } = finalizeRun({
+      run: concludedHeroKnowing(['spell.ember']),
+      content: casterPack(3),
+      lifetime: emptyLifetime(),
+    });
+    const standings = standingsFromRecords(
+      [{ ...record, enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' } }],
+      10,
+    );
+    expect(standings[0]!.signatureAbilityIds).toEqual(['spell.ember']);
   });
 });
