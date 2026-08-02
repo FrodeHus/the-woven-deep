@@ -194,6 +194,7 @@ async function renderPlay(session: FakeSession): Promise<void> {
     ),
   );
   await screen.findByRole('img', { name: /dungeon/i });
+  await fake.ready();
 }
 
 function moves(session: FakeSession): readonly PlayerIntent[] {

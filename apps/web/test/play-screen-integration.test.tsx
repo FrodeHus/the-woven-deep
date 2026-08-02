@@ -310,6 +310,7 @@ describe('PlayScreen threat hover scroll-dismiss', () => {
       ),
     );
     await screen.findByRole('img', { name: /dungeon/i });
+    await fake.ready();
 
     act(() => fake.latest().hover({ x: hero.x + 1, y: hero.y }, 30, 30));
     await waitFor(() => expect(screen.getByRole('tooltip')).toHaveTextContent('Cave rat'));
@@ -352,6 +353,7 @@ describe('PlayScreen hover cursor', () => {
       ),
     );
     await screen.findByRole('img', { name: /dungeon/i });
+    await fake.ready();
 
     act(() => fake.latest().hover({ x: navigable!.x, y: navigable!.y }, 10, 10));
     await waitFor(() =>

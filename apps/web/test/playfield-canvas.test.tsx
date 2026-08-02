@@ -35,6 +35,7 @@ describe('PlayfieldCanvas', () => {
 
     const host = await screen.findByRole('img');
     expect(host).toBeInTheDocument();
+    await fake.ready();
     expect(fake.instances).toHaveLength(1);
     await waitFor(() => expect(fake.latest().snapshots).toContain(snapshot));
   });
@@ -54,6 +55,7 @@ describe('PlayfieldCanvas', () => {
       />,
     );
     await screen.findByRole('img');
+    await fake.ready();
 
     act(() => fake.latest().click({ x: 3, y: 4 }, 'primary'));
     expect(onCellClick).toHaveBeenCalledWith({ x: 3, y: 4 }, 'primary');
