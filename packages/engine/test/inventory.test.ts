@@ -876,6 +876,18 @@ describe('createRecordedHeirloom artifact recovery', () => {
     expect(resolved).toBe('item.champion-fallback-relic');
   });
 
+  it('degrades to the fallback relic when the recorded enchantment no longer exists in the pack', () => {
+    const resolved = recordedHeirloomContentId({
+      content: artifactPack(),
+      snapshot: snapshot({
+        enchantment: { enchantmentId: 'enchantment.deleted', modifiers: { defense: 1 } },
+      }),
+      equippedItemContentIds: ['item.marias-grace'],
+      fallbackItemId: 'item.champion-fallback-relic',
+    });
+    expect(resolved).toBe('item.champion-fallback-relic');
+  });
+
   it('drops the curse when the snapshot degrades to the fallback relic', () => {
     const created = createRecordedHeirloom({
       content: artifactPack(),

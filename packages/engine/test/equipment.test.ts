@@ -163,7 +163,7 @@ describe('equipment planning and item lights', () => {
         slot: 'off-hand',
       }),
       identified: false,
-      enchantment: { enchantmentId: 'enchantment.guard', modifiers: { defense: 1 } },
+      enchantment: { enchantmentId: 'enchantment.warded-plate', modifiers: { defense: 1 } },
     };
     const hero = {
       ...base.actors[0]!,
