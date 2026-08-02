@@ -5,6 +5,7 @@ import { applyCurseRolls } from './curse-generation.js';
 import { DEPTH_BANDS, depthBandFor } from './depth-band.js';
 import type { DepthBand } from './depth-band.js';
 import type { ChestFeature, DoorFeature, DungeonFeature } from './feature-model.js';
+import { featureBlocksMovement } from './features.js';
 import { createFloorLootFromTable, projectLootGraph } from './inventory.js';
 import type { ItemInstance } from './item-model.js';
 import {
@@ -294,12 +295,28 @@ export function placeFloorLoot(
   // blocks until the hero reaches it, which is impossible from the far side. Doors keep the looser
   // protected-route rule: a door is meant to be opened and walked through. Articulation cells are
   // culled from the pool BEFORE the draw rather than rejected after it, so the roll count stays a
-  // pure function of the floor.
-  const sealingIndexes = articulationIndexes(floor);
+  // pure function of the floor and of the features committed before it.
+  //
+  // The analysis overlays every blocking feature already committed to the run and every chest this
+  // very loop has placed as walls: a cell that is no cut of the BARE tile graph can still jointly
+  // seal a two-wide passage with an earlier blocker (#194), so each placement must respect the
+  // graph its predecessors actually left behind.
+  const committedBlocking = new Set<number>();
+  for (const feature of run.features) {
+    if (feature.floorId !== floor.floorId || !featureBlocksMovement(feature)) continue;
+    const index = tileIndex(floor, feature.x, feature.y);
+    if (index !== undefined) committedBlocking.add(index);
+  }
   const chestCount = rollRange(cursor, knobs.chestCount.minimum, knobs.chestCount.maximum);
   cursor = chestCount.state;
+  const placedChestIndexes = new Set<number>();
   for (let chest = 0; chest < chestCount.value; chest += 1) {
-    const open = remaining.filter((cell) => !sealingIndexes.has(cell.y * floor.width + cell.x));
+    const blocked = new Set<number>([...committedBlocking, ...placedChestIndexes]);
+    const sealingIndexes = articulationIndexes(floor, blocked);
+    const open = remaining.filter((cell) => {
+      const index = cell.y * floor.width + cell.x;
+      return !sealingIndexes.has(index) && !blocked.has(index);
+    });
     const preferred = open.filter((cell) => wallAdjacent(floor, cell));
     const draw = drawCell(
       preferred.length > 0 ? preferred : open,
@@ -312,6 +329,7 @@ export function placeFloorLoot(
     cursor = draw.state;
     const index = draw.cell.y * floor.width + draw.cell.x;
     placedIndexes.add(index);
+    placedChestIndexes.add(index);
     const lockRoll = rollDie(cursor, PERCENT_SIDES);
     cursor = lockRoll.state;
     const locked = lockRoll.value <= knobs.lockedChestPercent;

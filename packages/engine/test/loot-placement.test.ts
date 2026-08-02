@@ -183,6 +183,56 @@ function ledgeFloor(): FloorSnapshot {
   });
 }
 
+/**
+ * A floor whose chambers meet through a TWO-wide corridor (rows y=6 and y=7): neither corridor
+ * cell is an articulation point of the bare tile graph (each has the other row as a bypass), so
+ * the single-cell cull alone lets a chest land there. With the y=6 row already committed as
+ * blocking features, any chest the pass drops on y=7 jointly seals the corridor -- the #194
+ * residual. Both stairs sit in the left chamber, keeping the corridor off the protected route.
+ */
+function twoWideCorridorFloor(): FloorSnapshot {
+  const tiles: TileId[] = Array.from({ length: WIDTH * HEIGHT }, () => 0 as TileId);
+  const open = (x: number, y: number): void => {
+    tiles[y * WIDTH + x] = 1 as TileId;
+  };
+  for (let y = 1; y <= 13; y += 1) for (let x = 1; x <= 4; x += 1) open(x, y);
+  for (let x = 5; x <= 20; x += 1) {
+    open(x, 6);
+    open(x, 7);
+  }
+  for (let y = 2; y <= 12; y += 1) for (let x = 21; x <= 29; x += 1) open(x, y);
+  tiles[2 * WIDTH + 2] = 4 as TileId;
+  tiles[12 * WIDTH + 2] = 5 as TileId;
+  return floor({
+    tiles,
+    stairUp: { x: 2, y: 2 },
+    stairDown: { x: 2, y: 12 },
+    vaults: [],
+  });
+}
+
+/** Locked chests committed to the run along the corridor's y=6 row -- the "already-placed blocking
+ * features" of #194 that the placement cull must overlay as walls. */
+function corridorBlockingChests(target: FloorSnapshot): readonly ChestFeature[] {
+  const chests: ChestFeature[] = [];
+  for (let x = 5; x <= 20; x += 1) {
+    chests.push({
+      featureId: `feature.committed.chest-${x}`,
+      floorId: target.floorId,
+      x,
+      y: 6,
+      contentId: null,
+      coverTileId: target.tiles[6 * WIDTH + x]!,
+      type: 'chest',
+      lootTableId: 'loot-table.chest-shallow',
+      lootContentId: null,
+      state: 'locked',
+      lock: { difficulty: 3, keyContentId: null },
+    });
+  }
+  return chests;
+}
+
 /** A wider seed set than `SEEDS`: the ledge only draws a chest on some seeds, so the sweep needs
  * enough draws for the unguarded pass to actually land on one. */
 const LEDGE_SEEDS: readonly Uint32State[] = Array.from(
@@ -326,6 +376,39 @@ describe('placeFloorLoot', () => {
         });
         expect({ chest, connected: analysis.connected }).toEqual({ chest, connected: true });
       }
+    }
+    expect(chests).toBeGreaterThan(0);
+  });
+
+  it('protects the movement-graph stair route: diagonal length, not the four-way staircase', () => {
+    // floor() is one open room: stairs (2,2) -> (28,12) are 26 apart in x, 10 in y. The hero walks
+    // diagonals (with the corner rule), so the shortest walkable route is 26 steps = 27 cells; the
+    // old four-way route was 36 steps = 37 cells of a shape the hero never walks.
+    expect(protectedRouteIndexes(floor({ vaults: [] })).size).toBe(27);
+  });
+
+  it('never jointly seals a two-wide corridor with a chest beside committed blocking features', () => {
+    const corridor = twoWideCorridorFloor();
+    const committed = corridorBlockingChests(corridor);
+    const seeded: ActiveRun = { ...run(), features: [...run().features, ...committed] };
+    let chests = 0;
+    for (const seed of LEDGE_SEEDS) {
+      const placed = placeFloorLoot({ run: seeded, floor: corridor, content: content() }, seed)
+        .features.filter((feature): feature is ChestFeature => feature.type === 'chest')
+        .map((chest) => ({ x: chest.x, y: chest.y }));
+      chests += placed.length;
+      // Overlay every blocking cell -- the committed y=6 row and every chest this pass placed --
+      // as walls: what remains must still be one connected component, or the placements jointly
+      // sealed a route no single cell of which was an articulation point.
+      const sealed = [...corridor.tiles];
+      for (const chest of committed) sealed[chest.y * corridor.width + chest.x] = 0 as TileId;
+      for (const chest of placed) sealed[chest.y * corridor.width + chest.x] = 0 as TileId;
+      const analysis = analyzeConnectivity({
+        width: corridor.width,
+        height: corridor.height,
+        tiles: sealed,
+      });
+      expect({ placed, connected: analysis.connected }).toEqual({ placed, connected: true });
     }
     expect(chests).toBeGreaterThan(0);
   });
