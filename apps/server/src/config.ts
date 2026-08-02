@@ -11,7 +11,12 @@ export interface AuthConfig {
   readonly publicUrl: string;
   readonly cookieSecret: string;
   readonly cookieSecure: boolean;
-  readonly mailgun: Readonly<{ apiKey: string; domain: string; sender: string }> | null;
+  readonly mailgun: Readonly<{
+    apiKey: string;
+    domain: string;
+    sender: string;
+    apiBase: string;
+  }> | null;
   readonly loginRateLimit: Readonly<{ perEmailPerHour: number; perSourcePerHour: number }>;
 }
 
@@ -104,10 +109,20 @@ function resolvePublicUrl(env: NodeJS.ProcessEnv): {
  * a production-shaped `PUBLIC_URL` requires all three so a live deployment never silently falls
  * back to the dev-echo mail transport.
  */
+const MAILGUN_API_BASES: Readonly<Record<string, string>> = {
+  us: 'https://api.mailgun.net',
+  eu: 'https://api.eu.mailgun.net',
+};
+
 function resolveMailgunConfig(
   env: NodeJS.ProcessEnv,
   isProductionShaped: boolean,
 ): AuthConfig['mailgun'] {
+  const mailgunRegion = readNonEmpty(env.MAILGUN_REGION) ?? 'us';
+  const mailgunApiBase = MAILGUN_API_BASES[mailgunRegion];
+  if (mailgunApiBase === undefined) {
+    throw new Error('MAILGUN_REGION must be "us" or "eu" when set');
+  }
   const mailgunApiKey = readNonEmpty(env.MAILGUN_API_KEY);
   const mailgunDomain = readNonEmpty(env.MAILGUN_DOMAIN);
   const mailgunSender = readNonEmpty(env.MAILGUN_SENDER);
@@ -130,6 +145,7 @@ function resolveMailgunConfig(
         apiKey: mailgunApiKey as string,
         domain: mailgunDomain as string,
         sender: mailgunSender as string,
+        apiBase: mailgunApiBase,
       }
     : null;
 }

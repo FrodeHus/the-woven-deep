@@ -67,6 +67,7 @@ describe('createMailTransport mailgun transport', () => {
       apiKey: 'key-123',
       domain: 'mail.example.com',
       sender: 'Woven Deep <noreply@mail.example.com>',
+      apiBase: 'https://api.mailgun.net',
     },
   });
 
@@ -100,6 +101,29 @@ describe('createMailTransport mailgun transport', () => {
     expect(body.get('to')).toBe('player@example.com');
     expect(body.get('subject')).toBeTruthy();
     expect(body.get('text')).toContain('http://localhost:3000/verify?token=abc');
+  });
+
+  it('posts to the EU endpoint when the config carries the EU API base', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 } as Response);
+    const transport = createMailTransport(
+      authConfig({
+        mailgun: {
+          apiKey: 'key-123',
+          domain: 'mail.example.com',
+          sender: 'Woven Deep <noreply@mail.example.com>',
+          apiBase: 'https://api.eu.mailgun.net',
+        },
+      }),
+      fetchImpl as unknown as typeof fetch,
+    );
+
+    await transport.sendLoginLink({
+      email: 'player@example.com',
+      link: 'http://localhost:3000/verify?token=abc',
+    });
+
+    const [url] = fetchImpl.mock.calls[0] as [string];
+    expect(url).toBe('https://api.eu.mailgun.net/v3/mail.example.com/messages');
   });
 
   it('throws on a non-2xx response', async () => {

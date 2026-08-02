@@ -119,6 +119,7 @@ describe('readConfig auth', () => {
       apiKey: fullMailgun.MAILGUN_API_KEY,
       domain: fullMailgun.MAILGUN_DOMAIN,
       sender: fullMailgun.MAILGUN_SENDER,
+      apiBase: 'https://api.mailgun.net',
     });
   });
 
@@ -148,6 +149,32 @@ describe('readConfig auth', () => {
     ).toThrow(/MAILGUN/);
   });
 
+  it('selects the EU API base when MAILGUN_REGION=eu', () => {
+    const config = readConfig({
+      PUBLIC_URL: 'https://example.com',
+      COOKIE_SECRET: 'a'.repeat(32),
+      ...fullMailgun,
+      MAILGUN_REGION: 'eu',
+    });
+
+    expect(config.auth.mailgun?.apiBase).toBe('https://api.eu.mailgun.net');
+  });
+
+  it('accepts an explicit MAILGUN_REGION=us', () => {
+    const config = readConfig({
+      PUBLIC_URL: 'https://example.com',
+      COOKIE_SECRET: 'a'.repeat(32),
+      ...fullMailgun,
+      MAILGUN_REGION: 'us',
+    });
+
+    expect(config.auth.mailgun?.apiBase).toBe('https://api.mailgun.net');
+  });
+
+  it('throws on an unknown MAILGUN_REGION even without mailgun credentials', () => {
+    expect(() => readConfig({ MAILGUN_REGION: 'emea' })).toThrow(/MAILGUN_REGION/);
+  });
+
   it('populates mailgun when all three fields are present', () => {
     const config = readConfig({
       PUBLIC_URL: 'https://example.com',
@@ -161,6 +188,7 @@ describe('readConfig auth', () => {
       apiKey: 'key-123',
       domain: 'mail.example.com',
       sender: 'noreply@example.com',
+      apiBase: 'https://api.mailgun.net',
     });
   });
 
@@ -197,6 +225,7 @@ describe('readConfig auth', () => {
       apiKey: fullMailgun.MAILGUN_API_KEY,
       domain: fullMailgun.MAILGUN_DOMAIN,
       sender: fullMailgun.MAILGUN_SENDER,
+      apiBase: 'https://api.mailgun.net',
     });
   });
 
