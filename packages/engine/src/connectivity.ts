@@ -196,8 +196,7 @@ export function articulationIndexes(
     throw new RangeError('articulation dimensions and dense tile count must agree');
   }
   const traversable = (index: number): boolean =>
-    tileDefinition(tiles[index]!).potentiallyTraversable &&
-    !(blockedIndexes?.has(index) ?? false);
+    tileDefinition(tiles[index]!).potentiallyTraversable && !(blockedIndexes?.has(index) ?? false);
   const discovered = new Int32Array(tiles.length).fill(-1);
   const low = new Int32Array(tiles.length).fill(-1);
   const result = new Set<number>();
