@@ -2032,6 +2032,67 @@ describe('active-run save codec', () => {
     expect(decodeActiveRun(encoded)).toEqual(withHistory);
   });
 
+  it('round-trips a recorded temper command', () => {
+    const state = createDemoRun();
+    const command = {
+      type: 'temper' as const,
+      commandId: 'command.temper-000001',
+      expectedRevision: 0,
+      attribute: 'vitality' as const,
+    };
+    const result = {
+      status: 'invalid' as const,
+      commandId: command.commandId,
+      revision: 0,
+      turn: 0,
+      reason: 'temper.unavailable' as const,
+    };
+    const invalidEvent = {
+      type: 'action.invalid' as const,
+      eventId: command.commandId,
+      commandId: command.commandId,
+      reason: result.reason,
+    };
+    const withHistory = {
+      ...state,
+      recentCommands: [{ command, result, events: [invalidEvent], publicEvents: [] }],
+    };
+    const encoded = encodeActiveRun(withHistory);
+    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
+    expect(decodeActiveRun(encoded)).toEqual(withHistory);
+  });
+
+  it.each(['temper.unavailable', 'temper.capped'] as const)(
+    'rejects a %s reason attached to a non-temper command',
+    (reason) => {
+      const state = createDemoRun();
+      const command = {
+        type: 'wait' as const,
+        commandId: 'command.wait-temper',
+        expectedRevision: 0,
+      };
+      const result = {
+        status: 'invalid' as const,
+        commandId: command.commandId,
+        revision: 0,
+        turn: 0,
+        reason,
+      };
+      const invalidEvent = {
+        type: 'action.invalid' as const,
+        eventId: command.commandId,
+        commandId: command.commandId,
+        reason,
+      };
+      expect(() =>
+        encodeActiveRun({
+          ...state,
+          recentCommands: [{ command, result, events: [invalidEvent], publicEvents: [] }],
+        }),
+      ).toThrow(/temper/i);
+    },
+  );
+
   it('rejects an offer.refused reason attached to a non-offer command', () => {
     const state = createDemoRun();
     const command = { type: 'wait' as const, commandId: 'command.wait-offer', expectedRevision: 0 };

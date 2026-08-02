@@ -5,6 +5,7 @@ import {
   type IdentificationPoolContentEntry,
   type ItemContentEntry,
 } from '@woven-deep/content';
+import type { AttributeName } from './actor-model.js';
 import type { ActiveRun } from './model.js';
 import { unidentifiedPresentation } from './identification.js';
 import { hungerStage } from './survival.js';
@@ -698,6 +699,27 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     ) {
       throw new Error(
         `content-bound validation: reputation for ${reputation.factionId} is outside authored bounds`,
+      );
+    }
+  }
+  // The content-bound half of the derived-base invariant the save tier started: the chargen base is
+  // `attributes - tempering.spent`, and the CAP on both ends is authored, so only this tier can
+  // police it. Without the upper bound a forged save could temper past `attributeMaximum`; without
+  // the lower one a forged `spent` could claim points the hero never had.
+  const heroAttributes = run.actors.find((actor) => actor.actorId === run.hero.actorId)?.attributes;
+  if (!heroAttributes) {
+    throw new Error('content-bound validation: hero actor does not exist');
+  }
+  for (const [attribute, value] of Object.entries(heroAttributes) as [AttributeName, number][]) {
+    if (value > balance.attributeMaximum) {
+      throw new Error(
+        `content-bound validation: hero attribute ${attribute} exceeds maximum ${balance.attributeMaximum}`,
+      );
+    }
+    const base = value - run.hero.tempering.spent[attribute];
+    if (base < balance.attributeMinimum) {
+      throw new Error(
+        `content-bound validation: hero attribute ${attribute} spends below minimum ${balance.attributeMinimum}`,
       );
     }
   }

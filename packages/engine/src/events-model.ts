@@ -1,6 +1,6 @@
 import type { OpaqueId, Direction, Point } from './model.js';
 import type { InvalidActionReason } from './commands-model.js';
-import type { EquipmentSlot } from './actor-model.js';
+import type { AttributeName, EquipmentSlot } from './actor-model.js';
 import type {
   CompletionType,
   DamageType,
@@ -227,6 +227,15 @@ export interface HeroTemperingBankedEvent {
   readonly eventId: OpaqueId;
   readonly depth: number;
   readonly banked: number;
+}
+/** One banked point spent on an attribute. The hero's own choice, so it is hero-visible in full:
+ * `value` is the attribute's new value and `remaining` the points still banked after the spend. */
+export interface HeroTemperedEvent {
+  readonly type: 'hero.tempered';
+  readonly eventId: OpaqueId;
+  readonly attribute: AttributeName;
+  readonly value: number;
+  readonly remaining: number;
 }
 export interface HeroRecalledEvent {
   readonly type: 'hero.recalled';
@@ -862,6 +871,7 @@ export type DomainEvent =
   | ItemUsedEvent
   | SpellLearnedEvent
   | HeroTemperingBankedEvent
+  | HeroTemperedEvent
   | HeroRecalledEvent
   | FloorEnteredEvent
   | SpellCastEvent

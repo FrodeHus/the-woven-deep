@@ -312,6 +312,7 @@ export function projectDomainEvents(
         break;
       case 'spell.learned':
       case 'hero.tempering-banked':
+      case 'hero.tempered':
       case 'hero.recalled':
       case 'spell.cast':
         output.push(event);

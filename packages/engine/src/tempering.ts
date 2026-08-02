@@ -1,7 +1,10 @@
 import type { CompiledContentPack } from '@woven-deep/content';
+import { heroActor, withActor, type AttributeName } from './actor-model.js';
 import { balanceEntry } from './balance.js';
+import { synchronizeDerivedMaxima } from './derived-maxima.js';
 import type { DomainEvent } from './events-model.js';
-import type { ActiveRun, HeroTemperingState, OpaqueId } from './model.js';
+import type { ActiveRun, HeroTemperingState, InvalidActionReason, OpaqueId } from './model.js';
+import { deriveRunActorStats } from './stats.js';
 
 /**
  * Milestone tempering: the hero earns one point the first time the run reaches each authored
@@ -58,5 +61,110 @@ export function grantTemperingMilestones(
       depth,
       banked: input.state.hero.tempering.banked + index + 1,
     })),
+  };
+}
+
+/**
+ * `value * newMax / oldMax`, floored, with a living floor of `floor`. Quotient division on safe
+ * integers -- never a float that survives the expression.
+ */
+function rescale(value: number, oldMax: number, newMax: number, floor: number): number {
+  if (![value, oldMax, newMax].every(Number.isSafeInteger)) {
+    throw new RangeError('rescale operands must be safe integers');
+  }
+  if (oldMax <= 0) return Math.min(Math.max(floor, value), newMax);
+  const numerator = value * newMax;
+  if (!Number.isSafeInteger(numerator)) throw new RangeError('rescale overflowed');
+  return Math.min(newMax, Math.max(floor, Math.trunc(numerator / oldMax)));
+}
+
+export type TemperValidation =
+  Readonly<{ ok: true }> | Readonly<{ ok: false; reason: InvalidActionReason }>;
+
+/**
+ * Whether one banked point may be spent on `attribute` right now. Two ways to say no, and the
+ * second is not an error state: with every attribute at the authored `attributeMaximum`, every
+ * choice answers `temper.capped` and the points simply bank forever. Nothing is refunded or lost.
+ */
+export function validateTemperCommand(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    attribute: AttributeName;
+  }>,
+): TemperValidation {
+  if (input.state.hero.tempering.banked <= 0) {
+    return { ok: false, reason: 'temper.unavailable' };
+  }
+  const maximum = balanceEntry(input.content).attributeMaximum;
+  if (heroActor(input.state).attributes[input.attribute] >= maximum) {
+    return { ok: false, reason: 'temper.capped' };
+  }
+  return { ok: true };
+}
+
+/**
+ * Spends one banked point on `attribute`: +1 to the attribute, the stored maxima recomputed from
+ * the formulas, and current health/weave rescaled proportionally in checked-integer quotient math
+ * so a tempered hero is never healed or hurt by the change alone. Pure and randomness-free.
+ *
+ * The spend is a TRANSFER: `banked` falls by one exactly as `spent[attribute]` rises by one, so
+ * `banked + sum(spent)` -- the total the run has ever earned -- is invariant. Nothing here refunds,
+ * resets, or mints a point, which is what lets `grantTemperingMilestones` keep deciding what is
+ * owed by subtraction against that total.
+ */
+export function resolveTemper(
+  input: Readonly<{
+    state: ActiveRun;
+    content: CompiledContentPack;
+    attribute: AttributeName;
+    eventId: OpaqueId;
+  }>,
+): Readonly<{ state: ActiveRun; events: readonly DomainEvent[] }> {
+  const { attribute } = input;
+  const hero = heroActor(input.state);
+  const tempering = input.state.hero.tempering;
+  const value = hero.attributes[attribute] + 1;
+  const banked = tempering.banked - 1;
+  const spent = tempering.spent[attribute] + 1;
+  if (!Number.isSafeInteger(value) || !Number.isSafeInteger(spent) || banked < 0) {
+    throw new RangeError('tempering spend must stay within safe integers');
+  }
+
+  const raised: ActiveRun = withActor(
+    {
+      ...input.state,
+      hero: {
+        ...input.state.hero,
+        tempering: { banked, spent: { ...tempering.spent, [attribute]: spent } },
+      },
+    },
+    { ...hero, attributes: { ...hero.attributes, [attribute]: value } },
+  );
+
+  // Derived from the raised attributes, not from the stored cache: the point of the spend is that
+  // the formulas now say something different.
+  const derived = deriveRunActorStats({
+    state: raised,
+    content: input.content,
+    actor: heroActor(raised),
+  });
+  const maxHealth = Math.max(1, derived.maxHealth);
+  const maxWeave = Math.max(0, derived.maxWeave);
+  // A rising maximum must neither heal nor hurt: a full hero stays full, a half-dead one stays
+  // half-dead, and the living floor of 1 keeps a barely-standing hero standing. Weave floors at 0 --
+  // there is no "minimum living weave".
+  const health = hero.health === 0 ? 0 : rescale(hero.health, hero.maxHealth, maxHealth, 1);
+  const weave = rescale(hero.weave, hero.maxWeave, maxWeave, 0);
+
+  const state = synchronizeDerivedMaxima(
+    withActor(raised, { ...heroActor(raised), maxHealth, maxWeave, health, weave }),
+    input.content,
+  );
+  return {
+    state,
+    events: [
+      { type: 'hero.tempered', eventId: input.eventId, attribute, value, remaining: banked },
+    ],
   };
 }

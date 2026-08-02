@@ -27,6 +27,7 @@ import {
   validateDialogueCommand,
 } from './dialogue.js';
 import { isHouseCommand, resolveHouseCommand, validateHouseCommand } from './house.js';
+import { resolveTemper, validateTemperCommand } from './tempering.js';
 import { advanceMerchantLifecycle } from './merchant-lifecycle.js';
 import { projectDomainEvents } from './event-projection.js';
 import { foldRunMetrics } from './run-metrics.js';
@@ -341,6 +342,55 @@ export function resolveCommand(
             heroId: resolved.state.hero.actorId,
             events: resolved.events,
           })),
+    ];
+    return {
+      state: record(resolved.state, context.content, command, result, events, publicEvents),
+      result,
+      events: publicEvents,
+    };
+  }
+
+  if (command.type === 'temper') {
+    const attribute = command.attribute;
+    const validation = validateTemperCommand({
+      state: current,
+      content: context.content,
+      attribute,
+    });
+    if (!validation.ok) {
+      return recordInvalid(
+        current,
+        context.content,
+        command,
+        validation.reason,
+        preEvents,
+        prePublicEvents,
+      );
+    }
+    assertCountersCanAdvance(current, false);
+    // Revision only: tempering is a reflection, not an action. No turn, no world time, no energy,
+    // no survival tick, and no randomness -- exactly the trade/dialogue/house posture.
+    const result = {
+      status: 'applied',
+      commandId: command.commandId,
+      revision: current.revision + 1,
+      turn: current.turn,
+    } as const;
+    const resolved = resolveTemper({
+      state: current,
+      content: context.content,
+      attribute,
+      eventId: command.commandId,
+    });
+    const events = [...preEvents, ...resolved.events];
+    const publicEvents = [
+      ...prePublicEvents,
+      ...projectDomainEvents({
+        state: resolved.state,
+        content: context.content,
+        heroId: resolved.state.hero.actorId,
+        events: resolved.events,
+      }),
     ];
     return {
       state: record(resolved.state, context.content, command, result, events, publicEvents),

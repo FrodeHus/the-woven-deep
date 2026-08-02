@@ -72,6 +72,11 @@ export const commandBaseOptions = [
   }),
   z.strictObject({
     ...commandBase,
+    type: z.literal('temper'),
+    attribute: z.enum(['might', 'agility', 'vitality', 'wits', 'resolve']),
+  }),
+  z.strictObject({
+    ...commandBase,
     type: z.literal('split-stack'),
     itemId: identifier,
     quantity: positiveQuantity,

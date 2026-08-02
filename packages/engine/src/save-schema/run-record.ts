@@ -1573,6 +1573,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     const commandItemId = 'itemId' in recordValue.command ? recordValue.command.itemId : undefined;
     const commandTargetActorId =
       recordValue.command.type === 'offer' ? recordValue.command.targetActorId : undefined;
+    const commandAttribute =
+      recordValue.command.type === 'temper' ? recordValue.command.attribute : undefined;
     const splitNewItemId =
       recordValue.command.type === 'split-stack' ? recordValue.command.newItemId : undefined;
     const commandQuantity =
@@ -1807,7 +1809,16 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                                                                         entry.offeredItemId ===
                                                                           commandItemId,
                                                                     )
-                                                                  : undefined;
+                                                                  : recordValue.command.type ===
+                                                                      'temper'
+                                                                    ? recordValue.events.find(
+                                                                        (entry) =>
+                                                                          entry.type ===
+                                                                            'hero.tempered' &&
+                                                                          entry.attribute ===
+                                                                            commandAttribute,
+                                                                      )
+                                                                    : undefined;
       if (!eventValue) fail(`${path}.events`, 'processed result has no matching event');
       if (recordValue.result.status === 'invalid') {
         if (
@@ -1967,6 +1978,12 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         eventValue.featureId === recordValue.command.featureId
       ) {
         // Feature state, any dropped loot, and the effects random stream store the outcome.
+      } else if (
+        recordValue.command.type === 'temper' &&
+        eventValue.type === 'hero.tempered' &&
+        eventValue.attribute === recordValue.command.attribute
+      ) {
+        // The hero's attributes and `hero.tempering` carry the outcome; the event only narrates it.
       } else if (
         recordValue.command.type === 'offer' &&
         eventValue.type === 'haunt.appeased' &&
@@ -2189,6 +2206,10 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
         const castReason = recordValue.result.reason.startsWith('cast.');
         const learnReason = recordValue.result.reason.startsWith('learn.');
         const offerReason = recordValue.result.reason === 'offer.refused';
+        const temperCommand = recordValue.command.type === 'temper';
+        const temperReason =
+          recordValue.result.reason === 'temper.unavailable' ||
+          recordValue.result.reason === 'temper.capped';
         const dialogueCommand = recordValue.command.type === 'dialogue-consequence';
         const dialogueReason = recordValue.result.reason.startsWith('dialogue.');
         if (dialogueReason && !dialogueCommand) {
@@ -2230,6 +2251,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           fail(`${path}.result.reason`, 'learn reason requires a use-item command');
         if (offerReason && !offerCommand)
           fail(`${path}.result.reason`, 'offer reason requires an offer command');
+        if (temperReason && !temperCommand)
+          fail(`${path}.result.reason`, 'temper reason requires a temper command');
         if (
           !inventoryReason &&
           !targetReason &&
@@ -2242,6 +2265,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
           !learnReason &&
           !dialogueReason &&
           !offerReason &&
+          !temperReason &&
           recordValue.result.reason !== 'action.unavailable' &&
           recordValue.result.reason !== 'run.concluded'
         ) {
@@ -2309,6 +2333,8 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
       recordValue.command.type === 'dialogue-consequence' ||
       // An offering is made from where the hero stands: the retained position chain is unchanged.
       recordValue.command.type === 'offer' ||
+      // Tempering never moves the hero either.
+      recordValue.command.type === 'temper' ||
       tradeCommand
     )
       continue;
