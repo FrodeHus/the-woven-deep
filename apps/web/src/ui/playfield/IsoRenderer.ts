@@ -17,7 +17,7 @@ import { equippedLightSource } from '../light-sources.js';
 import { featuresOf, heroOf, type FeatureView } from '../../session/projection-view.js';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { AtlasRect, PlayfieldAtlas, SpriteAtlas } from './atlas.js';
-import { withImpliedDoorFrames } from './door-frames.js';
+import { doorWallAxis, withImpliedDoorFrames } from './door-frames.js';
 import { bakeFloor, bakeKey, occludedWallIndices, planFloorBake } from './floor-bake.js';
 import { TILE_HALF_H, TILE_HALF_W, worldToScreen, cellAtScreen, type IsoView } from './iso-math.js';
 import { groundItemHoverOffset, resolveActorRect, resolveItemSprite } from './sprite-mapping.js';
@@ -785,13 +785,42 @@ export class IsoRenderer {
     const dh = dw * (rect.h / rect.w);
     const [lx, ly] = this.isoLocal(feature.x, feature.y);
     // Foot-anchored like the baked wall cubes: the crop's bottom edge rests on the cell's
-    // floor-diamond bottom corner so the standing feature rises above its floor.
+    // floor-diamond bottom corner so the standing feature rises above its floor. Centered
+    // horizontally (anchor 0.5) rather than positioned by a manually-offset top-left corner, so a
+    // mirrored door leaf (below) flips in place around that same center instead of sliding off its
+    // tile -- exactly the same anchor convention `buildActorBody`'s facing-mirror already uses.
     const bottomY = ly + TILE_HALF_H * BAKE_SCALE;
+    sprite.anchor.set(0.5, 1);
     sprite.width = dw;
     sprite.height = dh;
-    sprite.position.set(lx - dw / 2, bottomY - dh);
+    if (feature.type === 'door' && this.mirrorDoorLeaf(feature.x, feature.y)) {
+      sprite.scale.x = -sprite.scale.x;
+    }
+    sprite.position.set(lx, bottomY);
     sprite.tint = this.featureTintAt(feature.x, feature.y);
     return sprite;
+  }
+
+  /**
+   * Whether a door's leaf (and, for a locked door, the gate texture that stands in for it -- same
+   * sprite, same code path above) should mirror horizontally. The atlas ships exactly one door
+   * texture (`atlas.ts`'s `door: AtlasRect`), drawn facing one way; without this every door
+   * rendered identically regardless of which way its wall runs, which reads as rotated wrong for
+   * half of them (playtest report).
+   *
+   * `doorWallAxis` reuses `door-frames.ts`'s own passage-vs-wall vote (the wall a door sits in
+   * always has passage on one axis and masonry on the other) rather than restating it. Convention:
+   * a door on a `'horizontal'` wall (the wall runs along the grid x-axis, the screen NW/SE
+   * diagonal per `worldToScreen`'s `sx = (dx - dy) * ...` -- +x alone moves screen SE) mirrors; a
+   * `'vertical'`-wall door (grid y-axis, screen NE/SW -- the sprite's authored, unmirrored facing)
+   * or an ambiguous/undiscovered door (`null`) keeps today's default. One sign flip
+   * (`=== 'horizontal'` to `=== 'vertical'`) reverses the convention if a playtest says it's
+   * backwards.
+   */
+  private mirrorDoorLeaf(x: number, y: number): boolean {
+    const cellAt = (cx: number, cy: number): ObservableCell | undefined =>
+      this.cellByKey.get(`${cx},${cy}`);
+    return doorWallAxis(cellAt, x, y) === 'horizontal';
   }
 
   /** A shadow-ellipse + colored glyph for a feature with no mapped sprite, in the same visual style
