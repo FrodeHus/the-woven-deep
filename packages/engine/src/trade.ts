@@ -765,6 +765,7 @@ export function resolveTradeCommand(
     }
     if (command.serviceId === 'merchant-service.remove-curse') {
       const targetItemId = command.targetItemId!;
+      const target = charged.items.find((candidate) => candidate.itemId === targetItemId)!;
       const nextState: ActiveRun = {
         ...charged,
         items: charged.items.map((item) => {
@@ -787,6 +788,14 @@ export function resolveTradeCommand(
             price: plan.plan.price,
             currency: plan.plan.currency,
             remainingUses,
+          },
+          // The scroll path already announces the lift; without this the merchant path renders no
+          // log line at all (trade.service-purchased has none).
+          {
+            type: 'curse.removed',
+            eventId: command.commandId,
+            itemId: targetItemId,
+            curseId: target.curse!.curseId,
           },
         ],
       };
