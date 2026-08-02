@@ -1,3 +1,4 @@
+import { waitFor } from '@testing-library/react';
 import type { SessionSnapshot } from '../src/session/guest-session.js';
 import type { CreateRenderer, MountedRenderer } from '../src/ui/playfield/PlayfieldCanvas.js';
 import type {
@@ -29,6 +30,13 @@ export interface FakePlayfieldRenderer {
   readonly instances: RecordingRenderer[];
   /** The most recently created instance (the live one after a StrictMode remount). */
   latest(): RecordingRenderer;
+  /**
+   * Resolves with `latest()` once at least one renderer instance exists. Setup helpers must await
+   * this rather than relying on the host `role="img"` appearing: the host renders as soon as the
+   * atlas loads, but the renderer is only created in a later effect, so a bare `findByRole('img')`
+   * can win that race under load ("fake renderer was never created").
+   */
+  ready(): Promise<RecordingRenderer>;
 }
 
 /**
@@ -73,13 +81,21 @@ export function fakePlayfieldRenderer(): FakePlayfieldRenderer {
     return instance;
   };
 
+  const latest = (): RecordingRenderer => {
+    const last = instances.at(-1);
+    if (last === undefined) throw new Error('fake renderer was never created');
+    return last;
+  };
+
   return {
     createRenderer,
     instances,
-    latest: () => {
-      const last = instances.at(-1);
-      if (last === undefined) throw new Error('fake renderer was never created');
-      return last;
+    latest,
+    ready: async () => {
+      await waitFor(() => {
+        if (instances.length === 0) throw new Error('fake renderer not created yet');
+      });
+      return latest();
     },
   };
 }

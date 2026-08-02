@@ -182,6 +182,7 @@ async function renderPlay(session: FakeSession): Promise<FakePlayfieldRenderer> 
   );
   // The renderer mounts once the atlas resolves; its callbacks are how a click reaches PlayScreen.
   await screen.findByRole('img', { name: /dungeon/i });
+  await fake.ready();
   return fake;
 }
 

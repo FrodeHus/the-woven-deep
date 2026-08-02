@@ -115,6 +115,7 @@ async function renderPlay(session: FakeSession): Promise<void> {
     ),
   );
   await screen.findByRole('img', { name: /dungeon/i });
+  await fake.ready();
 }
 
 describe('belt keybind', () => {

@@ -164,6 +164,7 @@ async function renderPlay(session: FakeSession): Promise<FakePlayfieldRenderer> 
     ),
   );
   await screen.findByRole('img', { name: /dungeon/i });
+  await fake.ready();
   return fake;
 }
 
