@@ -263,7 +263,9 @@ function cursedItem(
     charges: null,
     fuel: null,
     enabled: null,
-    location: equipped ? { type: 'equipped', actorId, slot: 'main-hand' } : { type: 'backpack', actorId },
+    location: equipped
+      ? { type: 'equipped', actorId, slot: 'main-hand' }
+      : { type: 'backpack', actorId },
     curse: { curseId: 'curse.test', revealed },
   };
 }
