@@ -80,7 +80,7 @@ content/
 Every file is one strict document:
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: monster
     id: monster.example
@@ -93,9 +93,9 @@ Unknown fields are errors, including plausible misspellings.
 
 | Field | Type | Required/default | Rules and meaning |
 |---|---|---|---|
-| `schemaVersion` | integer | Required | Must be exactly `13`. |
+| `schemaVersion` | integer | Required | Must be exactly `14`. |
 | `entries` | array | Required, at least one | May contain any supported content kind. |
-| `kind` | enum | Required | One of `monster`, `npc`, `npc-faction`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, `fallen-champion-template`, `achievement`, `class`, `background`, `trait`, or `curse`. |
+| `kind` | enum | Required | One of `monster`, `npc`, `npc-faction`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, `fallen-champion-template`, `achievement`, `class`, `background`, `trait`, `curse`, or `enchantment`. |
 | `id` | string | Required | Globally unique stable ID such as `monster.cave-rat`. |
 | `name` | string | Required | Trimmed display name, 1–80 characters. |
 | `tags` | slug array | Defaults to `[]` | Descriptive taxonomy. Tags never activate engine rules. |
@@ -129,7 +129,7 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `restMaximumDuration` | positive safe integer | Yes | Hard upper bound, in world-time units, for a single rest command. Player requests may choose a shorter duration but cannot exceed this value. |
 | `recoveryByHungerStage` | object | Yes | Integer percentages from 0 through 100 for `sated`, `hungry`, `weak`, and `starving` recovery. |
 | `hungerStageModifiers` | object | Yes | Derived-stat modifiers for each hunger stage. Each stage accepts the same closed stat names used by condition modifiers. |
-| `formulas` | map of integer maps | Yes | Derived-stat coefficients; unknown operands fail engine validation. |
+| `formulas` | map of integer maps | Yes | Derived-stat coefficients; unknown operands fail engine validation. Every `DerivedStatName` needs a formula entry for the engine to derive it, including `spellPower` — the bundled value is `{ base: -10, wits: 1 }`. |
 | `actionCosts` | registered-action-ID-to-integer map | Yes | Non-negative cost overrides. Unknown action IDs fail compilation. |
 | `score` | object | Yes | Run scoring coefficients described in the `score` table below. Every value is an integer; no floating point is accepted. |
 | `pointBuy` | object | Yes | Chargen point-buy attribute table described below. |
@@ -139,11 +139,18 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `curses` | object | Yes | Curse generation rates described below. The bundled value is `{ chanceBps: { shallow: 1000, mid: 2000, deep: 3500 }, enchantedMultiplierBps: 20000, capBps: 5000 }`. |
 | `fragmentSpawnRollDenominator` | positive integer | Yes | Odds denominator (1-in-N) for the rare Ancient Tablet fragment spawn rolled once per floor generation. The bundled value is `40`. |
 | `generation` | object | Yes | Dungeon generation knobs described below. The bundled value is `{ doorTilePercent: 35, artifactOfferPercent: 12 }`. |
+| `tempering` | object | Yes | Depth-tempering knobs described below. The bundled value is `{ depths: [3, 6, 9, 12, 15, 18] }`. |
+| `spellPowerDivisor` | positive safe integer | Yes | Divides the hero's derived `spellPower` when it scales spell and scroll damage. The bundled value is `4`. |
+| `enchanting` | object | Yes | Enchantment magnitude scaling described below. The bundled value is `{ rarityMagnitudeBps: { common: 10000, uncommon: 12500, rare: 15000, legendary: 20000 } }`. |
 | `floorLoot` | object | Yes | Floor-loot placement knobs described below. |
 
 `house` carries a positive safe integer `baseCapacity` (the player house's starting storage capacity) and a positive safe integer `strongboxIncrement` (additional capacity granted per purchased strongbox upgrade). `encounterDensity` budgets a floor's population in **monsters**, not in placement attempts. `monstersPerThousandWalkable` carries a positive safe integer for each of `shallow`, `mid`, and `deep` — how many monsters a floor should hold per thousand walkable (open) cells in that depth band. The bands are the same ones `floorLoot.depthBands` defines (`shallowMaxDepth`, `midMaxDepth`), so retuning those boundaries retunes spawn density with them. The floor's target is `ceil(walkableCells * monstersPerThousandWalkable[band] / 1000)`, and the generator keeps placing encounters until that many monsters exist on the floor. Because one encounter can contribute anywhere from one monster (an `individual`) to several (a `group`), the number of placements needed varies; `attemptCap` (an integer from 1 through 32) bounds how many placement attempts a floor may consume regardless, so an unlucky floor whose encounters keep failing to fit still terminates. Guaranteed milestone bosses are placed before this loop and do not count against either the target or the cap. Only the actors an encounter creates at placement time are budgeted: a `swarm` contributes its source actor, and the members it spawns later during play are not counted, so a floor seeded with swarms grows past its target as the run proceeds.
 
 `curses` governs how often generated equipment arrives cursed. `chanceBps` carries a basis-point chance (0 through 10000) for each of `shallow`, `mid`, and `deep`, using the same bands `floorLoot.depthBands` defines. `enchantedMultiplierBps` (10000 through 100000) scales that chance for an item that also rolled an enchantment — the bundled `20000` doubles it, and `10000` disables the bonus. `capBps` (0 through 10000) is the hard ceiling applied after the multiplier, so no band-plus-enchantment combination can exceed it. Every eligible item consumes exactly one chance roll from the generating call site's loot stream whether or not the roll lands, and a landed roll spends one further roll to pick the curse; ineligible items and items generated on a floor with no eligible equipment consume nothing. Setting all three `chanceBps` values to `0` turns curse generation off without removing the curse entries from the pack.
+
+`tempering.depths` is a non-empty, strictly ascending array of positive safe integers — the dungeon depths at which a hero banks a tempering milestone. The bundled value, `[3, 6, 9, 12, 15, 18]`, banks one milestone every three floors through depth 18.
+
+`enchanting.rarityMagnitudeBps` scales an enchantment's authored `modifiers` by item rarity, in basis points: a positive safe integer for each of `common`, `uncommon`, `rare`, and `legendary`. The bundled value, `{ common: 10000, uncommon: 12500, rare: 15000, legendary: 20000 }`, leaves a common item's enchantment at its authored magnitude and scales a legendary item's up to double.
 
 ### Dungeon generation
 
@@ -212,7 +219,7 @@ pointBuy:
 ```
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: balance
     id: balance.core-gameplay
@@ -322,7 +329,7 @@ The `score` object supplies every coefficient used to compute a deterministic ru
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -354,7 +361,7 @@ Monsters are reusable creature definitions. Population frequency and composition
 
 An `npc` is a presented actor with `glyph`, `color`, a valid `factionId`, positive attributes, `health`, `speed`, `perception`, `accuracy`, and `defense`, non-negative `armor`, damage dice, all six resistances, and `selfPreservationThresholdBps` from `1` through `10000`. NPC disposition is closed to `neutral`; the available behavior is `npc-behavior.travelling-merchant`, whose `behaviorParameters` object is strict and empty.
 
-An `npc-faction` declares safe-integer `minimumReputation`, `maximumReputation`, and `startingReputation`, plus non-empty `tiers`. The starting value must be inside the bounds. Each tier has a unique slug `tierId`, display `name`, inclusive `minimum` and `maximum`, positive `purchasePriceBps` and `salePriceBps`, `acceptsTrade`, and `serviceIds`. Tiers are sorted by minimum and must cover every integer in the faction range exactly once: no gaps or overlaps. Service IDs are `merchant-service.identify`, `merchant-service.remove-curse`, and `merchant-service.strongbox`.
+An `npc-faction` declares safe-integer `minimumReputation`, `maximumReputation`, and `startingReputation`, plus non-empty `tiers`. The starting value must be inside the bounds. Each tier has a unique slug `tierId`, display `name`, inclusive `minimum` and `maximum`, positive `purchasePriceBps` and `salePriceBps`, `acceptsTrade`, and `serviceIds`. Tiers are sorted by minimum and must cover every integer in the faction range exactly once: no gaps or overlaps. Service IDs are `merchant-service.identify`, `merchant-service.remove-curse`, `merchant-service.strongbox`, and `merchant-service.enchant`.
 
 The bundled `npc-faction.lampwrights` spans `-1000..1000`, starts at `0`, and uses `refused` (`-1000..-251`, `15000`/`5000`, no trade/services), `wary` (`-250..-1`, `13000`/`7000`, trade/no services), `neutral` (`0..249`, `11000`/`9000`, trade/identify), and `trusted` (`250..1000`, `9000`/`10000`, trade/identify). The neutral `npc.travelling-lampwright` uses threshold `3500`.
 
@@ -430,7 +437,7 @@ The exact boundary is valid. Boundary plus one is rejected before selection, RNG
 | `minimumStockRolls`, `maximumStockRolls` | Merchant | Positive inclusive range; maximum is at least minimum. |
 | `merchantSaleBps`, `merchantPurchaseBps` | Merchant | Positive basis-point multipliers. |
 | `acceptedCategories` | Merchant | Non-empty item categories: `weapon`, `ammunition`, `armor`, `shield`, `light`, `fuel`, `food`, `potion`, `scroll`, `ring`, `misc`, or `currency`. |
-| `services`, `serviceId`, `basePrice`, `minimumUses`, `maximumUses`, `tierIds` | Merchant | Unique `merchant-service.identify`, `merchant-service.remove-curse`, or `merchant-service.strongbox` offers have non-negative price/use bounds, maximum uses at least minimum uses, and reference tiers that enable the offered service in the NPC faction. A `merchant-service.strongbox` offer additionally requires `minimumUses` and `maximumUses` of exactly `1`; a `merchant-service.remove-curse` offer requires `maximumUses` of at least `1`. |
+| `services`, `serviceId`, `basePrice`, `minimumUses`, `maximumUses`, `tierIds` | Merchant | Unique `merchant-service.identify`, `merchant-service.remove-curse`, `merchant-service.strongbox`, or `merchant-service.enchant` offers have non-negative price/use bounds, maximum uses at least minimum uses, and reference tiers that enable the offered service in the NPC faction. A `merchant-service.strongbox` offer additionally requires `minimumUses` and `maximumUses` of exactly `1`; a `merchant-service.remove-curse` offer requires `maximumUses` of at least `1`. |
 | `permanent` | Merchant | Required boolean. `true` marks a fixed town shopkeeper that never departs; `false` marks an ordinary dungeon-wandering merchant. |
 | `minimumLifetime`, `maximumLifetime`, `departureWarningThresholds` | Merchant | Optional in the source schema, but conditionally required: `permanent: true` forbids all three; `permanent: false` requires all three. When present, lifetime is a positive range and warnings are unique, strictly descending, and below the minimum lifetime. |
 | `aggressionResponse` | Merchant | Closed to `flee` or `self-defense`. |
@@ -485,8 +492,10 @@ Content schema version `12` adds the `curse` content kind and enforces DERIVED_S
 
 Content schema version `13` adds the required `appeasement` block to `fallen-champion-template`, mapping class tags to the item categories a haunt of that calling accepts as an offering. Migration from 12: bump every file's `schemaVersion` to 13, and add an `appeasement` block to the single `fallen-champion-template` entry (`classFavors` defaults to `{}`, `causelessCategories` defaults to `[]`, but `defaultCategories` is required and must be non-empty — an empty `defaultCategories` would leave a haunt permanently unappeasable). No other field changes.
 
+Content schema version `14` adds the `enchantment` content kind, the balance `tempering`, `spellPowerDivisor`, and `enchanting` knobs, the required `formulas.spellPower` entry, the `merchant-service.enchant` merchant service ID, and the `effect.item.enchant` effect ID. Migration from 13: bump every file's `schemaVersion` to 14; add `spellPower` to `DERIVED_STAT_NAMES` means `formulas.spellPower` becomes required for the engine to derive the stat (the schema's `formulas` map stays free-form, so this is an engine-level requirement, not a Zod one — but every pack needs the entry regardless); add `tempering: { depths: [...] }` (a non-empty, strictly ascending array of positive safe integers), `spellPowerDivisor` (a positive safe integer), and `enchanting: { rarityMagnitudeBps: { common, uncommon, rare, legendary } }` (four positive safe integers) to the balance entry; and author at least one `enchantment` entry, since none previously existed. `enchantment.categories` is a non-empty `ItemCategory` array excluding `currency`; `enchantment.modifiers` requires at least one strictly positive `DerivedStatName` value (enchanting gambles on magnitude, never on sign — the same split `curse.drawbackModifiers` enforces in the opposite direction); `enchantment.weight` is a positive safe integer. The bundled pack authors six enchantments covering every equippable category so no eligible item ever draws from an empty pool.
+
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: encounter
     id: encounter.cave-rat-individuals
@@ -531,7 +540,7 @@ the entire pack.
 The Champion heirloom is selected once at the original death from unique equipped item instances only. Backpack items never qualify, and a multi-slot item is still one candidate. Better rarity and positive quality ranks raise its weight, but common equipment retains a non-zero chance. There is no minimum rarity and no reroll, so damaged, depleted, or mundane equipped gear remains possible. If nothing equipped is eligible, the fallback relic is recorded.
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: fallen-champion-template
     id: fallen-champion-template.core
@@ -619,7 +628,7 @@ Identification modes have distinct contracts:
 Items never contain their unidentified names. The generated mapping is saved with the run, so save/reload cannot reroll it, and a later run receives a new mapping. Items using the same pool must have the pool's category. The compiler requires at least as many unique verb–noun combinations as item definitions using the pool.
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: item
     id: item.brass-lantern
@@ -656,7 +665,7 @@ Identification pools are normal content-pack entries and may be placed in any `.
 The pool's `name` is an administrator-facing label. It is not shown as an unidentified item name.
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: identification-pool
     id: identification-pool.potions
@@ -687,7 +696,7 @@ identification: { mode: shuffled, poolId: identification-pool.potions }
 | `effects` | non-empty effect array | Yes | Applied in listed order. |
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: spell
     id: spell.mend
@@ -715,7 +724,7 @@ entries:
 | `effects` | non-empty effect array | Yes | Ordered trigger effects. |
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: trap
     id: trap.poison-dart
@@ -745,7 +754,7 @@ entries:
 A curse's trigger `effect` is restricted to `effect.damage`, `effect.heal`, `effect.condition.apply`, `effect.condition.remove`, `effect.force-move`, and `effect.hunger.restore` — deliberately excluding every effect that can mutate terrain, features, or item inventories, so a curse can never gate the win path. Forced movement is the one traversal effect on the list, and the engine guards it: a shove that would land the hero out of bounds, on unwalkable terrain (a closed door included), or on top of another living actor is dropped, so a curse can never wedge the hero somewhere illegal. A curse must declare `drawbackModifiers`, `trigger`, or both; a curse with neither is rejected.
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: curse
     id: curse.hungering-edge
@@ -760,6 +769,28 @@ entries:
         effectId: effect.damage
         parameters: { damageType: arcane, dice: { count: 1, sides: 3, bonus: 0 } }
 ```
+
+## Enchantment entries
+
+| Field | Type | Required | Rules and meaning |
+|---|---|---|---|
+| `categories` | non-empty `ItemCategory` array | Yes | Item categories this enchantment may be drawn for. Never `currency` (coins are not enchantable — the same exclusion the haunt `appeasement` block enforces on offerings). |
+| `modifiers` | map | Yes, at least one key | Keys restricted to the closed `DerivedStatName` registry; values must be strictly positive safe integers. Enchanting is a gamble about magnitude, never about sign — a drawback is a `curse`'s job, not an enchantment's. |
+| `weight` | positive safe integer | Yes | Relative draw weight within its eligible pool. |
+
+```yaml
+schemaVersion: 14
+entries:
+  - kind: enchantment
+    id: enchantment.keen-edge
+    name: Keen Edge
+    tags: [enchantment, weapon]
+    categories: [weapon]
+    modifiers: { meleeAccuracy: 1 }
+    weight: 10
+```
+
+The bundled pack authors at least one enchantment per equippable category (`weapon`, `armor`/`shield`, `ring`, `light`) so the enchant service and the tempering-steel scroll never draw against an empty pool for an eligible item.
 
 ## Loot-table entries
 
@@ -785,7 +816,7 @@ Boss guaranteed-unique content is forbidden anywhere in an ordinary loot graph, 
 | `choices[].minDepth`, `choices[].maxDepth` | safe integers 0–999 | No | Optional per-choice depth band. Absent means unbanded: the choice is always available, matching prior behavior. When present, `0 <= minDepth <= maxDepth <= 999`; `minDepth` may be given alone to mean "available from this depth onward." Town merchant restocks use these bands to widen their stock at `balance.restockMilestones` so deeper runs surface new goods. Honoring the band during loot and stock rolls is engine work tracked separately from this content-layer authoring and validation. |
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: loot-table
     id: loot-table.basic-supplies
@@ -828,7 +859,7 @@ A slot's `lootTableId` and `contentId` name what it can contain once placed. A `
 A `kind: door` or `kind: chest` slot authors a locked feature and must set `difficulty` (a safe integer from `1` to `30`, the DC a lockpick check must meet or beat). A `kind: door` slot may also set `keyContentId`, naming an `item` that opens it without a check; every other slot kind must leave `difficulty` and `keyContentId` unset. A `chest` slot may not set `keyContentId` (chests take no keys).
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: vault
     id: vault.locked-cache
@@ -853,7 +884,7 @@ entries:
 ```
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: vault
     id: vault.small-cache
@@ -903,7 +934,7 @@ The bundled `content/vaults/town.yaml` is the complete copyable reference: a wal
 Replace and refresh produce one stack; intensify adds one up to the cap. Every reapplication refreshes source, application time, and deadline. Timed applications may omit duration to use the default or supply a positive override no greater than the maximum. Permanent conditions reject an override. Removal and expiration remove the complete condition instance.
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: condition
     id: condition.stunned
@@ -936,7 +967,7 @@ The `criteria.type` field is one of the four registered criteria types:
 | `complete-ending` | `ending` (`became-heart`, `refused`, or `broke-cycle`) | Grants when the run concludes with the matching ending. |
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: achievement
     id: achievement.defeated-the-deeps-champion
@@ -978,7 +1009,7 @@ Each kit has a slug `kitId` unique within the class, a display `name`, an `equip
 | `backpack[].quantity` | positive safe integer | Defaults to `1` | Starting stack size. |
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: class
     id: class.wayfarer
@@ -1021,7 +1052,7 @@ entries:
 `background` and `trait` both carry a `modifiers` derived-stat integer map (non-zero safe-integer values, keys drawn from the same closed stat names as condition modifiers: `maxHealth`, `meleeAccuracy`, `meleeDamageBonus`, `rangedAccuracy`, `defense`, `search`, `disarm`). A `trait` must declare exactly one modifier key; a `background` may declare any number, including zero. A `background` additionally carries `extraItems`, an array of `{ contentId, quantity }` starting-inventory grants using the same shape as a class kit's `backpack`, each `contentId` resolving to an `item` entry.
 
 ```yaml
-schemaVersion: 13
+schemaVersion: 14
 entries:
   - kind: background
     id: background.caravan-guard
@@ -1078,8 +1109,11 @@ Each effect has `effectId`, strict `parameters`, and optional `requiresLivingTar
 | `effect.spell.learn` | stable `spellId` |
 | `effect.recall` | none |
 | `effect.curse.remove` | none |
+| `effect.item.enchant` | none |
 
 `effect.curse.remove` targets one hero-owned item whose curse has been revealed and deletes the curse, leaving the item's enchantment, identification state, and condition untouched. It consumes no randomness. The bundled scroll of sundering (`item.scroll-of-sundering`, a shuffled-pool scroll weighted into deep loot tables) is its only authored carrier.
+
+`effect.item.enchant` carries no parameters; the resolver picks its target the same way `effect.curse.remove` does.
 
 `effect.spell.learn` and `effect.recall` are run-level effects: they are recognized by the effect sequence resolver but mutate no actor and consume no RNG there, since they act on run-scoped state (known spells, recall destination) that the cast/use-item dispatch handlers own.
 
@@ -1120,4 +1154,4 @@ Never silently attach an active run to a different content hash. Keep old conten
 
 ## Complete examples
 
-Each content-kind section above contains a complete copyable `schemaVersion: 13` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.
+Each content-kind section above contains a complete copyable `schemaVersion: 14` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.

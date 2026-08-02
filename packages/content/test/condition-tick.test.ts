@@ -4,7 +4,7 @@ import { contentFileSchema } from '../src/compiler/schema.js';
 describe('condition tickEffects', () => {
   it('accepts a timed condition carrying a fire tick', () => {
     const parsed = contentFileSchema.parse({
-      schemaVersion: 13,
+      schemaVersion: 14,
       entries: [
         {
           kind: 'condition',
@@ -29,7 +29,7 @@ describe('condition tickEffects', () => {
 
   it('defaults tickEffects to an empty array', () => {
     const parsed = contentFileSchema.parse({
-      schemaVersion: 13,
+      schemaVersion: 14,
       entries: [
         {
           kind: 'condition',

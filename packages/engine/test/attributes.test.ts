@@ -24,6 +24,7 @@ function fixture(): ActorDerivationInput {
       lightOutRevealRadius: { base: 1 },
       lightOutMemoryPersists: { base: 0 },
       lightOutCommitsMemory: { base: 0 },
+      spellPower: { base: -10, wits: 1 },
     },
     weaveRegenAmount: 2,
     equipmentModifiers: [
@@ -60,6 +61,7 @@ describe('deriveActorStats', () => {
       lightOutMemoryPersists: 0,
       lightOutCommitsMemory: 0,
       weaveRegen: 2,
+      spellPower: -1,
     });
     expect(input).toEqual(before);
   });

@@ -420,8 +420,15 @@ describe('createNewRun records input', () => {
     // zeroed `tempering`, and `rng` gains the seed-derived `enchanting` stream (the FIRST new RNG
     // stream since the eleven-stream list froze) -- no other key differs. This is the expected
     // save-schema bump, not an engine regression.
+    // Re-pinned again for content schema v14 (the `enchantment` kind, `tempering`/
+    // `spellPowerDivisor`/`enchanting` balance knobs, and the required `formulas.spellPower`
+    // entry): `contentHash` moves because the compiled pack grew a kind and the balance entry grew
+    // fields, and every hero's derived stats now include `spellPower` alongside the existing
+    // derived-stat set -- no RNG stream moves (enchanting is drawn only by the enchant service and
+    // the tempering-steel scroll, neither reachable from run creation). This is expected
+    // content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '6affa84ccccb0860c96abaae7b3f991db7d93082f7f64c78121e2d1bcbe46fc3',
+      '601b032058d4c20340298f44356c62200948a848e4b5bf8858713c6aa72419fd',
     );
   });
 

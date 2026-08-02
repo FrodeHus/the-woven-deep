@@ -90,6 +90,7 @@ const SERVICE_LABEL: Readonly<Record<MerchantServiceId, string>> = {
   'merchant-service.identify': 'Identify',
   'merchant-service.remove-curse': 'Remove curse',
   'merchant-service.strongbox': 'Strongbox',
+  'merchant-service.enchant': 'Enchant',
 };
 
 interface TradeRow {

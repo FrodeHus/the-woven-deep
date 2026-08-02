@@ -70,6 +70,7 @@ export function createDemoContentPack(): CompiledContentPack {
           lightOutRevealRadius: { base: 1 },
           lightOutMemoryPersists: { base: 0 },
           lightOutCommitsMemory: { base: 0 },
+          spellPower: { base: -10, wits: 1 },
         },
         actionCosts: { 'action.move': 100, 'action.wait': 100, 'action.spawn': 100 },
         pointBuy: {
@@ -121,6 +122,11 @@ export function createDemoContentPack(): CompiledContentPack {
         },
         fragmentSpawnRollDenominator: 40,
         generation: { doorTilePercent: 35, artifactOfferPercent: 12 },
+        tempering: { depths: [3, 6, 9, 12, 15, 18] },
+        spellPowerDivisor: 4,
+        enchanting: {
+          rarityMagnitudeBps: { common: 10000, uncommon: 12500, rare: 15000, legendary: 20000 },
+        },
         floorLoot: {
           scatterCount: { minimum: 2, maximum: 4 },
           chestCount: { minimum: 0, maximum: 2 },

@@ -5,6 +5,7 @@ import type { ClassContentEntry } from './class.js';
 import type { ConditionContentEntry } from './condition.js';
 import type { CurseContentEntry } from './curse.js';
 import type { DialogueContentEntry } from './dialogue.js';
+import type { EnchantmentContentEntry } from './enchantment.js';
 import type { EncounterContentEntry } from './encounter.js';
 import type { FallenChampionTemplateContentEntry } from './champion.js';
 import type { IdentificationPoolContentEntry } from './identification-pool.js';
@@ -18,7 +19,7 @@ import type { TraitContentEntry } from './trait.js';
 import type { TrapContentEntry } from './trap.js';
 import type { VaultContentEntry } from './vault.js';
 
-export const CONTENT_SCHEMA_VERSION = 13 as const;
+export const CONTENT_SCHEMA_VERSION = 14 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
@@ -41,6 +42,7 @@ export const CONTENT_KIND_IDS = [
   'background',
   'trait',
   'curse',
+  'enchantment',
 ] as const;
 export type ContentKind = (typeof CONTENT_KIND_IDS)[number];
 export const DERIVED_STAT_NAMES = [
@@ -56,6 +58,7 @@ export const DERIVED_STAT_NAMES = [
   'lightOutMemoryPersists',
   'lightOutCommitsMemory',
   'weaveRegen',
+  'spellPower',
 ] as const;
 export type DerivedStatName = (typeof DERIVED_STAT_NAMES)[number];
 export const DAMAGE_TYPES = ['physical', 'fire', 'cold', 'lightning', 'poison', 'arcane'] as const;
@@ -144,6 +147,7 @@ export const MERCHANT_SERVICE_IDS = [
   'merchant-service.identify',
   'merchant-service.remove-curse',
   'merchant-service.strongbox',
+  'merchant-service.enchant',
 ] as const;
 export type MerchantServiceId = (typeof MERCHANT_SERVICE_IDS)[number];
 
@@ -165,6 +169,7 @@ export const EFFECT_IDS = [
   'effect.spell.learn',
   'effect.recall',
   'effect.curse.remove',
+  'effect.item.enchant',
 ] as const;
 export type EffectId = (typeof EFFECT_IDS)[number];
 
@@ -187,7 +192,8 @@ export type ContentEntry =
   | ClassContentEntry
   | BackgroundContentEntry
   | TraitContentEntry
-  | CurseContentEntry;
+  | CurseContentEntry
+  | EnchantmentContentEntry;
 
 export interface ContentGenerationReport {
   readonly foundationalCategories: readonly string[];

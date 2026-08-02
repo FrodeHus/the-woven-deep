@@ -1,0 +1,49 @@
+schemaVersion: 14
+entries:
+  - kind: enchantment
+    id: enchantment.keen-edge
+    name: Keen Edge
+    tags: [enchantment, weapon]
+    categories: [weapon]
+    modifiers: { meleeAccuracy: 1 }
+    weight: 10
+
+  - kind: enchantment
+    id: enchantment.hungering-bite
+    name: Hungering Bite
+    tags: [enchantment, weapon]
+    categories: [weapon]
+    modifiers: { meleeDamageBonus: 1 }
+    weight: 6
+
+  - kind: enchantment
+    id: enchantment.warded-plate
+    name: Warded Plate
+    tags: [enchantment, armor]
+    categories: [armor, shield]
+    modifiers: { defense: 1 }
+    weight: 10
+
+  - kind: enchantment
+    id: enchantment.deep-lungs
+    name: Deep Lungs
+    tags: [enchantment, armor]
+    categories: [armor, ring]
+    modifiers: { maxHealth: 3 }
+    weight: 4
+
+  - kind: enchantment
+    id: enchantment.woven-thought
+    name: Woven Thought
+    tags: [enchantment, ring]
+    categories: [ring]
+    modifiers: { maxWeave: 2, spellPower: 1 }
+    weight: 4
+
+  - kind: enchantment
+    id: enchantment.steady-flame
+    name: Steady Flame
+    tags: [enchantment, light]
+    categories: [light]
+    modifiers: { lightOutRevealRadius: 1 }
+    weight: 8
