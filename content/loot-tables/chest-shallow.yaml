@@ -12,3 +12,5 @@ entries:
       - { contentId: item.wooden-shield, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.crimson-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
       - { contentId: item.lockpick, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 3 }
+      - { contentId: item.pitch-torch, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.lamp-oil, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }

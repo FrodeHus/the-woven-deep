@@ -176,7 +176,7 @@ describe('bundled content', () => {
     expect(entries.get('encounter.travelling-lampwright')).toMatchObject({
       model: 'merchant',
       minDepth: 1,
-      maxDepth: 10,
+      maxDepth: 20,
       runAppearanceChance: 0.25,
       discoveryProtectionIncrement: 0,
       discoveryProtectionCap: 0,
