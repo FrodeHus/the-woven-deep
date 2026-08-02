@@ -256,6 +256,10 @@ export function createDemoRun(): ActiveRun {
     currency: 40,
     classTags: [],
     statModifiers: {},
+    tempering: {
+      banked: 0,
+      spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+    },
   } as const;
   const heroActor: ActorState = {
     actorId: hero.actorId,

@@ -36,13 +36,17 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v16 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v17 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(16);
+    expect(first.schemaVersion).toBe(17);
     expect(first.mode).toBe('classic');
+    expect(first.hero.tempering).toEqual({
+      banked: 0,
+      spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+    });
     expect(first.offeredArtifact).toBeNull();
     expect(first.artifactsUndiscovered).toEqual([]);
     expect(first.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
@@ -263,6 +267,13 @@ describe('createNewRun', () => {
     expect({ ...wanderer, mode: 'classic' }).toEqual(classic);
   });
 
+  it('starts a new run with zeroed tempering', () => {
+    expect(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }).hero.tempering).toEqual({
+      banked: 0,
+      spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+    });
+  });
+
   describe('engine-required floor loot tables', () => {
     const MISSING = 'loot-table.chest-mid';
 
@@ -404,8 +415,13 @@ describe('createNewRun records input', () => {
     // loot/merchant logic reads it yet -- so the digest moves purely because `contentHash` covers
     // the whole compiled pack and the template entry grew a field. This is expected
     // content-authoring drift, not an engine regression.
+    // Re-pinned again for save schema v17 (hero tempering + the `enchanting` stream,
+    // hero-power-curve feature): `schemaVersion` moves 16 -> 17, every encoded hero now carries a
+    // zeroed `tempering`, and `rng` gains the seed-derived `enchanting` stream (the FIRST new RNG
+    // stream since the eleven-stream list froze) -- no other key differs. This is the expected
+    // save-schema bump, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '4529a80dabaee02ef4948b557598bb9001bcc8c59b102b6794fc635bd6042bbf',
+      '6affa84ccccb0860c96abaae7b3f991db7d93082f7f64c78121e2d1bcbe46fc3',
     );
   });
 

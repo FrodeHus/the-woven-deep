@@ -25,6 +25,7 @@ import {
 import { recorded } from './events.js';
 import { validateKnowledgePacking } from '../knowledge.js';
 import { RUN_MODES, tileIndex, type ActiveRun, type Direction } from '../model.js';
+import type { AttributeName } from '../actor-model.js';
 import { SaveLoadError } from '../save-error.js';
 import { movementBlockReason, tileDefinition } from '../terrain.js';
 import {
@@ -1055,6 +1056,19 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     fail('hero.actorId', 'hero must reference one player-controlled actor');
   if (savedHeroActor.floorId !== run.activeFloorId)
     fail('hero.actorId', 'hero actor must occupy the active floor');
+
+  // The chargen base is DERIVED, never stored: a second copy of it would be a second source of
+  // truth for a number the run already implies. Every spent point must therefore be accounted for
+  // by the attribute it was spent on, and no attribute may exceed the lifetime cap.
+  for (const [attribute, spent] of Object.entries(run.hero.tempering.spent) as [
+    AttributeName,
+    number,
+  ][]) {
+    const base = savedHeroActor.attributes[attribute] - spent;
+    if (!Number.isSafeInteger(base) || base < 0) {
+      fail(`hero.tempering.spent.${attribute}`, 'spent tempering exceeds the attribute itself');
+    }
+  }
 
   // A dead hero always requires a conclusion (`died`), but the reverse no longer holds: the Final
   // Chamber's voluntary conclusions (`became-heart`, `broke-cycle`) close the run with the hero

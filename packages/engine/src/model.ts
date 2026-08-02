@@ -2,7 +2,7 @@ import type { VaultPlacementKind } from '@woven-deep/content';
 import type { RngStreamName } from './versions.js';
 import type { FloorKnowledge } from './knowledge.js';
 import type { AmbientLight, LightSource } from './light-model.js';
-import type { ActorState, RelationshipOverride } from './actor-model.js';
+import type { ActorState, AttributeName, RelationshipOverride } from './actor-model.js';
 import type { DungeonFeature } from './feature-model.js';
 import type { IdentificationState, ItemInstance } from './item-model.js';
 import type { SurvivalState } from './survival-model.js';
@@ -80,6 +80,14 @@ export interface FloorPlacementSlot {
   readonly y: number;
 }
 
+export interface HeroTemperingState {
+  /** Milestone points earned and not yet spent. Never negative. */
+  readonly banked: number;
+  /** How many points have been spent on each attribute, kept so the UI can tell the story and so
+   * validation can pin `attributes = chargen base + spent`. */
+  readonly spent: Readonly<Record<AttributeName, number>>;
+}
+
 export interface HeroState {
   readonly actorId: OpaqueId;
   readonly name: string;
@@ -88,6 +96,7 @@ export interface HeroState {
   readonly currency: number;
   readonly classTags: readonly string[];
   readonly statModifiers: DerivedStatModifier;
+  readonly tempering: HeroTemperingState;
   readonly knownSpellIds?: readonly OpaqueId[];
 }
 
@@ -153,7 +162,7 @@ export const RUN_MODES = ['classic', 'wanderer'] as const;
 export type RunMode = (typeof RUN_MODES)[number];
 
 export interface ActiveRun {
-  readonly schemaVersion: 16;
+  readonly schemaVersion: 17;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly mode: RunMode;

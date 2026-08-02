@@ -544,6 +544,10 @@ export function createGameplayDemoRun(pack: CompiledContentPack): GameplayDemoRu
       currency: balance.startingCurrency,
       classTags: [],
       statModifiers: {},
+      tempering: {
+        banked: 0,
+        spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+      },
     },
     actors,
     items,
