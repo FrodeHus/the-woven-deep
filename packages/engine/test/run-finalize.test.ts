@@ -897,12 +897,43 @@ describe('signature abilities recorded on the build snapshot', () => {
   });
 
   it('breaks weave-cost ties deterministically by spell id', () => {
+    // The tie has to CROSS THE CAP for the comparator's tie-break to matter: with a limit that
+    // takes both, the final canonical sort would produce the same answer either way. A limit of one
+    // forces the selection itself to choose, and the choice must not depend on the order the hero
+    // happened to learn them in -- hence both orderings below.
+    const forwards = finalizeRun({
+      run: concludedHeroKnowing(['spell.b-tie', 'spell.a-tie']),
+      content: casterPack(1),
+      lifetime: emptyLifetime(),
+    });
+    const backwards = finalizeRun({
+      run: concludedHeroKnowing(['spell.a-tie', 'spell.b-tie']),
+      content: casterPack(1),
+      lifetime: emptyLifetime(),
+    });
+    expect(forwards.record.build.signatureAbilityIds).toEqual(['spell.a-tie']);
+    expect(backwards.record.build.signatureAbilityIds).toEqual(['spell.a-tie']);
+  });
+
+  it('keeps both sides of a tie when the cap has room for them', () => {
     const { record } = finalizeRun({
       run: concludedHeroKnowing(['spell.b-tie', 'spell.a-tie']),
       content: casterPack(3),
       lifetime: emptyLifetime(),
     });
     expect(record.build.signatureAbilityIds).toEqual(['spell.a-tie', 'spell.b-tie']);
+  });
+
+  it('records a spell the hero somehow knows twice exactly once', () => {
+    // `hero.knownSpellIds` is the one list here with no `validateOrderedIds` behind it, so a
+    // duplicate would write a perfectly good record and only explode on the first SAVE of a LATER
+    // run that loaded the resulting standing -- a long way from the cause.
+    const { record } = finalizeRun({
+      run: concludedHeroKnowing(['spell.ember', 'spell.ember', 'spell.mend']),
+      content: casterPack(3),
+      lifetime: emptyLifetime(),
+    });
+    expect(record.build.signatureAbilityIds).toEqual(['spell.ember', 'spell.mend']);
   });
 
   it('records nothing for a hero who knew no spells', () => {

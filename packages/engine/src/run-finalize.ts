@@ -60,7 +60,10 @@ function signatureAbilityIds(
   content: CompiledContentPack,
   template: FallenChampionTemplateContentEntry,
 ): readonly OpaqueId[] {
-  return (run.hero.knownSpellIds ?? [])
+  // Deduplicated first: `hero.knownSpellIds` is the only list on this path with no ordered-id
+  // validation behind it, and a duplicate would sail through recording and only throw on the first
+  // save of a LATER run that loaded the resulting standing.
+  return [...new Set(run.hero.knownSpellIds ?? [])]
     .flatMap((spellId) => {
       const spell = content.entries.find((entry) => entry.id === spellId);
       return spell?.kind === 'spell' ? [{ spellId, weaveCost: spell.weaveCost }] : [];

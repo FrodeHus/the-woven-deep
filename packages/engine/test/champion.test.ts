@@ -97,10 +97,16 @@ const spell: SpellContentEntry = {
   targetingId: 'target.actor',
   range: 5,
   actionCost: 100,
+  weaveCost: 4,
   effects: [],
 };
 /** A second spell, so a multi-ability standing can be exercised. */
-const galeSpell: SpellContentEntry = { ...spell, id: 'spell.gale', name: 'Gale' };
+const galeSpell: SpellContentEntry = {
+  ...spell,
+  id: 'spell.gale',
+  name: 'Gale',
+  weaveCost: 5,
+};
 const echoLoot: LootTableContentEntry = {
   kind: 'loot-table',
   id: 'loot-table.echo',
