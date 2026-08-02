@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import type { CompiledContentPack, ItemContentEntry } from '@woven-deep/content';
+import type {
+  CompiledContentPack,
+  ItemContentEntry,
+  LootTableContentEntry,
+} from '@woven-deep/content';
 import {
   createDemoContentPack,
   createDemoRun,
   decodeActiveRun,
   encodeActiveRun,
   movementAction,
+  openClosedChest,
   resolveCommand,
   validatePlayerAction,
   type ActiveRun,
@@ -42,10 +47,29 @@ function itemDefinition(id: string, overrides: Partial<ItemContentEntry> = {}): 
 }
 
 const TREASURE = itemDefinition('item.treasure', { glyph: '*', color: '#ffd700' });
+const TABLE_DROP = itemDefinition('item.table-drop', { glyph: '?', color: '#88ddff' });
+
+/** A one-choice table: the roll is real (it advances `loot`) but its outcome is not in question. */
+const LOOT_TABLE: LootTableContentEntry = {
+  kind: 'loot-table',
+  id: 'loot-table.chest-test',
+  name: 'Chest test drop',
+  tags: [],
+  rolls: 1,
+  choices: [
+    {
+      contentId: TABLE_DROP.id,
+      lootTableId: null,
+      weight: 1,
+      minimumQuantity: 1,
+      maximumQuantity: 1,
+    },
+  ],
+};
 
 function content(): CompiledContentPack {
   const base = createDemoContentPack();
-  return { ...base, entries: [...base.entries, TREASURE] };
+  return { ...base, entries: [...base.entries, TREASURE, TABLE_DROP, LOOT_TABLE] };
 }
 
 const context: ResolutionContext = { content: content() };
@@ -153,19 +177,87 @@ describe('bump-to-open a closed chest', () => {
     });
   });
 
-  it('draws the loot from the loot stream and nothing else', () => {
+  it('takes a fixed-content chest without touching any stream at all', () => {
     const base = createDemoRun();
     const hero = heroAt(base, 2, 1);
     const run = runWith(hero, [chestAt(2, 2, { lootTableId: null, lootContentId: TREASURE.id })]);
 
     const resolved = resolveCommand(run, move('south'), context);
 
-    // A fixed `lootContentId` takes no draw at all; a table would. Either way the ONLY stream a
-    // chest opening may touch is `loot` -- pinned here against the whole rng record.
+    // A fixed `lootContentId` is materialised outright: no draw, so not even `loot` moves.
+    expect(resolved.state.rng).toEqual(run.rng);
+  });
+
+  it('advances the loot stream and nothing else when the chest rolls a table', () => {
+    const base = createDemoRun();
+    const hero = heroAt(base, 2, 1);
+    const run = runWith(hero, [chestAt(2, 2, { lootTableId: LOOT_TABLE.id, lootContentId: null })]);
+
+    const resolved = resolveCommand(run, move('south'), context);
+
+    // The draw happened...
+    expect(resolved.state.rng.loot).not.toEqual(run.rng.loot);
+    // ...on the `loot` stream and no other, pinned against the whole rng record by name.
     for (const [name, value] of Object.entries(resolved.state.rng)) {
       if (name === 'loot') continue;
       expect(value, name).toEqual(run.rng[name as keyof typeof run.rng]);
     }
+    expect(
+      resolved.state.items.filter((item) => item.contentId === TABLE_DROP.id),
+    ).not.toHaveLength(0);
+  });
+
+  it('commits exactly the loot its speculative validation would have produced', () => {
+    // Validation dry-runs `openClosedChest` and throws the result away -- advanced `loot` stream
+    // and all -- and the dispatcher re-derives it at commit time. Both must land on the same items
+    // and the same resulting stream, or a rejected bump would silently shift the run's loot.
+    const base = createDemoRun();
+    const hero = heroAt(base, 2, 1);
+    const run = runWith(hero, [chestAt(2, 2, { lootTableId: LOOT_TABLE.id, lootContentId: null })]);
+
+    const speculative = openClosedChest({
+      run,
+      content: content(),
+      actorId: hero.actorId,
+      featureId: 'chest.closed',
+    });
+    expect(speculative.ok).toBe(true);
+    if (!speculative.ok) throw new Error('unreachable');
+
+    const resolved = resolveCommand(run, move('south'), context);
+
+    expect(resolved.state.rng.loot).toEqual(speculative.run.rng.loot);
+    expect(resolved.state.items.map((item) => `${item.itemId}:${item.contentId}`).sort()).toEqual(
+      speculative.created.map((item) => `${item.itemId}:${item.contentId}`).sort(),
+    );
+    // And the speculative call left the caller's run untouched, which is what makes it safe.
+    expect(run.rng.loot).toEqual(base.rng.loot);
+    expect(run.items).toEqual([]);
+  });
+
+  it('opens a chest that holds nothing, and the empty result still persists', () => {
+    // The empty `itemIds` case the unconditional `loot.dropped` exists for. Note the PRE-state is
+    // in-memory only: the save schema requires a `closed` chest to carry loot contents, so a
+    // pointerless closed chest can never be persisted -- which is exactly why this arm is
+    // defence-in-depth rather than a live path. The POST-state (a `looted` chest) is persistable,
+    // and round-tripping it is what proves the new codec couplings accept an empty drop.
+    const base = createDemoRun();
+    const hero = heroAt(base, 2, 1);
+    const run = runWith(hero, [chestAt(2, 2, { lootTableId: null, lootContentId: null })]);
+
+    const resolved = resolveCommand(run, move('south'), context);
+
+    expect(resolved.result.status).toBe('applied');
+    expect(resolved.events).toContainEqual(
+      expect.objectContaining({ type: 'loot.dropped', itemIds: [] }),
+    );
+    expect(resolved.state.items).toEqual([]);
+    const chest = resolved.state.features.find(
+      (feature): feature is ChestFeature => feature.type === 'chest',
+    )!;
+    expect(chest.state).toBe('looted');
+    const encoded = encodeActiveRun(resolved.state);
+    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
   });
 
   it('leaves the chest terminal: a second bump is an ordinary walk onto the looted cell', () => {
@@ -216,9 +308,11 @@ describe('bump-to-open a closed chest', () => {
     });
     const resolved = resolveCommand(run, move('southwest'), context);
     expect(resolved.result).toMatchObject({ status: 'invalid', reason: 'blocked.corner' });
-    for (const feature of resolved.state.features) {
-      expect((feature as ChestFeature).state).toBe('closed');
-    }
+    const chests = resolved.state.features.filter(
+      (feature): feature is ChestFeature => feature.type === 'chest',
+    );
+    expect(chests).toHaveLength(3);
+    for (const chest of chests) expect(chest.state).toBe('closed');
   });
 
   it('opens the same diagonal chest once a flank is clear', () => {

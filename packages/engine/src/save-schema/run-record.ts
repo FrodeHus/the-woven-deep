@@ -2131,6 +2131,12 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
                 (entry) => entry.type === 'door.opened' && entry.actorId === run.hero.actorId,
               ) ??
               // Bump-to-open a chest: the hero stays put, same as the door bump above.
+              //
+              // ORDER IS LOAD-BEARING. `hero.moved` must stay first in this chain: a move that
+              // both walked the hero AND dropped loot (stepping onto a cell that spills something)
+              // has to be checked as a MOVE against the retained position chain below. Hoisting
+              // `loot.dropped` above it would select the drop instead, and the `continue` it takes
+              // in that chain would silently stop verifying where the hero ended up.
               recordValue.events.find(
                 (entry) => entry.type === 'loot.dropped' && entry.actorId === run.hero.actorId,
               )!)
