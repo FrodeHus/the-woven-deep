@@ -28,6 +28,7 @@ import {
   CONSEQUENTIAL_EVENT_TYPES,
   ContentHashMismatchError,
   LockedClassError,
+  nextCommandSequenceFor,
   ServerPlaySession,
 } from '../../src/play/play-session.js';
 
@@ -205,6 +206,44 @@ function seedHallRecord(
   return stored;
 }
 
+describe('nextCommandSequenceFor', () => {
+  /** Appends a bare `recentCommands` entry carrying just the id -- the only field the scan reads. */
+  function withRecentCommandIds(run: ActiveRun, commandIds: readonly string[]): ActiveRun {
+    return {
+      ...run,
+      recentCommands: commandIds.map(
+        (commandId) =>
+          ({
+            command: { commandId },
+          }) as unknown as ActiveRun['recentCommands'][number],
+      ),
+    };
+  }
+
+  it('is 0 for a run whose window holds no profile-minted ids', () => {
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    expect(nextCommandSequenceFor(run)).toBe(0);
+    expect(nextCommandSequenceFor(withRecentCommandIds(run, ['command.guest-0000000007']))).toBe(0);
+  });
+
+  it('is one past the highest retained profile-minted id', () => {
+    const run = withRecentCommandIds(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }), [
+      'command.profile-0000000003',
+      'command.profile-0000000041',
+      'command.profile-0000000012',
+    ]);
+    expect(nextCommandSequenceFor(run)).toBe(42);
+  });
+
+  it('ignores the chargen handshake ids, which live in their own namespace', () => {
+    const run = withRecentCommandIds(createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }), [
+      'command.profile-start-9',
+      'command.profile-0000000002',
+    ]);
+    expect(nextCommandSequenceFor(run)).toBe(3);
+  });
+});
+
 describe('ServerPlaySession', () => {
   let database: Database.Database;
   let repo: ActiveRunRepository;
@@ -212,6 +251,20 @@ describe('ServerPlaySession', () => {
   beforeEach(() => {
     database = freshDatabase();
     repo = new ActiveRunRepository(database);
+  });
+
+  it('reports a nextCommandSequence above every profile id its run still retains', () => {
+    const session = newSession(database, { repo });
+    session.open({ seed: SEED });
+    expect(session.getSnapshot().nextCommandSequence).toBe(0);
+
+    session.applyIntent({
+      commandId: 'command.profile-0000000017',
+      expectedRevision: session.getSnapshot().revision,
+      intent: { type: 'wait' },
+    });
+
+    expect(session.getSnapshot().nextCommandSequence).toBe(18);
   });
 
   /** Teleports the hero onto the active floor's stair-down (same trick as

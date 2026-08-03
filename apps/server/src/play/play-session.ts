@@ -99,6 +99,30 @@ export const CONSEQUENTIAL_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
  * `apps/web`) -- re-exported here so existing local importers keep working unchanged. */
 export type { ServerRunSnapshot };
 
+/** Matches a command id minted by `ProfileSession.nextCommandId` (`command.profile-` + a
+ * zero-padded counter), capturing the counter. Deliberately anchored and digits-only so nothing
+ * else in the retained window -- the `command.profile-start-N` ids of the chargen handshake, or a
+ * guest-minted `command.guest-...` id in a blob that somehow crossed over -- can be read as one. */
+const PROFILE_COMMAND_ID_PATTERN = /^command\.profile-(\d+)$/;
+
+/**
+ * One past the highest profile-minted command sequence still held in `recentCommands` -- the floor
+ * a reconnecting client must start its counter at so no freshly-minted id collides with one the
+ * reducer still remembers (see `ServerRunSnapshot.nextCommandSequence` for the full rationale).
+ * Returns 0 for a run whose window holds no profile-minted ids at all (a brand-new run, or one
+ * whose window has rolled over entirely to other id shapes).
+ */
+export function nextCommandSequenceFor(run: ActiveRun): number {
+  let highest = -1;
+  for (const entry of run.recentCommands) {
+    const match = PROFILE_COMMAND_ID_PATTERN.exec(entry.command.commandId);
+    if (match === null) continue;
+    const sequence = Number(match[1]);
+    if (Number.isSafeInteger(sequence) && sequence > highest) highest = sequence;
+  }
+  return highest + 1;
+}
+
 export type ApplyOutcome =
   | { readonly kind: 'state'; readonly snapshot: ServerRunSnapshot }
   | {
@@ -589,6 +613,7 @@ export class ServerPlaySession {
       houseOpen: this.houseOpen,
       heroClassTags: this.run.hero.classTags,
       bossActive: isHeartBossActive(this.run),
+      nextCommandSequence: nextCommandSequenceFor(this.run),
     };
   }
 }

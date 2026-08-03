@@ -39,7 +39,10 @@ function freshRun(seed: Uint32State = SEED): ActiveRun {
 function snapshotOf(
   run: ActiveRun,
   overrides: Partial<
-    Pick<ServerRunSnapshot, 'lastEvents' | 'pendingDecision' | 'houseOpen' | 'bossActive'>
+    Pick<
+      ServerRunSnapshot,
+      'lastEvents' | 'pendingDecision' | 'houseOpen' | 'bossActive' | 'nextCommandSequence'
+    >
   > = {},
 ): ServerRunSnapshot {
   return {
@@ -54,6 +57,7 @@ function snapshotOf(
     houseOpen: overrides.houseOpen ?? false,
     heroClassTags: [...run.hero.classTags],
     bossActive: overrides.bossActive ?? isHeartBossActive(run),
+    nextCommandSequence: overrides.nextCommandSequence ?? 0,
   };
 }
 
@@ -237,6 +241,46 @@ describe('ProfileSession', () => {
     expect(snapshot.projection.metrics).toEqual(
       projectGameplayState({ state: advancedRun, content: pack }).metrics,
     );
+  });
+
+  it('seeds its command-id counter from the server, so a reload never reuses a retained id', async () => {
+    // A page reload builds a FRESH ProfileSession against a run the server has been driving for a
+    // while: its `recentCommands` window still holds every id the previous session minted. Starting
+    // the counter back at 0 would re-mint those ids with different payloads, which the reducer
+    // rejects as `command_id_conflict` -- the "That action was already handled" freeze. The server
+    // states the floor; the client starts above the whole retained window.
+    const { socket, connectPromise } = harness();
+    const run = freshRun();
+    socket().emit(HELLO);
+    socket().emit({ type: 'state', snapshot: snapshotOf(run, { nextCommandSequence: 500 }) });
+    const session = await connectPromise;
+
+    session.dispatch({ type: 'wait' });
+
+    expect(socket().sentMessages.at(-1)).toMatchObject({
+      type: 'command',
+      commandId: 'command.profile-0000000500',
+    });
+  });
+
+  it('keeps climbing from the seeded counter across subsequent commands', async () => {
+    const { socket, connectPromise } = harness();
+    const run = freshRun();
+    socket().emit(HELLO);
+    socket().emit({ type: 'state', snapshot: snapshotOf(run, { nextCommandSequence: 129 }) });
+    const session = await connectPromise;
+
+    session.dispatch({ type: 'wait' });
+    socket().emit({ type: 'state', snapshot: snapshotOf(run, { nextCommandSequence: 129 }) });
+    session.dispatch({ type: 'wait' });
+
+    const commandIds = socket()
+      .sentMessages.filter(
+        (message): message is { type: string; commandId: string } =>
+          (message as { type?: string }).type === 'command',
+      )
+      .map((message) => message.commandId);
+    expect(commandIds).toEqual(['command.profile-0000000129', 'command.profile-0000000130']);
   });
 
   describe('in-flight gating (held-key navigation)', () => {

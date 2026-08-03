@@ -211,7 +211,13 @@ export class ProfileSession implements RunSession {
   private readonly localStorage: SessionStorageLike;
   private readonly ws: WsClient;
   private serverSnapshot: ServerRunSnapshot;
-  private commandSequence = 0;
+  /** Seeded from the server's `nextCommandSequence` (never 0 by default): a page reload builds a
+   * fresh session against a run whose `recentCommands` window still holds the previous session's
+   * ids, and restarting at 0 would re-mint them with different payloads -- rejected as
+   * `command_id_conflict` until the counter climbs clear. Only the server can state the floor
+   * exactly; see that field's doc comment. Within one session it simply keeps climbing, including
+   * across `WsClient`'s automatic reconnects (which reuse this object, counter intact). */
+  private commandSequence: number;
   private log: readonly LogLine[] = [];
   private nextLogId = 0;
   private lastEvents: readonly PublicEvent[];
@@ -264,6 +270,7 @@ export class ProfileSession implements RunSession {
     if (onboardingLoad.corrupted) this.markOnboardingCorrupted();
 
     this.serverSnapshot = initialSnapshot;
+    this.commandSequence = initialSnapshot.nextCommandSequence;
     this.lastEvents = initialSnapshot.lastEvents;
     // `houseOpen` is CLIENT-side UI state (screen visibility), only ever SEEDED from the server --
     // see `setHouseOpen`'s doc comment for why it can never simply mirror the server field

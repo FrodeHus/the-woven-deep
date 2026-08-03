@@ -234,6 +234,7 @@ function serverSnapshotOf(run: ActiveRun): ServerRunSnapshot {
     houseOpen: false,
     heroClassTags: [...run.hero.classTags],
     bossActive: isHeartBossActive(run),
+    nextCommandSequence: 0,
   };
 }
 

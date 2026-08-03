@@ -37,6 +37,18 @@ export interface ServerRunSnapshot {
    * light-out mechanic (0 illumination on the hero's own tile) the boss can be alive but invisible,
    * and re-deriving from visible actors would wrongly re-offer the Final Chamber choice mid-fight. */
   readonly bossActive: boolean;
+  /** The lowest command-sequence number the client may safely mint from: one past the highest
+   * profile-minted `commandId` still held in the run's `recentCommands` window (0 when the window
+   * holds none).
+   *
+   * Only the SERVER can state this. The reducer retains the last `RECENT_COMMAND_LIMIT` commands
+   * and rejects a known `commandId` that arrives with a different payload as
+   * `command_id_conflict`; a client that restarts its counter at 0 on every page load therefore
+   * walks straight back into ids the run still remembers, and every command in the overlap is
+   * refused until the counter climbs clear of the window. Deriving the floor client-side from
+   * `revision` cannot be made exact -- the counter also advances on rejected/invalid commands,
+   * which never advance `revision` -- so the authoritative window is read here instead. */
+  readonly nextCommandSequence: number;
 }
 
 /** Client → server messages. Every mutating message carries the client-minted `commandId` and the
