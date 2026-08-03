@@ -66,6 +66,27 @@ export function validateContentBoundRun(run: ActiveRun, pack: CompiledContentPac
     );
   }
   const entries = entryMap(pack);
+  // Singleton circulation, checked directly and FIRST: at most one live instance of any artifact
+  // content id may exist in the run. The haunt reward-set checks further below would also trip on
+  // a duplicate, but with a misleading "Champion reward ... is invalid" -- this rule names the
+  // actual violation.
+  const artifactInstanceCounts = new Map<string, number>();
+  for (const item of run.items) {
+    const definition = entries.get(item.contentId);
+    if (definition?.kind === 'item' && definition.artifact != null) {
+      artifactInstanceCounts.set(
+        item.contentId,
+        (artifactInstanceCounts.get(item.contentId) ?? 0) + 1,
+      );
+    }
+  }
+  for (const [contentId, count] of artifactInstanceCounts) {
+    if (count > 1) {
+      throw new Error(
+        `content-bound validation: artifact ${contentId} has ${count} live instances; a singleton may have at most one`,
+      );
+    }
+  }
   const actors = new Map(run.actors.map((actor) => [actor.actorId, actor]));
   const expectedEncounterIds = pack.entries
     .filter((entry) => entry.kind === 'encounter')

@@ -89,6 +89,12 @@ export const bossRewardReceipt = z.strictObject({
  * there is no `false` state to reason about, and a save can only carry it by having been migrated
  * (or forged -- which `validateSemantics` then refuses to let excuse a partially deleted drop,
  * since a marked population must own no pieces whatsoever).
+ *
+ * The honest limit of that guard: a forger who deletes the ENTIRE drop and then sets this marker
+ * validates clean -- the all-or-nothing rule cannot tell "migrated before drops existed" from
+ * "every piece deleted". That is accepted deliberately: the forgery destroys only the forger's own
+ * loot (nothing is gained, no duplicate is minted, no other player's record is touched), so the
+ * cost of closing it -- teaching a migration marker to prove its own provenance -- buys nothing.
  */
 const preHauntReward = z.literal(true).optional();
 

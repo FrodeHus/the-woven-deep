@@ -1897,6 +1897,34 @@ describe('haunt drops never mint a second copy of an artifact', () => {
     expect(decodeActiveRun(encodeActiveRun(after))).toEqual(after);
   });
 
+  it('names the duplicated artifact directly when a forged second live instance exists', () => {
+    // Without a direct rule, a duplicated singleton only surfaces as a mismatched champion/echo
+    // drop ("Champion reward ... is invalid") -- a misleading message for what actually went wrong.
+    const state = bothHauntsKilled(true);
+    const after = advanceFallenHeroEncounters({ state, content: kitPack(), eventId: 'e1' }).state;
+    const forged = {
+      ...after,
+      items: [
+        ...after.items,
+        {
+          itemId: 'item.zzz-forged-relic',
+          contentId: 'item.hero-relic',
+          quantity: 1,
+          condition: 100,
+          enchantment: null,
+          identified: true,
+          charges: null,
+          fuel: null,
+          enabled: null,
+          location: { type: 'floor' as const, floorId: after.activeFloorId, x: 0, y: 0 },
+        },
+      ],
+    };
+    expect(() => validateContentBoundRun(forged, kitPack())).toThrow(
+      /artifact item\.hero-relic has 2 live instances/,
+    );
+  });
+
   it('consumes no randomness for the guard', () => {
     // Same scenario, once with the collision and once without: the guard only reads `run.items`, so
     // the loot stream must land in exactly the same place either way.

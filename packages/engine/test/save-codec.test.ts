@@ -1157,6 +1157,22 @@ describe('active-run save codec', () => {
         corpse(echoActorId, echoPopulationId, 3),
       ].sort((left: any, right: any) => (left.actorId < right.actorId ? -1 : 1)),
       items: [
+        // Sorts BETWEEN the renamed piece's `item.haunt.` prefix and the legacy `item.heirloom.`
+        // reward id, so the migration's re-sort is load-bearing: renaming the reward moves it from
+        // after this item to before it, and skipping the sort would leave the item list out of the
+        // strictly ascending order the save schema requires.
+        {
+          itemId: 'item.hauntling-charm',
+          contentId: 'item.iron-sword',
+          quantity: 1,
+          condition: 100,
+          enchantment: null,
+          identified: true,
+          charges: null,
+          fuel: null,
+          enabled: null,
+          location: { type: 'floor', floorId: hero.floorId, x: 4, y: 1 },
+        },
         {
           itemId: `item.heirloom.${championPopulationId}`,
           contentId: 'item.iron-sword',
@@ -1264,7 +1280,9 @@ describe('active-run save codec', () => {
   }
 
   it('migrates a v15 save whose champion was already defeated, renaming its reward to a death-inventory piece', () => {
-    const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()));
+    // Decoded WITH the demo pack the fixture's contentHash names, so this covers the content-bound
+    // validation tier end to end, not only the schema tier.
+    const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()), context.content);
     expect(decoded.schemaVersion).toBe(17);
     const champion = decoded.populations.find(
       (population) => population.model === 'champion',
@@ -1276,18 +1294,23 @@ describe('active-run save codec', () => {
       originatingHallRecordId: 'hall.a',
       originatingRank: 1,
     });
+    // The re-sort is load-bearing: the renamed `item.haunt.` piece must have MOVED to before the
+    // fixture's in-between `item.hauntling-charm`, keeping the whole list strictly ascending.
+    const ids = decoded.items.map((item) => item.itemId);
+    expect(ids.indexOf(pieceId)).toBeLessThan(ids.indexOf('item.hauntling-charm'));
+    expect([...ids].sort()).toEqual(ids);
     const encoded = encodeActiveRun(decoded);
-    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
+    expect(encodeActiveRun(decodeActiveRun(encoded, context.content))).toBe(encoded);
   });
 
   it('migrates a v15 save whose echo was already defeated and never surrendered a piece', () => {
-    const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()));
+    const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()), context.content);
     const echo = decoded.populations.find((population) => population.model === 'echo')!;
     expect(
       decoded.items.some((item) => item.itemId.startsWith(`item.haunt.${echo.populationId}.`)),
     ).toBe(false);
     const encoded = encodeActiveRun(decoded);
-    expect(encodeActiveRun(decodeActiveRun(encoded))).toBe(encoded);
+    expect(encodeActiveRun(decodeActiveRun(encoded, context.content))).toBe(encoded);
   });
 
   it('refuses a pre-haunt reward marker that would excuse a partially deleted drop', () => {
