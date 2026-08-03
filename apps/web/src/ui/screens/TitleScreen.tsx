@@ -23,6 +23,12 @@ export interface TitleScreenProps {
   /** Signs the current session out. Offered only while `account.status === 'signed-in'`, in
    * place of (never alongside) "Sign in with email". */
   readonly onSignOut: () => void;
+  /** Signed-in only: whether the profile connect has already resolved to a live run held by the
+   * host. Swaps the profile's single entry between "Continue" (a held run -- `onContinue` enters
+   * it) and "Enter the Deep" (no run yet -- `onEnterTheDeep` opens chargen over the held
+   * connection, or no-ops while the connect is still in flight). Guests ignore this entirely:
+   * their Continue is gated on the decodable local save (see `canContinue`). */
+  readonly profileHasRun?: boolean;
 }
 
 /**
@@ -59,6 +65,7 @@ export function TitleScreen({
   account,
   onSignIn,
   onSignOut,
+  profileHasRun = false,
 }: TitleScreenProps): JSX.Element {
   const signedIn = account.status === 'signed-in';
   const options: readonly {
@@ -66,8 +73,12 @@ export function TitleScreen({
     readonly label: string;
     readonly onSelect: () => void;
   }[] = [
-    { key: 'enter', label: 'Enter the Deep', onSelect: onEnterTheDeep },
-    ...(canContinue(storage) ? [{ key: 'continue', label: 'Continue', onSelect: onContinue }] : []),
+    ...(signedIn && profileHasRun
+      ? [{ key: 'continue', label: 'Continue', onSelect: onContinue }]
+      : [{ key: 'enter', label: 'Enter the Deep', onSelect: onEnterTheDeep }]),
+    ...(!signedIn && canContinue(storage)
+      ? [{ key: 'continue', label: 'Continue', onSelect: onContinue }]
+      : []),
     { key: 'hall', label: 'Hall of Records', onSelect: onHall },
     ...(onOpenOverlay
       ? [

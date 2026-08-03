@@ -850,7 +850,39 @@ describe('App identity/account — ProfileSession routing', () => {
     unlockedClassIds: [],
   };
 
-  it('a signed-in boot opens a ProfileSession over /ws/play and renders play from the server state', async () => {
+  it('a signed-in boot holds the connected run on the title -- the menu never unmounts underneath the player, and Continue enters play (#200)', async () => {
+    const user = userEvent.setup();
+    const { createSocket, sockets } = profileSocketFactory();
+
+    render(
+      <App
+        fetcher={packFetcher()}
+        storage={fakeStorage()}
+        accountOverride={SIGNED_IN_ACCOUNT}
+        createSocket={createSocket}
+      />,
+    );
+
+    await waitFor(() => expect(sockets.length).toBe(1));
+    // The player is looking at the title menu while the connect is in flight...
+    const settingsOption = await screen.findByRole('option', { name: /^settings$/i });
+    const socket = sockets[0]!;
+    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    socket.emit(HELLO);
+    socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
+
+    // ...so the connect resolving must not navigate away on its own: the run is held and offered
+    // as Continue, and the Settings entry is the SAME element (no unmount mid-click -- #200).
+    expect(await screen.findByRole('option', { name: /^continue$/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /^settings$/i })).toBe(settingsOption);
+    expect(screen.queryByRole('img', { name: /dungeon/i })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('option', { name: /^continue$/i }));
+    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
+  });
+
+  it('a signed-in profile with no run stays on the title; Enter the Deep opens the chargen wizard over the held connection', async () => {
+    const user = userEvent.setup();
     const { createSocket, sockets } = profileSocketFactory();
 
     render(
@@ -864,11 +896,15 @@ describe('App identity/account — ProfileSession routing', () => {
 
     await waitFor(() => expect(sockets.length).toBe(1));
     const socket = sockets[0]!;
-    const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     socket.emit(HELLO);
-    socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
+    socket.emit({ type: 'no-run' });
 
-    expect(await screen.findByRole('img', { name: /dungeon/i })).toBeInTheDocument();
+    // The no-run outcome holds the connection without yanking the player off the title menu.
+    expect(await screen.findByRole('option', { name: /enter the deep/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Step 1 of 8/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('option', { name: /enter the deep/i }));
+    expect(await screen.findByLabelText(/Step 1 of 8/)).toBeInTheDocument();
   });
 
   it('signing out (from the in-play settings overlay) tears down the WS and returns to the guest/title flow', async () => {
@@ -895,6 +931,7 @@ describe('App identity/account — ProfileSession routing', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     socket.emit(HELLO);
     socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
+    await user.click(await screen.findByRole('option', { name: /^continue$/i }));
     await screen.findByRole('img', { name: /dungeon/i });
 
     fireEvent.keyDown(window, { key: 'O', shiftKey: true });
@@ -942,11 +979,12 @@ describe('App identity/account — ProfileSession routing', () => {
     await user.click(await screen.findByRole('option', { name: /sign out/i }));
     await waitFor(() => expect(releaseLogout).toBeDefined());
 
-    // Now the connect completes: play mounts on a `ProfileSession` the sign-out click never saw.
+    // Now the connect completes: a `ProfileSession` the sign-out click never saw lands and is
+    // held under the title (offered as Continue -- the title itself never navigates).
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     socket.emit(HELLO);
     socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
-    await screen.findByRole('img', { name: /dungeon/i });
+    await screen.findByRole('option', { name: /^continue$/i });
 
     releaseLogout!();
 
@@ -981,6 +1019,7 @@ describe('App identity/account — ProfileSession routing', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     socket.emit(HELLO);
     socket.emit({ type: 'state', snapshot: serverSnapshotOf(run) });
+    await user.click(await screen.findByRole('option', { name: /^continue$/i }));
     await screen.findByRole('img', { name: /dungeon/i });
 
     fireEvent.keyDown(window, { key: 'O', shiftKey: true });
@@ -1035,6 +1074,7 @@ describe('App identity/account — ProfileSession routing', () => {
     };
     socket.emit(HELLO);
     socket.emit({ type: 'state', snapshot: serverSnapshotOf(dead) });
+    await user.click(await screen.findByRole('option', { name: /^continue$/i }));
 
     await user.click(await screen.findByRole('button', { name: /rise again/i }));
     expect(JSON.parse(socket.rawSent.at(-1)!)).toMatchObject({ type: 'rise-again' });

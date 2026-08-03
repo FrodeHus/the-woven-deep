@@ -492,6 +492,13 @@ export function App({
     sessionRef.current = session;
   }, [session]);
   const [chargenSeed, setChargenSeed] = useState<Uint32State>();
+  // The current screen, mirrored for the profile connect effect below exactly like `sessionRef`:
+  // the connect resolves from a promise callback long after boot, and whether it may route depends
+  // on where the player is AT THAT MOMENT, not where they were when the effect fired.
+  const screenRef = useRef(screen.screen);
+  useEffect(() => {
+    screenRef.current = screen.screen;
+  }, [screen]);
   /** The held `/ws/play` connection of a signed-in profile with no run yet -- set when connect
    * resolves `{kind: 'chargen'}`, consumed by the chargen screen's profile confirm path, and torn
    * down on sign-out with the rest of the profile state. */
@@ -659,9 +666,20 @@ export function App({
           else outcome.pending.close();
           return;
         }
+        // Whether resolving may NAVIGATE depends on where the player is right now. On the menu
+        // screens (title/hall/signin) the player is mid-interaction -- yanking the screen away
+        // detaches the very element they are clicking (#200) -- so the outcome is only HELD
+        // there: the title menu offers it as Continue (a live run) or Enter the Deep (no run
+        // yet), and the player's own selection does the routing. Anywhere else (the conclusion
+        // screen's "New hero" re-connect is the one live case), the player has already asked to
+        // move on, so routing on resolve is exactly what they are waiting for.
+        const atMenu =
+          screenRef.current === 'title' ||
+          screenRef.current === 'hall' ||
+          screenRef.current === 'signin';
         if (outcome.kind === 'session') {
           setSession(outcome.session);
-          router.toPlay();
+          if (!atMenu) router.toPlay();
           return;
         }
         // The profile has no run yet: hold the connection and route through the SAME chargen
@@ -669,7 +687,7 @@ export function App({
         // profile branch in the chargen screen's onConfirm below).
         setPendingProfileStart(outcome.pending);
         setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
-        router.toChargen();
+        if (!atMenu) router.toChargen();
       },
       (thrown: unknown) => {
         if (cancelled) return;
@@ -749,17 +767,31 @@ export function App({
           <TitleScreen
             storage={storage}
             account={account}
+            profileHasRun={session !== undefined}
             onEnterTheDeep={() => {
-              // Guests only -- a signed-in profile's run is server-authoritative and connects
-              // automatically (see the connect effect above); there is no client-side chargen
-              // wizard for it (hero customization for profiles is a later milestone).
-              if (account.status !== 'guest') return;
+              // A signed-in profile with no run enters the SAME chargen wizard over the held
+              // `/ws/play` connection (see the connect effect above -- `chargenSeed` was already
+              // rolled when the no-run outcome resolved). While the connect is still in flight
+              // there is nothing to enter yet, so the entry no-ops rather than guessing.
+              if (account.status !== 'guest') {
+                if (pendingProfileStart === undefined) return;
+                closeOverlay();
+                router.toChargen();
+                return;
+              }
               closeOverlay();
               setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
               router.toChargen();
             }}
             onContinue={() => {
-              if (account.status !== 'guest') return;
+              // A signed-in profile's Continue enters the run the connect effect above already
+              // holds -- the session exists, only the navigation was waiting on the player.
+              if (account.status !== 'guest') {
+                if (session === undefined) return;
+                closeOverlay();
+                router.toPlay();
+                return;
+              }
               closeOverlay();
               setPortraitGlyph(storage.get(PORTRAIT_KEY) ?? undefined);
               setSession(

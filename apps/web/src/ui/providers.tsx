@@ -4,7 +4,7 @@ import type { RunRecordRepository } from '@woven-deep/engine';
 import type { SessionSnapshot } from '../session/guest-session.js';
 import type { RunSession } from '../session/run-session.js';
 import { resolveKeymap, type ResolvedKeymap, type Settings } from '../session/settings.js';
-import { useRunSession } from '../session/store.js';
+import { useOptionalRunSession } from '../session/store.js';
 
 const PackContext = createContext<CompiledContentPack | null>(null);
 const SettingsContext = createContext<{
@@ -50,14 +50,21 @@ export function useSessionCtx(): {
   return useContext(SessionContext);
 }
 
+/** Always mounted, session or not: a layer that appears only once a session exists would change
+ * the element type at this tree position the moment one is set, and React would then unmount and
+ * remount every screen below it -- detaching the exact element the player is clicking when a
+ * profile's held connection resolves under the title menu (#200). With no session the context
+ * value is simply `null`, which is what `useSessionCtx` already hands to sessionless callers. */
 function SessionBridge({
   session,
   children,
-}: Readonly<{ session: RunSession; children: ReactNode }>): JSX.Element {
-  const snapshot = useRunSession(session);
-  return (
-    <SessionContext.Provider value={{ session, snapshot }}>{children}</SessionContext.Provider>
+}: Readonly<{ session: RunSession | undefined; children: ReactNode }>): JSX.Element {
+  const snapshot = useOptionalRunSession(session);
+  const value = useMemo(
+    () => (session && snapshot ? { session, snapshot } : null),
+    [session, snapshot],
   );
+  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
 export function UiProviders({
@@ -81,11 +88,12 @@ export function UiProviders({
     () => ({ settings, onChange: onChangeSettings, keymap: resolveKeymap(settings.bindings) }),
     [settings, onChangeSettings],
   );
-  const tree = session ? <SessionBridge session={session}>{children}</SessionBridge> : children;
   return (
     <PackContext.Provider value={pack}>
       <SettingsContext.Provider value={settingsValue}>
-        <RepositoryContext.Provider value={repository ?? null}>{tree}</RepositoryContext.Provider>
+        <RepositoryContext.Provider value={repository ?? null}>
+          <SessionBridge session={session}>{children}</SessionBridge>
+        </RepositoryContext.Provider>
       </SettingsContext.Provider>
     </PackContext.Provider>
   );
