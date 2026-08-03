@@ -69,8 +69,7 @@ function materializeScenario(
     { factory: () => ({ type: 'equip', itemId: ids.armor, slot: 'body' }) },
     {
       factory: () => ({ type: 'attack', targetActorId: ids.rat }),
-      repeatUntil: (state) =>
-        state.actors.find((actor) => actor.actorId === ids.rat)!.health === 0,
+      repeatUntil: (state) => state.actors.find((actor) => actor.actorId === ids.rat)!.health === 0,
     },
     { factory: () => ({ type: 'equip', itemId: ids.bow, slot: 'main-hand' }) },
     {
