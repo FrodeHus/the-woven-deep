@@ -127,7 +127,9 @@ test('a guest builds a Lamplighter through the eight-step console and enters pla
   // budget).
   const vitalityIncrement = page.getByRole('button', { name: '+', exact: true }).nth(2);
   for (let i = 0; i < 12; i += 1) await vitalityIncrement.click();
-  await expect(page.getByRole('region', { name: 'Derived stats' })).toContainText(/Max health\s*22/);
+  await expect(page.getByRole('region', { name: 'Derived stats' })).toContainText(
+    /Max health\s*22/,
+  );
   await page.getByRole('button', { name: /NEXT/ }).click();
 
   // Step 5 (Origin): deep-miner background.
