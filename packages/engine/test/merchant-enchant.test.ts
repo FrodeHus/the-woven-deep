@@ -249,6 +249,22 @@ describe('trade-service enchant projection', () => {
       serviceTargetItemIds({ state: run, content, serviceId: 'merchant-service.enchant' }),
     );
   });
+
+  it('projects the exact re-enchant quote alongside the base quote (only for the enchant service)', () => {
+    // The doubling applies to the BASE price before the faction quote, so a client doubling the
+    // quoted unitPrice itself can be off by a rounding step -- the projection carries the true
+    // figure so the target picker can show it per already-enchanted target.
+    const run = openedRun();
+    const projection = projectGameplayState({ state: run, content }).trade!;
+    const enchant = projection.services.find((s) => s.serviceId === 'merchant-service.enchant')!;
+    expect(enchant.unitPrice).toBe(enchantPrice(1));
+    expect(enchant.reEnchantUnitPrice).toBe(enchantPrice(2));
+    for (const service of projection.services) {
+      if (service.serviceId !== 'merchant-service.enchant') {
+        expect(service.reEnchantUnitPrice).toBeUndefined();
+      }
+    }
+  });
 });
 
 describe('trade-service enchant', () => {
