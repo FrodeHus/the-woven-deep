@@ -4,6 +4,7 @@ import type { RunConclusionProjection } from '@woven-deep/engine';
 import type { LogLine } from '../../session/event-log.js';
 import { useListNavigation } from './roving-focus.js';
 import { cn } from '../lib/cn.js';
+import { modeLabel } from '../mode-label.js';
 
 export interface ConclusionScreenProps {
   readonly projection: RunConclusionProjection;
@@ -119,7 +120,7 @@ export function ConclusionScreen({
           : 'At the Final Chamber'}{' '}
         at depth {cause.depth}, turn {cause.turn}.{' '}
         <span className="text-xs uppercase tracking-wide text-subtle">
-          {projection.mode === 'wanderer' ? 'Wanderer' : 'Classic'}
+          {modeLabel(projection.mode)}
         </span>
       </p>
       {projection.mode === 'wanderer' ? (

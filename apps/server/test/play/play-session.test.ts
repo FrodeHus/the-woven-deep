@@ -1192,18 +1192,35 @@ describe('ServerPlaySession', () => {
       expect(session.getSnapshot().conclusion?.finalized).toBe(false);
     });
 
-    it('refuses to rise a non-death conclusion', { timeout: 30_000 }, () => {
-      const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
-      storeConcludedWanderer('broke-cycle');
-      const session = newSession(database, { repo, hallRepo });
-      session.open({ seed: SEED });
+    it(
+      'refuses to rise a non-death conclusion even with a live checkpoint row',
+      { timeout: 30_000 },
+      () => {
+        const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });
+        const base = storeConcludedWanderer('broke-cycle');
+        const session = newSession(database, { repo, hallRepo });
+        session.open({ seed: SEED });
+        // The finalize gate cleared the row on open, which used to make this test vacuous: rise
+        // refused because there was nothing to restore, not because a win is unrisable. Re-seed a
+        // perfectly restorable checkpoint so the ONLY thing standing between this victory and a
+        // rewind is the completion-type guard itself.
+        repo.upsert({
+          profileId: PROFILE,
+          runBlob: encodeActiveRun(base),
+          revision: base.revision,
+          contentHash: pack.hash,
+          updatedAt: FIXED_CLOCK(),
+          checkpointBlob: encodeActiveRun(base),
+        });
 
-      // The victory already cleared the row on open; rising is not a thing a win can do.
-      const outcome = session.riseAgain();
+        const outcome = session.riseAgain();
 
-      expect(outcome.snapshot.projection.conclusion?.completionType).toBe('broke-cycle');
-      expect(hallRepo.records()).toEqual([]);
-    });
+        expect(outcome.snapshot.projection.conclusion?.completionType).toBe('broke-cycle');
+        // Refused at the guard, before the repo was consulted: the row survives untouched.
+        expect(repo.get(PROFILE)).toBeDefined();
+        expect(hallRepo.records()).toEqual([]);
+      },
+    );
 
     it('acceptDeath is a no-op on a LIVE wanderer run', { timeout: 30_000 }, () => {
       const hallRepo = new ServerRunRecordRepository({ database, profileId: PROFILE });

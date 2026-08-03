@@ -25,6 +25,7 @@ import {
 } from '../../../session/pack-queries.js';
 import { BlockBar, DotLeaderRow } from './chargen-components.js';
 import { Button } from '../../components/button.js';
+import { modeLabel } from '../../mode-label.js';
 import {
   ATTRIBUTE_ABBREVIATIONS,
   ATTRIBUTE_LABELS,
@@ -230,7 +231,7 @@ export function HeroRecord({
 
       <section aria-label="Mode" className="flex flex-col gap-2 border-t border-line pt-2">
         <SectionHeader label="MODE" />
-        <DotLeaderRow label="Mode" value={state.mode === 'wanderer' ? 'Wanderer' : 'Classic'} />
+        <DotLeaderRow label="Mode" value={modeLabel(state.mode)} />
       </section>
 
       <section aria-label="Loadout" className="flex flex-col gap-2 border-t border-line pt-2">

@@ -110,3 +110,15 @@ adds `checkpoint_blob`, a nullable `text` column, additive via `alter table` so 
   the row and checkpoint in place, undecided, until the client sends `rise-again` or `accept-death`; a
   Wanderer victory clears immediately. This is deliberate — a reconnect mid-undecided-death re-offers
   the same choice from the pushed snapshot instead of resolving it either way.
+
+**Undecided dead Wanderer rows across content deploys.** Because an undecided death holds its row
+open indefinitely, deploying a new content pack while such a row exists strands it: the next `open()`
+throws `ContentHashMismatchError` before the rise/accept choice can ever be made (the WS layer sends
+a `content-mismatch` error and closes), and the row is **not** cleared — every reconnect fails the
+same way, so the profile cannot start a signed-in run at all until the row is removed. Remediation is
+manual today: delete the profile's `active_runs` row (`delete from active_runs where profile_id = ?`)
+and the player starts fresh. Nothing owed to the profile is lost — a Wanderer death writes nothing to
+the Hall whichever way the choice would have gone. To avoid creating such rows in the first place,
+drain undecided deaths before a content deploy: announce the restart and let players resolve
+rise/accept while the old pack is still live. (This row class is new with Wanderer mode; Classic rows
+concluded-and-cleared on sight and could not linger undecided.)
