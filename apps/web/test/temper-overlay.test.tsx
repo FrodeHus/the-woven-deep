@@ -59,7 +59,7 @@ describe('TemperOverlay', () => {
     ).toHaveLength(5);
   });
 
-  it('disables a capped attribute', () => {
+  it('offers no temper affordance at all for a capped attribute', () => {
     render(
       <TemperOverlay
         projection={projectionWithCappedMight()}
@@ -67,7 +67,10 @@ describe('TemperOverlay', () => {
         onClose={vi.fn()}
       />,
     );
-    expect(screen.getByRole('button', { name: /Might/ })).toBeDisabled();
+    // A capped row carries its reason instead of a permanently dead button (see the row branch in
+    // `TemperOverlay`): there is nothing to click, so there is no button to disable.
+    expect(screen.queryByRole('button', { name: /Might/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Agility/ })).toBeEnabled();
   });
 
   it('says the points are held when everything is capped', () => {
@@ -96,6 +99,35 @@ describe('TemperOverlay', () => {
     })) {
       expect(button).toBeDisabled();
     }
+  });
+
+  it('says how points are earned when nothing is banked', () => {
+    render(
+      <TemperOverlay projection={projectionWithBanked(0)} onTemper={vi.fn()} onClose={vi.fn()} />,
+    );
+    expect(screen.getByText(/deeper/i)).toBeInTheDocument();
+    // The held-by-the-Deep line is about UNSPENDABLE banked points -- with nothing banked there is
+    // nothing being held, so it must not appear.
+    expect(screen.queryByText('Held by the Deep.')).not.toBeInTheDocument();
+  });
+
+  it('marks a capped attribute at its maximum rather than leaving the row dead', () => {
+    render(
+      <TemperOverlay
+        projection={projectionWithCappedMight()}
+        onTemper={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('at maximum')).toBeInTheDocument();
+  });
+
+  it('explains both reasons when nothing is banked AND everything is capped', () => {
+    render(
+      <TemperOverlay projection={projectionAllCapped(0)} onTemper={vi.fn()} onClose={vi.fn()} />,
+    );
+    expect(screen.getByText(/deeper/i)).toBeInTheDocument();
+    expect(screen.getAllByText('at maximum')).toHaveLength(5);
   });
 
   it('calls onClose from the close affordance', async () => {
