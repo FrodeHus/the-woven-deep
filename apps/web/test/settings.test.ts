@@ -84,6 +84,14 @@ describe('resolveKeymap', () => {
     }
   });
 
+  it("an explicit override wins over a later action's DEFAULT chord in byChord", () => {
+    // 'wait' precedes 'use-belt-1' in ACTION_IDS, and use-belt-1's default is '1': under
+    // last-write-wins in declaration order, the later DEFAULT silently stole the chord the user
+    // explicitly bound. The user's binding must own the keystroke.
+    const { byChord } = resolveKeymap({ wait: { key: '1', shift: false } });
+    expect(byChord.get('1')).toBe('wait');
+  });
+
   it('lets an override shadow a default for one action without disturbing the rest', () => {
     const override: KeyChord = { key: 'z', shift: false };
     const { byAction, byChord } = resolveKeymap({ wait: override });
