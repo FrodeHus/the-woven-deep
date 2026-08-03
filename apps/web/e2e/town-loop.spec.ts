@@ -26,8 +26,8 @@ import { dungeonCanvas, expectHeroAt, topBarLocation } from './support.js';
  * (strongbox) = 5.
  *
  * Depth 1 for this seed is 160x50; the hero arrives on the stair-up at (38,23). The nearest
- * hostiles are a cave-rat pair around (54,44); the KILL walk bump-attacks until BOTH die, the
- * first at (56,42). The stored-floor proof re-descends and walks the hero back onto (56,42): only
+ * hostiles are a cave-rat pair around (54,44); the KILL walk bump-attacks until BOTH die (two
+ * blows each since the #212 combat tuning), the first at (56,42). The stored-floor proof re-descends and walks the hero back onto (56,42): only
  * reachable if that monster stays dead (a live monster would block the cell). Southwest steps use
  * `b` (top-row `1` is the potion belt's first slot now; see `guest-play.spec.ts`).
  */
@@ -66,6 +66,8 @@ const KILL = [
   '2',
   'b',
   'b',
+  '2',
+  '2',
 ];
 const TO_STAIR_UP = [
   '8',

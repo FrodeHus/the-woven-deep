@@ -17,10 +17,10 @@ import { dungeonCanvas, hoverWorldCell, topBarLocation } from './support.js';
  * (a single southeast step, `3`), then `>` drops to depth 1 (160x50, hero on the stair-up at
  * (38,23)). The two dungeon walks below are re-derived against that floor's CURRENT population
  * (issue #107): monsters now spawn in packed pairs, and the nearest pack to the stair-up is the
- * cave-rat pair at (54,44)/(54,45). `KILL` marches to that pair and kills BOTH rats (the second
- * closes to melee as the first dies), ending at (57,41) with nothing hostile within eight cells —
+ * cave-rat pair at (54,44)/(54,45). `KILL` marches to that pair and kills BOTH rats — two blows
+ * each since the #212 combat tuning — ending at (57,41) with nothing hostile within eight cells —
  * a calm spot for the item-management beats. `CLUSTER_KILL` is the same march stopped one blow
- * earlier: the first rat dies with the survivor adjacent at (56,42), hero at (57,41), for the
+ * earlier: the first rat dies with the survivor adjacent at (57,42), hero at (57,41), for the
  * threat-popover walk. No seed places ground items on a dungeon floor, so the "walk onto an item
  * and press g" beat drops one of the hero's travel rations and picks it back up.
  *
@@ -73,6 +73,8 @@ const KILL = [
   '2',
   'b',
   'b',
+  '2',
+  '2',
 ];
 
 /** Depth 1: the same march stopped one blow earlier — the first cave rat dies with its packmate
@@ -107,6 +109,7 @@ const CLUSTER_KILL = [
   '2',
   '2',
   '2',
+  'b',
   'b',
 ];
 
@@ -259,7 +262,7 @@ test('hovering a nearby threat on the canvas raises the popover', async ({ page 
   await awaitKeyboardReady(page);
 
   // Descend, then march to the cave-rat pair and kill the first: its packmate survives at world
-  // cell (56,42) beside the hero at (57,41) — pinned by the derivation run.
+  // cell (57,42) beside the hero at (57,41) — pinned by the derivation run.
   await pressAll(page, DESCEND_PREFIX);
   await page.keyboard.press('>');
   await expect(topBarLocation(page)).toContainText(/depth 1/i);
@@ -267,7 +270,7 @@ test('hovering a nearby threat on the canvas raises the popover', async ({ page 
   await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(/dies/i);
 
   const hero = { x: 57, y: 41 };
-  const rat = { x: 56, y: 42 };
+  const rat = { x: 57, y: 42 };
 
   // Hovering the rat's cell (computed from the pinned hero cell via the same iso projection the
   // renderer itself uses -- see `support.ts`'s `hoverWorldCell`) raises the threat popover card.

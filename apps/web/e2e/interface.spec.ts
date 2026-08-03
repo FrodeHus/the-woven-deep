@@ -45,7 +45,8 @@ import { dungeonCanvas, expectHeroAt, heroCellLabel, topBarLocation } from './su
  */
 const SEED_QUERY = '/play?quickstart=1&seed=11.22.33.44';
 
-/** Depth 1: march to the cave-rat pair and bump-attack until BOTH die (hero ends at (57,41)).
+/** Depth 1: march to the cave-rat pair and bump-attack until BOTH die -- two blows each since
+ * the #212 combat tuning (hero ends at (57,41)).
  * Lifted verbatim from `town-loop`/`guest-play` -- same descend origin, same deterministic floor.
  * Southwest steps use `b` (top-row `1` is the potion belt's first slot now). */
 const KILL = [
@@ -80,6 +81,8 @@ const KILL = [
   '2',
   'b',
   'b',
+  '2',
+  '2',
 ];
 /** Depth 1: from the post-KILL cell (57,41) back to the stair-up at (38,23). Lifted from `town-loop`. */
 const TO_STAIR_UP = [

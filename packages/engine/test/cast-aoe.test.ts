@@ -128,13 +128,15 @@ describe('AoE cast', () => {
   });
 
   it('applies, emits spell.cast, and round-trips a real single-target cast (spell.ember-bolt)', () => {
-    const { run } = createGameplayDemoRun(pack);
+    const { run, ids } = createGameplayDemoRun(pack);
     const hero = run.actors.find((actor) => actor.playerControlled)!;
     // `hero.x - 1` (unlike `hero.x + 1`, a wall) is genuinely walkable terrain, so the target rat
-    // placed there keeps the round-tripped save valid.
+    // placed there keeps the round-tripped save valid. Only the ONE wired rat moves: the bolt no
+    // longer one-shots a rat (they survive 2+ blows since the #212 tuning), so stacking every rat
+    // on the cell would leave living actors sharing it and invalidate the round-tripped save.
     const target = { x: hero.x - 1, y: hero.y };
     const actors = run.actors.map((actor) =>
-      actor.contentId === 'monster.cave-rat' ? { ...actor, ...target } : actor,
+      actor.actorId === ids.rat ? { ...actor, ...target } : actor,
     );
     const casterRun: ActiveRun = {
       ...run,

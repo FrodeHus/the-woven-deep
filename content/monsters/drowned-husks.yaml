@@ -11,12 +11,12 @@ entries:
     minDepth: 4
     maxDepth: 7
     attributes: { might: 7, agility: 3, vitality: 9, wits: 1, resolve: 8 }
-    health: 20
+    health: 32
     speed: 70
-    accuracy: 2
+    accuracy: 5
     defense: 8
     perception: 5
-    damage: { count: 1, sides: 8, bonus: 1 }
+    damage: { count: 2, sides: 4, bonus: 1 }
     armor: 1
     resistances: { physical: 10, fire: -30, cold: 40, lightning: 0, poison: 80, arcane: 0 }
     disposition: hostile
@@ -38,9 +38,9 @@ entries:
     minDepth: 4
     maxDepth: 8
     attributes: { might: 6, agility: 6, vitality: 6, wits: 2, resolve: 7 }
-    health: 16
+    health: 26
     speed: 95
-    accuracy: 3
+    accuracy: 8
     defense: 11
     perception: 6
     damage: { count: 1, sides: 8, bonus: 0 }
@@ -67,7 +67,7 @@ entries:
     attributes: { might: 10, agility: 3, vitality: 12, wits: 1, resolve: 9 }
     health: 34
     speed: 65
-    accuracy: 3
+    accuracy: 7
     defense: 9
     perception: 5
     damage: { count: 2, sides: 6, bonus: 1 }
@@ -94,7 +94,7 @@ entries:
     attributes: { might: 2, agility: 7, vitality: 6, wits: 9, resolve: 10 }
     health: 18
     speed: 100
-    accuracy: 4
+    accuracy: 7
     defense: 13
     perception: 10
     damage: { count: 1, sides: 8, bonus: 2 }
@@ -121,7 +121,7 @@ entries:
     attributes: { might: 12, agility: 5, vitality: 13, wits: 3, resolve: 11 }
     health: 42
     speed: 85
-    accuracy: 4
+    accuracy: 10
     defense: 11
     perception: 7
     damage: { count: 2, sides: 8, bonus: 2 }

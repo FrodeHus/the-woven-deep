@@ -11,9 +11,9 @@ entries:
     minDepth: 6
     maxDepth: 9
     attributes: { might: 11, agility: 5, vitality: 11, wits: 3, resolve: 8 }
-    health: 28
+    health: 39
     speed: 90
-    accuracy: 4
+    accuracy: 7
     defense: 10
     perception: 6
     damage: { count: 2, sides: 6, bonus: 1 }
@@ -40,7 +40,7 @@ entries:
     attributes: { might: 9, agility: 8, vitality: 8, wits: 3, resolve: 6 }
     health: 22
     speed: 115
-    accuracy: 5
+    accuracy: 9
     defense: 12
     perception: 7
     damage: { count: 1, sides: 10, bonus: 1 }
@@ -67,7 +67,7 @@ entries:
     attributes: { might: 13, agility: 5, vitality: 13, wits: 4, resolve: 10 }
     health: 40
     speed: 85
-    accuracy: 5
+    accuracy: 7
     defense: 11
     perception: 6
     damage: { count: 2, sides: 8, bonus: 2 }
@@ -94,7 +94,7 @@ entries:
     attributes: { might: 9, agility: 6, vitality: 10, wits: 6, resolve: 8 }
     health: 30
     speed: 90
-    accuracy: 5
+    accuracy: 9
     defense: 10
     perception: 9
     damage: { count: 2, sides: 6, bonus: 2 }
@@ -121,7 +121,7 @@ entries:
     attributes: { might: 16, agility: 5, vitality: 16, wits: 4, resolve: 12 }
     health: 52
     speed: 90
-    accuracy: 6
+    accuracy: 10
     defense: 12
     perception: 7
     damage: { count: 3, sides: 6, bonus: 2 }

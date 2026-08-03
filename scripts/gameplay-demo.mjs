@@ -69,28 +69,40 @@ function directionTo(from, to) {
 }
 
 function commandFactories(ids) {
+  // The rat kill and the beetle shoot are bounded loops (`repeatUntil`) rather than one scripted
+  // command each: since the #212 combat tuning neither wired monster dies to a single blow. The
+  // materialized command list stays fully deterministic -- each loop's length is fixed by the seed.
   return [
-    () => ({ type: 'open-door', featureId: ids.door }),
-    (state) => {
-      const hero = state.actors.find((actor) => actor.actorId === ids.hero);
-      const door = state.features.find((feature) => feature.featureId === ids.door);
-      return { type: 'move', direction: directionTo(hero, door) };
+    { factory: () => ({ type: 'open-door', featureId: ids.door }) },
+    {
+      factory: (state) => {
+        const hero = state.actors.find((actor) => actor.actorId === ids.hero);
+        const door = state.features.find((feature) => feature.featureId === ids.door);
+        return { type: 'move', direction: directionTo(hero, door) };
+      },
     },
-    () => ({ type: 'search' }),
-    () => ({ type: 'disarm', featureId: ids.trap }),
-    () => ({ type: 'equip', itemId: ids.armor, slot: 'body' }),
-    () => ({ type: 'attack', targetActorId: ids.rat }),
-    () => ({ type: 'equip', itemId: ids.bow, slot: 'main-hand' }),
-    (state) => {
-      const beetle = state.actors.find((actor) => actor.actorId === ids.beetle);
-      return { type: 'fire', itemId: ids.bow, target: { x: beetle.x, y: beetle.y } };
+    { factory: () => ({ type: 'search' }) },
+    { factory: () => ({ type: 'disarm', featureId: ids.trap }) },
+    { factory: () => ({ type: 'equip', itemId: ids.armor, slot: 'body' }) },
+    {
+      factory: () => ({ type: 'attack', targetActorId: ids.rat }),
+      repeatUntil: (state) => state.actors.find((actor) => actor.actorId === ids.rat).health === 0,
     },
-    () => ({ type: 'equip', itemId: ids.sword, slot: 'main-hand' }),
-    () => ({ type: 'equip', itemId: ids.lantern, slot: 'off-hand' }),
-    () => ({ type: 'use-item', itemId: ids.crimsonPotion, target: null }),
-    () => ({ type: 'rest', until: 'interrupted', maximumDuration: 12 }),
-    () => ({ type: 'pick-lock', featureId: ids.chest }),
-    () => ({ type: 'pick-lock', featureId: ids.lockedDoor }),
+    { factory: () => ({ type: 'equip', itemId: ids.bow, slot: 'main-hand' }) },
+    {
+      factory: (state) => {
+        const beetle = state.actors.find((actor) => actor.actorId === ids.beetle);
+        return { type: 'fire', itemId: ids.bow, target: { x: beetle.x, y: beetle.y } };
+      },
+      repeatUntil: (state) =>
+        state.actors.find((actor) => actor.actorId === ids.beetle).health === 0,
+    },
+    { factory: () => ({ type: 'equip', itemId: ids.sword, slot: 'main-hand' }) },
+    { factory: () => ({ type: 'equip', itemId: ids.lantern, slot: 'off-hand' }) },
+    { factory: () => ({ type: 'use-item', itemId: ids.crimsonPotion, target: null }) },
+    { factory: () => ({ type: 'rest', until: 'interrupted', maximumDuration: 12 }) },
+    { factory: () => ({ type: 'pick-lock', featureId: ids.chest }) },
+    { factory: () => ({ type: 'pick-lock', featureId: ids.lockedDoor }) },
   ];
 }
 
@@ -123,19 +135,24 @@ function execute(initial, content, commands, reloadAfter) {
 function materialize(initial, content, ids) {
   let state = initial;
   const commands = [];
-  for (const [index, factory] of commandFactories(ids).entries()) {
-    const command = {
-      ...factory(state),
-      commandId: `command.gameplay-${String(index + 1).padStart(2, '0')}`,
-      expectedRevision: state.revision,
-    };
-    const resolution = resolveCommand(state, command, { content });
-    assert(
-      resolution.result.status === 'applied',
-      `${command.commandId} was ${resolution.result.status}: ${stableJson(resolution.events)}`,
-    );
-    commands.push(command);
-    state = resolution.state;
+  for (const step of commandFactories(ids)) {
+    for (let iteration = 0; iteration < 24; iteration += 1) {
+      const command = {
+        ...step.factory(state),
+        commandId: `command.gameplay-${String(commands.length + 1).padStart(2, '0')}`,
+        expectedRevision: state.revision,
+      };
+      const resolution = resolveCommand(state, command, { content });
+      assert(
+        resolution.result.status === 'applied',
+        `${command.commandId} was ${resolution.result.status}: ${stableJson(resolution.events)}`,
+      );
+      commands.push(command);
+      state = resolution.state;
+      if (step.repeatUntil === undefined || step.repeatUntil(state)) break;
+    }
+    if (step.repeatUntil !== undefined)
+      assert(step.repeatUntil(state), 'scenario loop did not reach its goal within 24 commands');
   }
   return commands;
 }

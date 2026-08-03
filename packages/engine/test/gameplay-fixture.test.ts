@@ -201,7 +201,6 @@ describe('seeded gameplay fixture', () => {
       () => ({ type: 'search' }) as GameCommand,
       () => ({ type: 'disarm', featureId: ids.trap }) as GameCommand,
       () => ({ type: 'equip', itemId: ids.armor, slot: 'body' }) as GameCommand,
-      () => ({ type: 'attack', targetActorId: ids.rat }) as GameCommand,
     ];
 
     let state = fixture.run;
@@ -209,6 +208,21 @@ describe('seeded gameplay fixture', () => {
       const command = {
         ...factory(state),
         commandId: `command.loot-fixture-${index + 1}`,
+        expectedRevision: state.revision,
+      } as GameCommand;
+      const resolution = resolveCommand(state, command, { content: pack });
+      expect(resolution.result.status, stableJson(resolution.events)).toBe('applied');
+      state = resolution.state;
+    }
+
+    // Monsters survive multiple blows since the #212 tuning, so the kill is a bounded loop rather
+    // than a single scripted attack -- the assertion under test is the loot drop, not the blow count.
+    for (let swing = 0; swing < 20; swing += 1) {
+      if (state.actors.find((actor) => actor.actorId === ids.rat)!.health === 0) break;
+      const command = {
+        type: 'attack',
+        targetActorId: ids.rat,
+        commandId: `command.loot-fixture-kill-${swing + 1}`,
         expectedRevision: state.revision,
       } as GameCommand;
       const resolution = resolveCommand(state, command, { content: pack });

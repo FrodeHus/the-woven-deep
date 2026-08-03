@@ -11,9 +11,9 @@ entries:
     minDepth: 15
     maxDepth: 15
     attributes: { might: 15, agility: 10, vitality: 16, wits: 13, resolve: 15 }
-    health: 78
+    health: 120
     speed: 100
-    accuracy: 8
+    accuracy: 11
     defense: 15
     perception: 11
     damage: { count: 2, sides: 8, bonus: 3 }
