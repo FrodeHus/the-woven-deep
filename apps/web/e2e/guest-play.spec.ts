@@ -15,12 +15,18 @@ import { dungeonCanvas, hoverWorldCell, topBarLocation } from './support.js';
  * Town start (5C): quickstart now boots into the authored town (depth 0), so every walk gains a
  * one-step descend prefix — the hero spawns at (5,9), the dungeon entrance / stair-down is (6,10)
  * (a single southeast step, `3`), then `>` drops to depth 1 (160x50, hero on the stair-up at
- * (38,23)). The two dungeon walks below are re-derived against that floor (the old 80x25 depth-1
- * pins are gone). `KILL` chases the lone monster that intercepts the hero and kills it at (27,10),
- * leaving a calm spot for the item-management beats. `CLUSTER_KILL` marches into the far monster
- * room and kills one of the packed group, leaving a live cave rat adjacent at (9,2) (hero at
- * (10,2)) for the threat-panel/death walks. No seed places ground items on a dungeon floor, so the
- * "walk onto an item and press g" beat drops one of the hero's travel rations and picks it back up.
+ * (38,23)). The two dungeon walks below are re-derived against that floor's CURRENT population
+ * (issue #107): monsters now spawn in packed pairs, and the nearest pack to the stair-up is the
+ * cave-rat pair at (54,44)/(54,45). `KILL` marches to that pair and kills BOTH rats (the second
+ * closes to melee as the first dies), ending at (57,41) with nothing hostile within eight cells —
+ * a calm spot for the item-management beats. `CLUSTER_KILL` is the same march stopped one blow
+ * earlier: the first rat dies with the survivor adjacent at (56,42), hero at (57,41), for the
+ * threat-popover walk. No seed places ground items on a dungeon floor, so the "walk onto an item
+ * and press g" beat drops one of the hero's travel rations and picks it back up.
+ *
+ * Southwest steps use `b` (the default keymap's vi binding): the top-row `1` is the potion belt's
+ * first slot now — only `Numpad1` still means southwest, and Playwright's `keyboard.press('1')`
+ * sends `Digit1`, which with an empty belt is a silent no-op that desyncs the walk.
  */
 // The landing page now owns `/`; the guest game lives behind the `/play` path (see
 // `src/main.tsx`'s path check). The seed override still parses out of the query string exactly
@@ -32,34 +38,29 @@ const SEED_QUERY = '/play?quickstart=1&seed=11.22.33.44';
 /** Town spawn (5,9) -> dungeon entrance / stair-down (6,10): one southeast step, then `>`. */
 const DESCEND_PREFIX = ['3'];
 
-/** Depth 1: chase the intercepting monster and bump-attack until it dies at (27,10) (hero (28,10),
- * no hostiles left nearby — a calm spot for the drop/pickup/consume/rest beats). */
+/** Depth 1: march to the nearest cave-rat pair and bump-attack until BOTH die (the second rat
+ * closes to melee as the first falls), ending at (57,41) with no hostiles within eight cells — a
+ * calm spot for the drop/pickup/consume/rest beats. */
 const KILL = [
-  '4',
-  '7',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '7',
-  '7',
-  '7',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '7',
-  '4',
-  '1',
+  '6',
+  '3',
+  '3',
+  '6',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '3',
   '2',
   '2',
   '2',
@@ -67,59 +68,46 @@ const KILL = [
   '2',
   '2',
   '2',
-  '1',
-  '4',
-  '4',
+  '2',
+  '2',
+  '2',
+  'b',
+  'b',
 ];
 
-/** Depth 1: march into the far monster room and kill one of the packed group, leaving a live cave
- * rat adjacent at (9,2) with the hero at (10,2). */
+/** Depth 1: the same march stopped one blow earlier — the first cave rat dies with its packmate
+ * (a live cave rat) left adjacent at (56,42), hero at (57,41). */
 const CLUSTER_KILL = [
-  '4',
-  '7',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '7',
-  '7',
-  '7',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '7',
-  '4',
-  '4',
-  '1',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
-  '4',
+  '6',
+  '3',
+  '3',
+  '6',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '3',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  '2',
+  'b',
 ];
 
 async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
@@ -173,10 +161,11 @@ test('a guest plays, persists, and descends by keyboard alone', async ({ page })
   await expect(log).toContainText(/dies/i);
 
   // Drop a travel ration (creating a real ground item), step off and back onto it, pick it up.
+  // North/south is the derived step pair at (57,41) — west is a wall there.
   await openBackpack(page);
   await page.keyboard.press('d');
   await closeBackpack(page);
-  await pressAll(page, ['4', '6']);
+  await pressAll(page, ['8', '2']);
   await page.keyboard.press('g');
   await expect(log).toContainText(/you pick up an item/i);
 
@@ -269,16 +258,16 @@ test('hovering a nearby threat on the canvas raises the popover', async ({ page 
   await expect(dungeonCanvas(page)).toBeVisible();
   await awaitKeyboardReady(page);
 
-  // Descend, then march into the monster room and kill one of the packed group: a surviving cave
-  // rat is left at world cell (9,2) beside the hero at (10,2) — pinned by the derivation run.
+  // Descend, then march to the cave-rat pair and kill the first: its packmate survives at world
+  // cell (56,42) beside the hero at (57,41) — pinned by the derivation run.
   await pressAll(page, DESCEND_PREFIX);
   await page.keyboard.press('>');
   await expect(topBarLocation(page)).toContainText(/depth 1/i);
   await pressAll(page, CLUSTER_KILL);
   await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(/dies/i);
 
-  const hero = { x: 10, y: 2 };
-  const rat = { x: 9, y: 2 };
+  const hero = { x: 57, y: 41 };
+  const rat = { x: 56, y: 42 };
 
   // Hovering the rat's cell (computed from the pinned hero cell via the same iso projection the
   // renderer itself uses -- see `support.ts`'s `hoverWorldCell`) raises the threat popover card.

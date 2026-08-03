@@ -26,16 +26,16 @@ import { dungeonCanvas, expectHeroAt, heroCellLabel, topBarLocation } from './su
  * 34x16, hero spawns at (5,9); the dungeon entrance / stair-down is (6,10); the three merchant
  * stalls sit along the top wall -- provisioner at (6,2), arms dealer at (16,2), CURIOS DEALER at
  * (25,2), reachable by standing directly south of it at (25,3). Depth 1 for this seed is 160x50;
- * the hero arrives on the stair-up at (38,23); the KILL walk bump-attacks until a Training beetle
- * dies at (27,10) (hero ends at (28,10)); ascending returns the hero to the town stair cell (6,10).
+ * the hero arrives on the stair-up at (38,23); the KILL walk bump-attacks the nearest cave-rat pair
+ * until both die (hero ends at (57,41)); ascending returns the hero to the town stair cell (6,10).
  *
  * SPEC-REALITY NOTES (why this spec's assertions differ from the task brief's prose):
  *  - The shipped codex has four categories -- classes, items, spells, monsters -- and NO NPC/merchant
  *    category (see `codex.ts`'s `deriveCodexState`). A town merchant such as the provisioner is an
  *    `npc`-kind actor, never a `monster`-kind content entry, so it can never surface as a codex
  *    entry. The faithful "something met in town is already discovered" beat is therefore asserted
- *    against what the codex genuinely shows in town: the hero's own class (Wayfarer) and the starting
- *    gear it carries (Iron sword, Leather armor) are discovered, while every monster stays a
+ *    against what the codex genuinely shows in town: the hero's own class (Wayfarer) and the identified
+ *    provisions it carries (Travel ration) are discovered, while every monster stays a
  *    silhouette until one is actually perceived below.
  *  - The hero starts with no unidentified items, so this spec BUYS the curios dealer's unidentified
  *    potion first (its stock's base band is a single crimson potion, which projects under an
@@ -45,34 +45,29 @@ import { dungeonCanvas, expectHeroAt, heroCellLabel, topBarLocation } from './su
  */
 const SEED_QUERY = '/play?quickstart=1&seed=11.22.33.44';
 
-/** Depth 1: chase the intercepting monster and bump-attack until a Training beetle dies at (27,10).
- * Lifted verbatim from `town-loop`/`guest-play` -- same descend origin, same deterministic floor. */
+/** Depth 1: march to the cave-rat pair and bump-attack until BOTH die (hero ends at (57,41)).
+ * Lifted verbatim from `town-loop`/`guest-play` -- same descend origin, same deterministic floor.
+ * Southwest steps use `b` (top-row `1` is the potion belt's first slot now). */
 const KILL = [
-  '4',
-  '7',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '7',
-  '7',
-  '7',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '7',
-  '4',
-  '1',
+  '6',
+  '3',
+  '3',
+  '6',
+  '3',
+  '3',
+  '3',
+  '3',
+  '3',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '6',
+  '3',
   '2',
   '2',
   '2',
@@ -80,14 +75,14 @@ const KILL = [
   '2',
   '2',
   '2',
-  '1',
-  '4',
-  '4',
+  '2',
+  '2',
+  '2',
+  'b',
+  'b',
 ];
-/** Depth 1: from the post-KILL cell back to the stair-up at (38,23). Lifted from `town-loop`. */
+/** Depth 1: from the post-KILL cell (57,41) back to the stair-up at (38,23). Lifted from `town-loop`. */
 const TO_STAIR_UP = [
-  '6',
-  '9',
   '8',
   '8',
   '8',
@@ -95,41 +90,32 @@ const TO_STAIR_UP = [
   '8',
   '8',
   '8',
-  '9',
-  '6',
-  '3',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '2',
-  '3',
-  '3',
-  '3',
-  '2',
-  '3',
-  '6',
+  '8',
+  '8',
+  '8',
+  '7',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '4',
+  '7',
+  '7',
+  '4',
+  '7',
+  '7',
+  '7',
+  '4',
+  '7',
+  '7',
 ];
 /** Town: from the stair cell (6,10) up to the walkway and east into the curios stall's mouth,
  * ending directly south of the dealer at (25,3) -- Chebyshev-adjacent, so trade can open. */
 const TO_CURIOS = [
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
-  '8',
   '6',
   '6',
   '6',
@@ -142,14 +128,13 @@ const TO_CURIOS = [
   '6',
   '6',
   '6',
-  '6',
-  '6',
-  '6',
-  '6',
-  '6',
-  '6',
-  '6',
-  '8',
+  '9',
+  '9',
+  '9',
+  '9',
+  '9',
+  '9',
+  '9',
 ];
 
 async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
@@ -193,7 +178,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await cycleOverlay(page, 'c', 'overlay-character-sheet');
   await cycleOverlay(page, 'm', 'overlay-map-journal');
   await cycleOverlay(page, 'x', 'overlay-codex');
-  await cycleOverlay(page, 'o', 'overlay-settings');
+  await cycleOverlay(page, 'Shift+O', 'overlay-settings');
   await cycleOverlay(page, 'Shift+?', 'overlay-help');
   await cycleOverlay(page, 'i', 'overlay-inventory');
   // Hero is still responsive after the whole overlay tour (state untouched at the spawn cell).
@@ -207,7 +192,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   // otherwise unreachable; briefly growing the viewport is the only way to interact with it
   // without touching component source.
   await page.setViewportSize({ width: 1440, height: 2200 });
-  await page.keyboard.press('o');
+  await page.keyboard.press('Shift+O');
   const settings = page.getByTestId('overlay-settings');
   await expect(settings).toBeVisible();
   // Each binding row is a `<li>` with the action label followed by the chord as its own `<span>`
@@ -225,7 +210,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await expectHeroAt(page, 4, 9);
 
   // Rebind back: reset the Move west row to its default `h`.
-  await page.keyboard.press('o');
+  await page.keyboard.press('Shift+O');
   await expect(settings).toBeVisible();
   await westRow.getByRole('button', { name: 'Reset' }).click();
   await expect(westChord).toHaveText('h');
@@ -242,19 +227,21 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await pressAll(page, ['6', '6', '6', '6', '6']); // walk east five cells: (4,9) -> (9,9)
   await expectHeroAt(page, 9, 9);
 
-  // --- Codex in town: the hero's class and starting gear are discovered (perceived in town),
-  // but every monster is still a silhouette -- nothing has been perceived below yet. ---
+  // --- Codex in town: the hero's class is discovered, and of the starting kit only the Travel
+  // ration is a NAMED item discovery -- the identification pillar keeps unidentified gear (sword/
+  // armor/torch) as ???? silhouettes until identified. Every monster is still a silhouette --
+  // nothing has been perceived below yet. ---
   await page.keyboard.press('x');
   const codex = page.getByTestId('overlay-codex');
   await expect(codex).toBeVisible();
   await codex.getByRole('tab', { name: 'Classes' }).click();
   await expect(codex.getByRole('listbox', { name: 'Classes' })).toContainText('Wayfarer');
   await codex.getByRole('tab', { name: 'Items' }).click();
-  await expect(codex.getByRole('listbox', { name: 'Items' })).toContainText('Iron sword');
+  await expect(codex.getByRole('listbox', { name: 'Items' })).toContainText('Travel ration');
   await codex.getByRole('tab', { name: 'Monsters' }).click();
   const monsters = codex.getByRole('listbox', { name: 'Monsters' });
   await expect(monsters).toContainText('???');
-  await expect(monsters).not.toContainText(/Training beetle/i);
+  await expect(monsters).not.toContainText(/Cave rat/i);
   await page.keyboard.press('Escape');
   await expect(codex).toBeHidden();
 
@@ -272,11 +259,11 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   await expect(topBarLocation(page)).toContainText(/town/i);
   await expectHeroAt(page, 6, 10);
 
-  // --- Codex again: the perceived-and-killed Training beetle is now a named, discovered entry. ---
+  // --- Codex again: the perceived-and-killed Cave rat is now a named, discovered entry. ---
   await page.keyboard.press('x');
   await expect(codex).toBeVisible();
   await codex.getByRole('tab', { name: 'Monsters' }).click();
-  await expect(codex.getByRole('listbox', { name: 'Monsters' })).toContainText(/Training beetle/i);
+  await expect(codex.getByRole('listbox', { name: 'Monsters' })).toContainText(/Cave rat/i);
   await page.keyboard.press('Escape');
   await expect(codex).toBeHidden();
 
@@ -342,7 +329,7 @@ test('the guest interface: overlays, rebinding, font scale, codex discovery, ide
   // quickstart's session is gated on `screen.screen === 'play'`, so it does not re-fire once
   // clearing lands on the title screen, and storage stays wiped (see `App.tsx`).
   await page.setViewportSize({ width: 1440, height: 2200 });
-  await page.keyboard.press('o');
+  await page.keyboard.press('Shift+O');
   await expect(settings).toBeVisible();
   await settings.locator('#settings-clear-confirm').fill('clear');
   await settings.getByRole('button', { name: 'Clear guest session' }).click();

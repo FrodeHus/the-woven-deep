@@ -55,36 +55,40 @@ async function pressAll(page: Page, keys: readonly string[]): Promise<void> {
 /** Builds a hero through the minimal chargen console path and enters play -- the same lean
  * run-through `run-lifecycle.spec.ts`'s "New Hero" leg uses, lifted here so this spec can reach
  * town play WITHOUT quickstart (the only boot under which onboarding is allowed to show). Step
- * order is Identity -> Calling -> Kit -> Attributes -> Origin -> Traits -> Review. */
+ * order is Identity -> Calling -> Kit -> Attributes -> Origin -> Traits -> Mode -> Review. */
 async function buildHeroAndEnterTown(page: Page): Promise<void> {
   await page.getByRole('option', { name: 'Enter the Deep' }).click();
 
-  await expect(page.getByLabel(/Step 1 of 7/)).toBeVisible();
+  await expect(page.getByLabel(/Step 1 of 8/)).toBeVisible();
   await page.getByRole('textbox', { name: 'Name' }).fill('Ember');
-  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: /NEXT/ }).click();
 
-  await expect(page.getByLabel(/Step 2 of 7/)).toBeVisible();
+  await expect(page.getByLabel(/Step 2 of 8/)).toBeVisible();
   await page.getByRole('option', { name: /Wayfarer/ }).click();
-  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: /NEXT/ }).click();
 
-  await expect(page.getByLabel(/Step 3 of 7/)).toBeVisible();
+  await expect(page.getByLabel(/Step 3 of 8/)).toBeVisible();
   await page.getByRole('listbox', { name: 'Kit' }).getByRole('option').first().click();
-  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: /NEXT/ }).click();
 
-  await expect(page.getByLabel(/Step 4 of 7/)).toBeVisible();
+  await expect(page.getByLabel(/Step 4 of 8/)).toBeVisible();
   await page.getByRole('option', { name: /ROLL 3D6/i }).click();
   await page.getByRole('button', { name: 'Roll attributes' }).click();
-  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: /NEXT/ }).click();
 
-  await expect(page.getByLabel(/Step 5 of 7/)).toBeVisible();
+  await expect(page.getByLabel(/Step 5 of 8/)).toBeVisible();
   await page.getByRole('option', { name: 'Caravan guard' }).click();
-  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: /NEXT/ }).click();
 
-  await expect(page.getByLabel(/Step 6 of 7/)).toBeVisible();
-  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByLabel(/Step 6 of 8/)).toBeVisible();
+  await page.getByRole('button', { name: /NEXT/ }).click(); // Traits (none) -> Mode
 
-  await expect(page.getByLabel(/Step 7 of 7/)).toBeVisible();
+  await expect(page.getByLabel(/Step 7 of 8/)).toBeVisible();
+  await page.getByRole('button', { name: /NEXT/ }).click(); // Mode (Classic) -> Review
+
+  await expect(page.getByLabel(/Step 8 of 8/)).toBeVisible();
   await page.getByRole('button', { name: 'WEAVE ▸', exact: true }).click();
+  await page.getByRole('button', { name: /DESCEND/ }).click();
 
   await expect(dungeonCanvas(page)).toBeVisible();
   await expect(topBarLocation(page)).toContainText(/town/i);
@@ -138,7 +142,7 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
   // `max-h`/`overflow-y`), so several of its controls are otherwise unreachable; briefly growing
   // the viewport is the only way to interact with them without touching component source. ---
   await page.setViewportSize({ width: 1440, height: 2200 });
-  await page.keyboard.press('o');
+  await page.keyboard.press('Shift+O');
   const settings = page.getByTestId('overlay-settings');
   await expect(settings).toBeVisible();
 
@@ -181,7 +185,7 @@ test('the guest polish: onboarding, theme, the descend fade, and a clean reset',
   // --- Clear the guest session from settings; the app lands on a fresh title screen and every
   // guest storage key is wiped -- including the onboarding mastery ledger this run wrote to. ---
   await page.setViewportSize({ width: 1440, height: 2200 });
-  await page.keyboard.press('o');
+  await page.keyboard.press('Shift+O');
   await expect(settings).toBeVisible();
   await settings.locator('#settings-clear-confirm').fill('clear');
   await settings.getByRole('button', { name: 'Clear guest session' }).click();
