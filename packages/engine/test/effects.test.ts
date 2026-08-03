@@ -250,9 +250,9 @@ describe('ordered effects', () => {
 
 function cursedItem(
   itemId: string,
-  overrides: Readonly<{ actorId?: string; revealed?: boolean }> = {},
+  overrides: Readonly<{ actorId?: string; revealed?: boolean; equipped?: boolean }> = {},
 ): ItemInstance {
-  const { actorId = 'hero.demo', revealed = true } = overrides;
+  const { actorId = 'hero.demo', revealed = true, equipped = false } = overrides;
   return {
     itemId,
     contentId: 'item.dummy',
@@ -263,7 +263,9 @@ function cursedItem(
     charges: null,
     fuel: null,
     enabled: null,
-    location: { type: 'backpack', actorId },
+    location: equipped
+      ? { type: 'equipped', actorId, slot: 'main-hand' }
+      : { type: 'backpack', actorId },
     curse: { curseId: 'curse.test', revealed },
   };
 }
@@ -287,6 +289,22 @@ describe('effect.curse.remove', () => {
       itemId: 'item.a.0001',
       curseId: 'curse.test',
     });
+  });
+
+  it('prefers a welded (equipped) cursed item over a droppable backpack one, whatever the itemId order', () => {
+    // The backpack ring sorts first by itemId, but the player aimed the scroll at the sword welded
+    // to their hand -- the item they cannot simply drop.
+    const backpackRing = cursedItem('item.a.ring');
+    const weldedSword = cursedItem('item.z.sword', { equipped: true });
+    const result = resolveEffectSequence({
+      ...fixture([
+        { effectId: 'effect.curse.remove', parameters: {}, requiresLivingTarget: false },
+      ]),
+      items: [backpackRing, weldedSword],
+      targetActorId: 'hero.demo',
+    });
+    expect(result.items.find((item) => item.itemId === 'item.z.sword')!.curse).toBeUndefined();
+    expect(result.items.find((item) => item.itemId === 'item.a.ring')!.curse).toBeDefined();
   });
 
   it('leaves an unrevealed curse alone', () => {

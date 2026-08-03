@@ -85,16 +85,26 @@ export function balanceEntriesIssues(
     );
   }
   if (balanceEntries.length === 1) {
+    const located = balanceEntries[0] as LocatedContentEntry & { entry: BalanceContentEntry };
     const monsters = locatedEntries.filter(
-      (located): located is LocatedContentEntry & { entry: MonsterContentEntry } =>
-        located.entry.kind === 'monster',
+      (candidate): candidate is LocatedContentEntry & { entry: MonsterContentEntry } =>
+        candidate.entry.kind === 'monster',
     );
-    issues.push(
-      ...balanceIssues(
-        balanceEntries[0] as LocatedContentEntry & { entry: BalanceContentEntry },
-        monsters,
-      ),
-    );
+    issues.push(...balanceIssues(located, monsters));
+    // A nonzero curse chance with an empty curse roster compiles clean but throws at generation
+    // time, on the first floor that actually rolls a curse -- mid-run instead of at
+    // content:validate. Zero chance with no curses stays legal (curses disabled).
+    const { chanceBps } = located.entry.curses;
+    const anyChance = chanceBps.shallow > 0 || chanceBps.mid > 0 || chanceBps.deep > 0;
+    if (anyChance && !locatedEntries.some(({ entry }) => entry.kind === 'curse')) {
+      issues.push(
+        issue(
+          located.file,
+          `$.entries.${located.entry.id}.curses.chanceBps`,
+          'nonzero curse chance requires at least one curse entry in the pack',
+        ),
+      );
+    }
   }
   return issues;
 }

@@ -245,6 +245,20 @@ describe('trade-service remove-curse', () => {
     expect(healed.condition).toBe(before.condition);
   });
 
+  it('emits curse.removed beside the purchase event, so the log prints the lift', () => {
+    const runWithTrade = openedRun();
+    const cursed = itemOf(runWithTrade, 'item.hero.revealed-cursed');
+    const resolved = resolveCommand(runWithTrade, removeCurseCommand(), context());
+    expect(resolved.result).toMatchObject({ status: 'applied' });
+    expect(resolved.events).toContainEqual(
+      expect.objectContaining({
+        type: 'curse.removed',
+        itemId: 'item.hero.revealed-cursed',
+        curseId: cursed.curse!.curseId,
+      }),
+    );
+  });
+
   it('makes an equipped cursed item unequippable again after removal', () => {
     const runWithTrade = openedRun();
     const resolved = resolveCommand(

@@ -419,8 +419,10 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
         quantity,
       });
     } else if (effect.effectId === 'effect.curse.remove') {
-      // Targets like effect.fuel.transfer does: the actor's own items, deterministically first by
-      // itemId. use-item carries no item target, so this is the codebase's item-targeting contract.
+      // Targets the actor's own revealed cursed items, welded (equipped) ones first: use-item
+      // carries no item target, and a droppable backpack ring must never eat the scroll a player
+      // aimed at the sword welded to their hand. Within each group the itemId order keeps the
+      // draw deterministic, matching effect.fuel.transfer's contract.
       const cursed = items
         .filter(
           (item) =>
@@ -428,7 +430,11 @@ export function resolveEffectSequence(input: EffectSequenceInput): EffectSequenc
             item.location.actorId === input.targetActorId &&
             item.curse?.revealed === true,
         )
-        .sort((left, right) => compareCodeUnits(left.itemId, right.itemId));
+        .sort((left, right) => {
+          const weldedFirst =
+            Number(right.location.type === 'equipped') - Number(left.location.type === 'equipped');
+          return weldedFirst !== 0 ? weldedFirst : compareCodeUnits(left.itemId, right.itemId);
+        });
       const target = cursed[0];
       if (target) {
         items = items.map((item) => {
