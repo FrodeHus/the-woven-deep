@@ -127,9 +127,14 @@ export function materializeDeathInventory(
     y: number;
   }>,
 ): readonly MaterializedPiece[] {
-  const unavailableContentIds = circulatingArtifactContentIds(input.content, input.existingItems);
-  return input.snapshots.map((snapshot, index) =>
-    createRecordedHeirloom({
+  // The unavailable set accumulates as the set materializes: a piece that mints an artifact makes
+  // that artifact unavailable to every LATER piece of the same drop, so a drop whose snapshots name
+  // the same singleton twice (composable from two sources) can never mint it twice in one call.
+  const unavailableContentIds = new Set(
+    circulatingArtifactContentIds(input.content, input.existingItems),
+  );
+  return input.snapshots.map((snapshot, index) => {
+    const piece = createRecordedHeirloom({
       content: input.content,
       snapshot,
       equippedItemContentIds: input.equippedItemContentIds,
@@ -139,6 +144,17 @@ export function materializeDeathInventory(
       floorId: input.floorId,
       x: input.x,
       y: input.y,
-    }),
+    });
+    if (!piece.fallback && isArtifactContentId(input.content, piece.item.contentId)) {
+      unavailableContentIds.add(piece.item.contentId);
+    }
+    return piece;
+  });
+}
+
+/** Whether `contentId` names an artifact item in `content`. */
+function isArtifactContentId(content: CompiledContentPack, contentId: OpaqueId): boolean {
+  return content.entries.some(
+    (entry) => entry.kind === 'item' && entry.id === contentId && entry.artifact != null,
   );
 }

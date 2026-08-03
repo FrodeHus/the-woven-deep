@@ -363,4 +363,25 @@ describe('materializeDeathInventory artifact singleton guard', () => {
     // Only singletons are guarded: ordinary gear is minted as often as records name it.
     expect(materialize([existing])[1]!.fallback).toBe(false);
   });
+
+  it('degrades the second of two snapshots naming the same artifact within ONE drop', () => {
+    // The unavailable set must accumulate across the set being materialized, not only be computed
+    // once from what the run held beforehand -- otherwise a drop composed from two sources that
+    // both name the artifact would mint the singleton twice in a single call.
+    const pieces = materializeDeathInventory({
+      content: pack(),
+      snapshots: [relic(), relic()],
+      equippedItemContentIds: ['item.relic'],
+      fallbackItemId: 'item.champion-fallback-relic',
+      existingItems: [],
+      itemIdPrefix: 'item.haunt.x',
+      floorId,
+      x: 1,
+      y: 1,
+    });
+    expect(pieces[0]!.fallback).toBe(false);
+    expect(pieces[0]!.item.contentId).toBe('item.relic');
+    expect(pieces[1]!.fallback).toBe(true);
+    expect(pieces[1]!.item.contentId).toBe('item.champion-fallback-relic');
+  });
 });
