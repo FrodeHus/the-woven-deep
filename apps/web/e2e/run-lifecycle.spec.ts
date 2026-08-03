@@ -21,9 +21,10 @@ import { dungeonCanvas, topBarLocation } from './support.js';
  *    gains a one-step descend prefix (`3` then `>`, spawn (5,9) -> dungeon entrance (6,10) ->
  *    depth 1). On the 160x50 depth-1 floor the hero marches to the nearest cave-rat pair and kills
  *    ONE of them (`CLUSTER_KILL`, shared derivation with `guest-play.spec.ts`), leaving its live
- *    packmate adjacent at (56,42) with the hero at (57,41). From there the hero simply WAITS
+ *    packmate adjacent at (57,42) with the hero at (57,41). From there the hero simply WAITS
  *    (`.`): each wait passes the turn to the adjacent hostile, which attacks with no retaliation,
- *    and the hero dies (the cave rat lands the blow — 86 waits for this pinned seed,
+ *    and the hero dies (the cave rat lands the blow — 12 waits for this pinned seed under the #212
+ *    combat tuning,
  *    engine-deterministic). That count is deliberately NOT hardcoded — we poll the conclusion
  *    screen with an immediate `isVisible()` under a generous cap — because a pinned wait-count
  *    would be brittle test data with no reader value, unlike the movement walk it builds on.
@@ -35,7 +36,7 @@ const QUICKSTART_QUERY = '/play?quickstart=1&seed=11.22.33.44';
 const DESCEND_PREFIX = ['3'];
 
 /** Depth 1: march to the cave-rat pair and kill the first — its packmate survives adjacent at
- * (56,42), hero at (57,41) (see `guest-play.spec.ts`'s derivation notes; the trailing southwest
+ * (57,42), hero at (57,41) (see `guest-play.spec.ts`'s derivation notes; the trailing southwest
  * bump is `b` because top-row `1` is the potion belt's first slot now). */
 const CLUSTER_KILL = [
   '6',
@@ -67,6 +68,7 @@ const CLUSTER_KILL = [
   '2',
   '2',
   '2',
+  'b',
   'b',
 ];
 
@@ -185,8 +187,8 @@ test('a death finalizes into the Hall and the conclusion closes the loop', async
   await pressAll(page, CLUSTER_KILL);
   await expect(page.getByRole('log', { name: /adventure log/i })).toContainText(/dies/i);
 
-  // The armoured hero shrugs off most of the survivor's swings, so death takes many waits (86 for
-  // this pinned seed). We poll with an immediate `isVisible()` rather than a per-iteration timeout
+  // Death takes a dozen waits for this pinned seed (the survivor bites hard since the #212
+  // combat tuning). We poll with an immediate `isVisible()` rather than a per-iteration timeout
   // so the loop stays fast; the cap is a generous guard, not pinned test data.
   // A Classic death first raises the DeathOverlay ("THE DEEP TAKES YOU") over the playfield; the
   // run is already finalized at that point, and Enter acknowledges it into the conclusion screen.

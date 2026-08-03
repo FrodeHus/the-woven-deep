@@ -48,41 +48,62 @@ function materializeScenario(
   initial: ActiveRun,
   ids: ReturnType<typeof createGameplayDemoRun>['ids'],
 ): readonly GameCommand[] {
-  const factories: readonly CommandFactory[] = [
-    () => ({ type: 'open-door', featureId: ids.door }),
-    (state) => {
-      const hero = state.actors.find((actor) => actor.actorId === ids.hero)!;
-      const door = state.features.find((feature) => feature.featureId === ids.door)!;
-      return { type: 'move', direction: directionTo(hero, door) };
+  // Since the #212 tuning, neither wired monster dies to a single blow, so the rat kill and the
+  // beetle shoot are bounded LOOPS (a `repeatUntil` per step) instead of one scripted command each.
+  // The materialized command list is still fully deterministic -- each loop's length is fixed by
+  // the seed -- and `execute` below replays the exact same list.
+  const steps: readonly Readonly<{
+    factory: CommandFactory;
+    repeatUntil?: (state: ActiveRun) => boolean;
+  }>[] = [
+    { factory: () => ({ type: 'open-door', featureId: ids.door }) },
+    {
+      factory: (state) => {
+        const hero = state.actors.find((actor) => actor.actorId === ids.hero)!;
+        const door = state.features.find((feature) => feature.featureId === ids.door)!;
+        return { type: 'move', direction: directionTo(hero, door) };
+      },
     },
-    () => ({ type: 'search' }),
-    () => ({ type: 'disarm', featureId: ids.trap }),
-    () => ({ type: 'equip', itemId: ids.armor, slot: 'body' }),
-    () => ({ type: 'attack', targetActorId: ids.rat }),
-    () => ({ type: 'equip', itemId: ids.bow, slot: 'main-hand' }),
-    (state) => {
-      const beetle = state.actors.find((actor) => actor.actorId === ids.beetle)!;
-      return { type: 'fire', itemId: ids.bow, target: { x: beetle.x, y: beetle.y } };
+    { factory: () => ({ type: 'search' }) },
+    { factory: () => ({ type: 'disarm', featureId: ids.trap }) },
+    { factory: () => ({ type: 'equip', itemId: ids.armor, slot: 'body' }) },
+    {
+      factory: () => ({ type: 'attack', targetActorId: ids.rat }),
+      repeatUntil: (state) =>
+        state.actors.find((actor) => actor.actorId === ids.rat)!.health === 0,
     },
-    () => ({ type: 'equip', itemId: ids.sword, slot: 'main-hand' }),
-    () => ({ type: 'equip', itemId: ids.lantern, slot: 'off-hand' }),
-    () => ({ type: 'use-item', itemId: ids.crimsonPotion, target: null }),
-    () => ({ type: 'rest', until: 'interrupted', maximumDuration: 12 }),
+    { factory: () => ({ type: 'equip', itemId: ids.bow, slot: 'main-hand' }) },
+    {
+      factory: (state) => {
+        const beetle = state.actors.find((actor) => actor.actorId === ids.beetle)!;
+        return { type: 'fire', itemId: ids.bow, target: { x: beetle.x, y: beetle.y } };
+      },
+      repeatUntil: (state) =>
+        state.actors.find((actor) => actor.actorId === ids.beetle)!.health === 0,
+    },
+    { factory: () => ({ type: 'equip', itemId: ids.sword, slot: 'main-hand' }) },
+    { factory: () => ({ type: 'equip', itemId: ids.lantern, slot: 'off-hand' }) },
+    { factory: () => ({ type: 'use-item', itemId: ids.crimsonPotion, target: null }) },
+    { factory: () => ({ type: 'rest', until: 'interrupted', maximumDuration: 12 }) },
   ];
   let state = initial;
   const commands: GameCommand[] = [];
-  for (const [index, factory] of factories.entries()) {
-    const command = {
-      ...factory(state, index),
-      commandId: `command.gameplay-${String(index + 1).padStart(2, '0')}`,
-      expectedRevision: state.revision,
-    } as GameCommand;
-    const resolution = resolveCommand(state, command, { content: pack });
-    expect(resolution.result.status, stableJson({ command, events: resolution.events })).toBe(
-      'applied',
-    );
-    commands.push(command);
-    state = resolution.state;
+  for (const step of steps) {
+    for (let iteration = 0; iteration < 24; iteration += 1) {
+      const command = {
+        ...step.factory(state, commands.length),
+        commandId: `command.gameplay-${String(commands.length + 1).padStart(2, '0')}`,
+        expectedRevision: state.revision,
+      } as GameCommand;
+      const resolution = resolveCommand(state, command, { content: pack });
+      expect(resolution.result.status, stableJson({ command, events: resolution.events })).toBe(
+        'applied',
+      );
+      commands.push(command);
+      state = resolution.state;
+      if (step.repeatUntil === undefined || step.repeatUntil(state)) break;
+    }
+    if (step.repeatUntil !== undefined) expect(step.repeatUntil(state)).toBe(true);
   }
   return commands;
 }
@@ -121,7 +142,7 @@ describe('core gameplay replay', () => {
 
     expect(encodeActiveRun(split.state)).toBe(encodeActiveRun(continuous.state));
     expect(stableJson(split.records)).toBe(stableJson(continuous.records));
-    expect(continuous.records).toHaveLength(12);
+    expect(continuous.records).toHaveLength(commands.length);
     const eventTypes = continuous.state.recentCommands.flatMap((record) =>
       record.events.map((event) => event.type),
     );

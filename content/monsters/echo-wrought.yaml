@@ -13,7 +13,7 @@ entries:
     attributes: { might: 16, agility: 5, vitality: 15, wits: 5, resolve: 12 }
     health: 54
     speed: 90
-    accuracy: 6
+    accuracy: 7
     defense: 11
     perception: 6
     damage: { count: 2, sides: 8, bonus: 3 }
@@ -40,7 +40,7 @@ entries:
     attributes: { might: 17, agility: 5, vitality: 16, wits: 6, resolve: 13 }
     health: 55
     speed: 85
-    accuracy: 6
+    accuracy: 7
     defense: 12
     perception: 6
     damage: { count: 3, sides: 8, bonus: 2 }
@@ -67,7 +67,7 @@ entries:
     attributes: { might: 15, agility: 8, vitality: 15, wits: 9, resolve: 13 }
     health: 55
     speed: 95
-    accuracy: 7
+    accuracy: 8
     defense: 13
     perception: 9
     damage: { count: 3, sides: 8, bonus: 2 }
@@ -94,7 +94,7 @@ entries:
     attributes: { might: 18, agility: 6, vitality: 17, wits: 10, resolve: 15 }
     health: 57
     speed: 95
-    accuracy: 7
+    accuracy: 10
     defense: 13
     perception: 8
     damage: { count: 3, sides: 8, bonus: 3 }

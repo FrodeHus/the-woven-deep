@@ -11,12 +11,12 @@ entries:
     minDepth: 1
     maxDepth: 6
     attributes: { might: 3, agility: 8, vitality: 4, wits: 2, resolve: 2 }
-    health: 4
+    health: 22
     speed: 110
-    accuracy: 1
+    accuracy: 7
     defense: 10
     perception: 6
-    damage: { count: 1, sides: 3, bonus: 0 }
+    damage: { count: 1, sides: 3, bonus: 1 }
     armor: 0
     resistances: { physical: 0, fire: 0, cold: 0, lightning: 0, poison: 10, arcane: 0 }
     disposition: hostile

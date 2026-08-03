@@ -457,8 +457,12 @@ describe('createNewRun records input', () => {
     // diffing the decoded run objects field-by-field against the prior pin: only `contentHash`
     // differs, nothing else -- confirmed by rebuilding the pre-#154 tree in a scratch worktree and
     // comparing byte-for-byte. Expected content-authoring drift, not an engine regression.
+    // Re-pinned again for issue #212 (combat balance): monster health/accuracy/damage blocks were
+    // retuned across every band. None of those fields are read by `createNewRun` -- monsters spawn
+    // on first DESCENT, not at creation, and the town seeds only NPC populations -- so the only
+    // field that can differ is the embedded `contentHash`, exactly like the #154 re-pin above.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '75104bac1e56caf704bf9356b4031724002db83608b88530fefb67d783211515',
+      '5b67e9ad287d91c1aa3c3f8afcaa9d80567a7124bd6572dc51e82c1d636c000a',
     );
   });
 
