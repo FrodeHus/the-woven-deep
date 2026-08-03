@@ -1,5 +1,5 @@
 import { MERCHANT_SERVICE_IDS, type MerchantServiceId } from '@woven-deep/content';
-import { ATTRIBUTE_ORDER } from '@woven-deep/engine';
+import { ATTRIBUTE_ORDER, RUN_MODES, type HeroChoices } from '@woven-deep/engine';
 import {
   PROTOCOL_VERSION,
   type ClientMessage,
@@ -30,6 +30,28 @@ const FINAL_CHAMBER_CHOICES = ['become-heart', 'turn-away', 'break-cycle'] as co
 export type ParsedClientMessage =
   | { readonly ok: true; readonly value: ClientMessage }
   | { readonly ok: false; readonly reason: string };
+
+/**
+ * Structural (wire-level) validation of a `start-run` payload's choices. Deep semantic validation
+ * — real class/kit/background/trait ids, point-buy legality, name rules — is the engine's
+ * `heroFromChoices`/`validateHeroChoices`, run by the session when the message is handled; this
+ * only guarantees the shape is safe to hand it.
+ */
+function validateHeroChoicesShape(value: unknown): value is HeroChoices {
+  if (!isRecord(value)) return false;
+  if (typeof value.name !== 'string') return false;
+  if (value.method !== 'roll' && value.method !== 'point-buy') return false;
+  if (!isRecord(value.attributes)) return false;
+  for (const attribute of ATTRIBUTE_ORDER) {
+    if (typeof value.attributes[attribute] !== 'number') return false;
+  }
+  if (typeof value.classId !== 'string' || typeof value.kitId !== 'string') return false;
+  if (typeof value.backgroundId !== 'string') return false;
+  if (!Array.isArray(value.traitIds) || value.traitIds.some((id) => typeof id !== 'string')) {
+    return false;
+  }
+  return true;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -156,6 +178,21 @@ export function parseClientMessage(raw: unknown): ParsedClientMessage {
         type: parsed.type,
         commandId: parsed.commandId,
         expectedRevision: parsed.expectedRevision,
+      },
+    };
+  }
+  if (parsed.type === 'start-run') {
+    if (!isOneOf(parsed.mode, RUN_MODES) || !validateHeroChoicesShape(parsed.choices)) {
+      return { ok: false, reason: 'malformed start-run' };
+    }
+    return {
+      ok: true,
+      value: {
+        type: 'start-run',
+        commandId: parsed.commandId,
+        expectedRevision: parsed.expectedRevision,
+        choices: parsed.choices,
+        mode: parsed.mode,
       },
     };
   }

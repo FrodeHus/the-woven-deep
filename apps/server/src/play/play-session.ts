@@ -5,6 +5,7 @@ import {
   decodeActiveRun,
   encodeActiveRun,
   finalizeRun,
+  heroFromChoices,
   isHeartBossActive,
   projectGameplayState,
   newRunRecords,
@@ -12,6 +13,7 @@ import {
   SaveLoadError,
   DEFAULT_GUEST_HERO,
   type ActiveRun,
+  type HeroChoices,
   type AchievementGrant,
   type GameCommand,
   type NewRunHero,
@@ -238,6 +240,29 @@ export class ServerPlaySession {
     // between the conclusion-producing command and the finalize step below) -- catch it up here.
     this.maybeFinalize();
     return this.snapshot();
+  }
+
+  /** Whether this session holds a run at all — false only for a fresh session whose profile had no
+   * stored row and has not answered the `no-run` push with `start-run` yet. */
+  hasRun(): boolean {
+    return this.run !== undefined;
+  }
+
+  /**
+   * Answers a `no-run` push: builds the hero from the wizard's CHOICES through the engine's own
+   * `heroFromChoices` (which validates class/kit/background/traits/attributes/name and throws on
+   * anything illegal — the wire layer only shape-checked), then opens a fresh run with the given
+   * mode. The caller supplies the seed (server-rolled, exactly like the connect-time path). The
+   * class-unlock guard is `open()`'s existing one. Throws exactly what `heroFromChoices`/`open`
+   * throw; a run already in progress is answered with its current snapshot instead of a second
+   * run.
+   */
+  startRun(
+    input: Readonly<{ choices: HeroChoices; mode: RunMode; seed: Uint32State }>,
+  ): ServerRunSnapshot {
+    if (this.hasRun()) return this.snapshot();
+    const hero = heroFromChoices({ pack: this.pack, choices: input.choices });
+    return this.open({ seed: input.seed, hero, mode: input.mode });
   }
 
   /** Applies a dispatched player intent, mutating + persisting the authoritative run. */

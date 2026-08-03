@@ -111,6 +111,42 @@ async function verifyAndGetCookies(
   return Array.isArray(setCookie) ? setCookie : [String(setCookie)];
 }
 
+/** Valid wizard choices for the always-playable Wayfarer — what a real client's chargen sends. */
+function wayfarerChoices(): Record<string, unknown> {
+  return {
+    name: 'Rogue',
+    method: 'roll',
+    attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+    classId: 'class.wayfarer',
+    kitId: 'blade',
+    backgroundId: 'background.caravan-guard',
+    traitIds: [],
+  };
+}
+
+/**
+ * Drives a fresh profile connection through the new start-run handshake: expects the `no-run`
+ * push (the server no longer invents a default hero), answers with `start-run`, and returns the
+ * resulting initial `state`.
+ */
+async function startRunOverWs(
+  ws: { send(data: string): void },
+  nextMessage: () => Promise<ServerMessage>,
+): Promise<ServerMessage> {
+  const prompt = await nextMessage();
+  expect(prompt.type).toBe('no-run');
+  ws.send(
+    JSON.stringify({
+      type: 'start-run',
+      commandId: 'start-1',
+      expectedRevision: 0,
+      choices: wayfarerChoices(),
+      mode: 'classic',
+    }),
+  );
+  return nextMessage();
+}
+
 describe('handleMessage (pure message routing)', () => {
   let session: ServerPlaySession;
   /** The suite's database and active-run repository, shared with the Wanderer helper below so it
@@ -365,7 +401,7 @@ describe('/ws/play connection', () => {
       const hello = await nextMessage();
       expect(hello.type).toBe('hello');
 
-      const initialState = await nextMessage();
+      const initialState = await startRunOverWs(ws, nextMessage);
       expect(initialState.type).toBe('state');
       const revisionBefore = initialState.type === 'state' ? initialState.snapshot.revision : -1;
 
@@ -398,7 +434,7 @@ describe('/ws/play connection', () => {
       const nextMessage = messageQueue(ws);
 
       await nextMessage(); // hello
-      const initialState = await nextMessage();
+      const initialState = await startRunOverWs(ws, nextMessage);
       const revisionBefore = initialState.type === 'state' ? initialState.snapshot.revision : -1;
 
       ws.send('not json');
@@ -430,7 +466,7 @@ describe('/ws/play connection', () => {
     const first = await app.injectWS('/ws/play', { headers: connectHeaders });
     const firstMessages = messageQueue(first);
     await firstMessages(); // hello
-    await firstMessages(); // initial state
+    await startRunOverWs(first, firstMessages); // no-run -> start-run -> initial state
 
     const closed = new Promise<void>((resolveClosed) => first.on('close', () => resolveClosed()));
 
@@ -468,6 +504,92 @@ describe('/ws/play connection', () => {
     }
   });
 
+  it('a fresh profile gets no-run, a premature command re-prompts, and start-run builds the CHOSEN hero', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-chargen@example.com');
+
+    const ws = await app.injectWS('/ws/play', {
+      headers: { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL },
+    });
+    try {
+      const nextMessage = messageQueue(ws);
+      await nextMessage(); // hello
+      const prompt = await nextMessage();
+      expect(prompt.type).toBe('no-run');
+
+      // A command before any run exists is re-prompted, not crashed on.
+      ws.send(
+        JSON.stringify({
+          type: 'command',
+          commandId: 'early',
+          expectedRevision: 0,
+          intent: { type: 'wait' },
+        }),
+      );
+      expect((await nextMessage()).type).toBe('no-run');
+
+      ws.send(
+        JSON.stringify({
+          type: 'start-run',
+          commandId: 'start-1',
+          expectedRevision: 0,
+          choices: { ...wayfarerChoices(), name: 'Chosen One' },
+          mode: 'wanderer',
+        }),
+      );
+      const started = await nextMessage();
+      expect(started.type).toBe('state');
+      if (started.type === 'state') {
+        const hero = started.snapshot.projection.hero as unknown as { name: string };
+        expect(hero.name).toBe('Chosen One');
+        expect(started.snapshot.projection.mode).toBe('wanderer');
+      }
+    } finally {
+      ws.terminate();
+    }
+  });
+
+  it('start-run with unknown choice ids errors without creating a run, and the wizard can resend', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-badchoices@example.com');
+
+    const ws = await app.injectWS('/ws/play', {
+      headers: { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL },
+    });
+    try {
+      const nextMessage = messageQueue(ws);
+      await nextMessage(); // hello
+      await nextMessage(); // no-run
+
+      ws.send(
+        JSON.stringify({
+          type: 'start-run',
+          commandId: 'start-bad',
+          expectedRevision: 0,
+          choices: { ...wayfarerChoices(), classId: 'class.does-not-exist' },
+          mode: 'classic',
+        }),
+      );
+      const rejectedStart = await nextMessage();
+      expect(rejectedStart.type).toBe('error');
+      if (rejectedStart.type === 'error') expect(rejectedStart.code).toBe('invalid-choices');
+      expect(ws.readyState).toBe(ws.OPEN);
+
+      ws.send(
+        JSON.stringify({
+          type: 'start-run',
+          commandId: 'start-good',
+          expectedRevision: 0,
+          choices: wayfarerChoices(),
+          mode: 'classic',
+        }),
+      );
+      expect((await nextMessage()).type).toBe('state');
+    } finally {
+      ws.terminate();
+    }
+  });
+
   it('a reconnect after a drop rehydrates the same run, and a resent commandId does not double-apply', async () => {
     await app.ready();
     const sessionCookies = await verifyAndGetCookies(app, database, 'ws-reconnect@example.com');
@@ -476,7 +598,7 @@ describe('/ws/play connection', () => {
     const first = await app.injectWS('/ws/play', { headers: connectHeaders });
     const firstMessages = messageQueue(first);
     await firstMessages(); // hello
-    const initialState = await firstMessages();
+    const initialState = await startRunOverWs(first, firstMessages);
     const revisionBefore = initialState.type === 'state' ? initialState.snapshot.revision : -1;
 
     first.send(

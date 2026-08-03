@@ -1,9 +1,11 @@
 import type {
   FinalChamberChoiceCommand,
   GameplayProjection,
+  HeroChoices,
   PublicDecision,
   PublicEvent,
   RunConclusionProjection,
+  RunMode,
 } from '@woven-deep/engine';
 import type { PlayerIntent } from './intents.js';
 
@@ -13,7 +15,7 @@ import type { PlayerIntent } from './intents.js';
  * server's — never silently mismatched. Bump whenever a client/server-message shape changes in a
  * way older clients can't safely ignore.
  */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 
 /**
  * The run-authoritative snapshot the server produces after applying a command. Only redacted,
@@ -72,6 +74,20 @@ export type ClientMessage =
       readonly type: 'accept-death';
       readonly commandId: string;
       readonly expectedRevision: number;
+    }
+  | {
+      /**
+       * Starts the profile's run from the chargen wizard's choices, answering the server's
+       * `no-run` push. The server rebuilds and validates the hero from the CHOICES
+       * (`heroFromChoices`) rather than trusting a client-built hero, rolls the seed itself
+       * (anti-cheat: a client seed is never trusted), and enforces the profile's earned class
+       * unlocks. `expectedRevision` is 0 by convention — there is no run to be stale against.
+       */
+      readonly type: 'start-run';
+      readonly commandId: string;
+      readonly expectedRevision: number;
+      readonly choices: HeroChoices;
+      readonly mode: RunMode;
     };
 
 export interface HelloMessage {
@@ -96,4 +112,9 @@ export type ServerMessage =
       readonly snapshot: ServerRunSnapshot;
     }
   | { readonly type: 'error'; readonly code: string; readonly message: string }
-  | { readonly type: 'superseded' };
+  | { readonly type: 'superseded' }
+  | {
+      /** Pushed (after `hello`) when the profile has no stored run: the client must route through
+       * hero creation and answer with `start-run` — the server no longer invents a default hero. */
+      readonly type: 'no-run';
+    };

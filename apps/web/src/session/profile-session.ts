@@ -4,8 +4,10 @@ import {
   tabletFragmentIds,
   type FinalChamberChoiceCommand,
   type HallRecordEnrichment,
+  type HeroChoices,
   type PublicEvent,
   type RunConclusionProjection,
+  type RunMode,
   type RunRecordRepository,
 } from '@woven-deep/engine';
 import type {
@@ -121,6 +123,61 @@ function computePendingFinalChamberChoice(
   return { canBreakCycle };
 }
 
+/** What `ProfileSession.connect` resolves to: an immediately-playable session (the profile had a
+ * run, stored or live), or a held connection awaiting the chargen wizard's choices. */
+export type ProfileConnectOutcome =
+  | Readonly<{ kind: 'session'; session: ProfileSession }>
+  | Readonly<{ kind: 'chargen'; pending: PendingProfileStart }>;
+
+/**
+ * The held `/ws/play` connection of a profile with no run yet. `startRun` answers the server's
+ * `no-run` push with the wizard's choices; a rejection (`invalid-choices`, `locked-class`) leaves
+ * the connection open so the wizard can correct and resend.
+ */
+export class PendingProfileStart {
+  private startSequence = 0;
+
+  constructor(
+    private readonly input: ProfileSessionInput,
+    private readonly ws: WsClient,
+  ) {}
+
+  startRun(choices: HeroChoices, mode: RunMode): Promise<ProfileSession> {
+    return new Promise<ProfileSession>((resolve, reject) => {
+      let settled = false;
+      const unsubscribe = this.ws.onMessage((raw) => {
+        if (settled) return;
+        const message = parseServerMessage(raw);
+        if (message === null) return;
+        if (message.type === 'hello' || message.type === 'superseded' || message.type === 'no-run')
+          return;
+        if (message.type === 'error') {
+          settled = true;
+          unsubscribe();
+          reject(new Error(`${message.code}: ${message.message}`));
+          return;
+        }
+        settled = true;
+        unsubscribe();
+        resolve(ProfileSession.adopt(this.input, this.ws, message.snapshot));
+      });
+      this.ws.send({
+        type: 'start-run',
+        commandId: `command.profile-start-${this.startSequence}`,
+        expectedRevision: 0,
+        choices,
+        mode,
+      });
+      this.startSequence += 1;
+    });
+  }
+
+  /** Tears the held connection down without starting a run (e.g. backing out to the title). */
+  close(): void {
+    this.ws.close();
+  }
+}
+
 export interface ProfileSessionInput {
   readonly pack: CompiledContentPack;
   readonly url: string;
@@ -167,6 +224,10 @@ export class ProfileSession implements RunSession {
    * flips true once and never back to false, so it can't be read as a rising edge on its own; see
    * `setHouseOpen`'s doc comment for the full houseOpen design). Cleared on every reply. */
   private lastDispatchedIntentType: string | null = null;
+  /** Whether a `command` message is awaiting its server reply -- see `dispatch`'s doc comment. */
+  private commandInFlight = false;
+  /** The newest intent dispatched while a command was in flight (latest-wins, size 1). */
+  private queuedIntent: PlayerIntent | null = null;
   /** Set while a `rise-again` is in flight, so the state push that answers it can be read as
    * success or refusal: the server replies with the ordinary snapshot either way, and a snapshot
    * that is STILL concluded means it found no usable checkpoint. Without this the profile's
@@ -176,6 +237,17 @@ export class ProfileSession implements RunSession {
   private readonly listeners = new Set<() => void>();
   private sightingsCorruptionNotified = false;
   private onboardingCorruptionNotified = false;
+
+  /** Internal factory for `PendingProfileStart`: wraps an already-held connection whose first
+   * `state` just arrived. Not part of the public surface callers should reach for -- `connect`
+   * is the entry point. */
+  static adopt(
+    input: ProfileSessionInput,
+    ws: WsClient,
+    snapshot: ServerRunSnapshot,
+  ): ProfileSession {
+    return new ProfileSession(input, ws, snapshot);
+  }
 
   private constructor(
     input: ProfileSessionInput,
@@ -213,8 +285,8 @@ export class ProfileSession implements RunSession {
    * before ever reaching that point. Every message the fake/real socket delivers before this
    * settles is consumed here; once settled, the constructed instance's own handler takes over.
    */
-  static connect(input: ProfileSessionInput): Promise<ProfileSession> {
-    return new Promise<ProfileSession>((resolve, reject) => {
+  static connect(input: ProfileSessionInput): Promise<ProfileConnectOutcome> {
+    return new Promise<ProfileConnectOutcome>((resolve, reject) => {
       const ws = new WsClient({
         url: input.url,
         ...(input.createSocket ? { createSocket: input.createSocket } : {}),
@@ -233,10 +305,19 @@ export class ProfileSession implements RunSession {
           reject(new Error(`${message.code}: ${message.message}`));
           return;
         }
+        if (message.type === 'no-run') {
+          // The profile has no stored run: hand the held connection back so the caller can route
+          // through hero creation and answer with `start-run` -- the server no longer invents a
+          // default hero (#95).
+          settled = true;
+          unsubscribe();
+          resolve({ kind: 'chargen', pending: new PendingProfileStart(input, ws) });
+          return;
+        }
         // 'state' | 'decision-required' | 'rejected' all carry a usable initial snapshot.
         settled = true;
         unsubscribe();
-        resolve(new ProfileSession(input, ws, message.snapshot));
+        resolve({ kind: 'session', session: new ProfileSession(input, ws, message.snapshot) });
       });
       ws.connect();
     });
@@ -262,8 +343,25 @@ export class ProfileSession implements RunSession {
     this.ws.send(message);
   }
 
+  /**
+   * Sends at most ONE command at a time. An intent dispatched while another still awaits its
+   * server reply is queued (latest-wins, size 1) and sent with the FRESH revision when the reply
+   * lands. Without this, a held movement key repeats faster than the round trip, every repeat
+   * carries a stale `expectedRevision`, and the server rejects them all -- navigation crawls at
+   * one step per round trip while the log floods with "That action is out of date." Latest-wins
+   * (rather than a FIFO) means releasing the key never replays a backlog of queued steps.
+   */
   dispatch(intent: PlayerIntent): void {
     this.notice = null;
+    if (this.commandInFlight) {
+      this.queuedIntent = intent;
+      return;
+    }
+    this.sendIntent(intent);
+  }
+
+  private sendIntent(intent: PlayerIntent): void {
+    this.commandInFlight = true;
     this.lastDispatchedIntentType = intent.type;
     this.send({
       type: 'command',
@@ -271,6 +369,17 @@ export class ProfileSession implements RunSession {
       expectedRevision: this.serverSnapshot.revision,
       intent,
     });
+  }
+
+  /** Every server reply settles the in-flight command; a queued intent (if the reply did not open
+   * a decision modal) goes out immediately against the fresh revision. */
+  private settleInFlight(options: Readonly<{ dropQueued?: boolean }> = {}): void {
+    this.commandInFlight = false;
+    const queued = this.queuedIntent;
+    this.queuedIntent = null;
+    if (queued !== null && options.dropQueued !== true) {
+      this.sendIntent(queued);
+    }
   }
 
   answerDecision(confirmed: boolean): void {
@@ -424,11 +533,18 @@ export class ProfileSession implements RunSession {
     switch (message.type) {
       case 'hello':
         return;
+      case 'no-run':
+        // Only ever meaningful during `connect`/`PendingProfileStart` (a live session by
+        // definition has a run); a stray one mid-session is ignored.
+        return;
       case 'state':
         this.applyServerState(message.snapshot, { foldEvents: true });
+        this.settleInFlight();
         return;
       case 'decision-required':
         this.applyServerState(message.snapshot, { foldEvents: false });
+        // Never fire a queued held-key repeat into the modal the server just opened.
+        this.settleInFlight({ dropQueued: true });
         return;
       case 'rejected':
         this.serverSnapshot = message.snapshot;
@@ -439,15 +555,20 @@ export class ProfileSession implements RunSession {
         this.syncSightings(true);
         this.snapshot = this.buildSnapshot();
         this.notify();
+        this.settleInFlight();
         return;
       case 'error':
         this.notice = { kind: 'protocol-error', code: message.code, message: message.message };
+        this.commandInFlight = false;
+        this.queuedIntent = null;
         this.ws.close();
         this.snapshot = this.buildSnapshot();
         this.notify();
         return;
       case 'superseded':
         this.notice = { kind: 'superseded' };
+        this.commandInFlight = false;
+        this.queuedIntent = null;
         this.ws.close();
         this.snapshot = this.buildSnapshot();
         this.notify();

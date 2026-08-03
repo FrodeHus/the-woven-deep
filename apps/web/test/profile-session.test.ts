@@ -89,11 +89,12 @@ interface Harness {
   readonly sockets: FakeSocket[];
   readonly socket: () => FakeSocket;
   readonly connectPromise: Promise<ProfileSession>;
+  readonly outcomePromise: ReturnType<typeof ProfileSession.connect>;
 }
 
 function harness(): Harness {
   const sockets: FakeSocket[] = [];
-  const connectPromise = ProfileSession.connect({
+  const outcomePromise = ProfileSession.connect({
     pack,
     url: 'ws://test/ws/play',
     createSocket: () => {
@@ -102,7 +103,16 @@ function harness(): Harness {
       return socket;
     },
   });
-  return { sockets, socket: () => sockets[sockets.length - 1]!, connectPromise };
+  // Every pre-existing test connects into a run that already exists, so the harness unwraps the
+  // session outcome; the chargen outcome has its own tests below.
+  const connectPromise = outcomePromise.then((outcome) => {
+    if (outcome.kind !== 'session') throw new Error('expected a session outcome');
+    return outcome.session;
+  });
+  // The chargen-outcome tests never await connectPromise; swallow its expected rejection so it
+  // can't surface as an unhandled rejection after the test body has already passed.
+  void connectPromise.catch(() => {});
+  return { sockets, socket: () => sockets[sockets.length - 1]!, connectPromise, outcomePromise };
 }
 
 const HELLO: ServerMessage = {
@@ -112,6 +122,56 @@ const HELLO: ServerMessage = {
   gameVersion: 'test-version',
   saveSchemaVersion: 1,
 };
+
+describe('ProfileSession chargen handshake', () => {
+  const CHOICES = {
+    name: 'Chosen',
+    method: 'roll' as const,
+    attributes: { might: 10, agility: 10, vitality: 10, wits: 10, resolve: 10 },
+    classId: 'class.wayfarer',
+    kitId: 'blade',
+    backgroundId: 'background.caravan-guard',
+    traitIds: [],
+  };
+
+  it('resolves the chargen outcome on no-run, and startRun sends choices then yields the session', async () => {
+    const { socket, outcomePromise } = harness();
+    socket().emit(HELLO);
+    socket().emit({ type: 'no-run' });
+    const outcome = await outcomePromise;
+    expect(outcome.kind).toBe('chargen');
+    if (outcome.kind !== 'chargen') return;
+
+    const sessionPromise = outcome.pending.startRun(CHOICES, 'classic');
+    expect(socket().sentMessages.at(-1)).toMatchObject({
+      type: 'start-run',
+      expectedRevision: 0,
+      choices: CHOICES,
+      mode: 'classic',
+    });
+
+    socket().emit({ type: 'state', snapshot: snapshotOf(freshRun()) });
+    const session = await sessionPromise;
+    expect(session.getSnapshot().projection.floor).toBeDefined();
+  });
+
+  it('a refused start-run rejects but leaves the connection open for a corrected resend', async () => {
+    const { socket, outcomePromise } = harness();
+    socket().emit(HELLO);
+    socket().emit({ type: 'no-run' });
+    const outcome = await outcomePromise;
+    if (outcome.kind !== 'chargen') throw new Error('expected chargen outcome');
+
+    const first = outcome.pending.startRun(CHOICES, 'classic');
+    socket().emit({ type: 'error', code: 'invalid-choices', message: 'no such class' });
+    await expect(first).rejects.toThrow(/invalid-choices/);
+    expect(socket().readyState).toBe(1);
+
+    const second = outcome.pending.startRun(CHOICES, 'classic');
+    socket().emit({ type: 'state', snapshot: snapshotOf(freshRun()) });
+    await expect(second).resolves.toBeInstanceOf(ProfileSession);
+  });
+});
 
 describe('ProfileSession', () => {
   it('sends nothing until hello + state arrive, then resolves with a full snapshot', async () => {
@@ -177,6 +237,101 @@ describe('ProfileSession', () => {
     expect(snapshot.projection.metrics).toEqual(
       projectGameplayState({ state: advancedRun, content: pack }).metrics,
     );
+  });
+
+  describe('in-flight gating (held-key navigation)', () => {
+    it('queues an intent dispatched while another awaits its reply, sending it with the fresh revision', async () => {
+      const { socket, connectPromise } = harness();
+      const run = freshRun();
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await connectPromise;
+
+      session.dispatch({ type: 'move', direction: 'east' });
+      // A held key repeats before the reply arrives. Sending it now would carry a stale
+      // expectedRevision and be rejected -- the very spam that made signed-in navigation crawl.
+      session.dispatch({ type: 'move', direction: 'east' });
+      expect(socket().sentMessages).toHaveLength(1);
+
+      const advanced: ActiveRun = { ...run, revision: run.revision + 1 };
+      socket().emit({ type: 'state', snapshot: snapshotOf(advanced) });
+
+      expect(socket().sentMessages).toHaveLength(2);
+      expect(socket().sentMessages.at(-1)).toMatchObject({
+        type: 'command',
+        expectedRevision: advanced.revision,
+        intent: { type: 'move', direction: 'east' },
+      });
+    });
+
+    it('keeps only the newest queued intent (latest-wins) so a released key never rubber-bands', async () => {
+      const { socket, connectPromise } = harness();
+      const run = freshRun();
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await connectPromise;
+
+      session.dispatch({ type: 'move', direction: 'east' });
+      session.dispatch({ type: 'move', direction: 'east' });
+      session.dispatch({ type: 'move', direction: 'south' });
+      expect(socket().sentMessages).toHaveLength(1);
+
+      const advanced: ActiveRun = { ...run, revision: run.revision + 1 };
+      socket().emit({ type: 'state', snapshot: snapshotOf(advanced) });
+
+      // Only the latest repeat went out; the backlog never replays.
+      expect(socket().sentMessages).toHaveLength(2);
+      expect(socket().sentMessages.at(-1)).toMatchObject({
+        intent: { type: 'move', direction: 'south' },
+      });
+      const settled: ActiveRun = { ...run, revision: run.revision + 2 };
+      socket().emit({ type: 'state', snapshot: snapshotOf(settled) });
+      expect(socket().sentMessages).toHaveLength(2);
+    });
+
+    it('a rejected reply also releases the queue', async () => {
+      const { socket, connectPromise } = harness();
+      const run = freshRun();
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await connectPromise;
+
+      session.dispatch({ type: 'pick-lock' });
+      session.dispatch({ type: 'move', direction: 'north' });
+      expect(socket().sentMessages).toHaveLength(1);
+
+      socket().emit({ type: 'rejected', reason: 'no lock here', snapshot: snapshotOf(run) });
+
+      expect(socket().sentMessages).toHaveLength(2);
+      expect(socket().sentMessages.at(-1)).toMatchObject({
+        intent: { type: 'move', direction: 'north' },
+      });
+    });
+
+    it('a decision-required reply drops the queued intent instead of firing it into the modal', async () => {
+      const { socket, connectPromise } = harness();
+      const run = freshRun();
+      socket().emit(HELLO);
+      socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await connectPromise;
+
+      session.dispatch({ type: 'move', direction: 'north' });
+      session.dispatch({ type: 'move', direction: 'north' });
+      const decision: PublicDecision = {
+        kind: 'confirm-aggression',
+        targetActorId: 'actor.some-monster',
+      } as unknown as PublicDecision;
+      socket().emit({
+        type: 'decision-required',
+        decision,
+        snapshot: snapshotOf(run, { pendingDecision: decision }),
+      });
+
+      expect(socket().sentMessages).toHaveLength(1);
+      // The queue is also idle again: the next explicit dispatch goes straight out.
+      session.answerDecision(true);
+      expect(socket().sentMessages).toHaveLength(2);
+    });
   });
 
   it('surfaces a rejected command as a log line without a pending decision', async () => {

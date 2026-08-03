@@ -14,7 +14,7 @@ import { GUEST_ACCOUNT, type AccountState } from './session/account.js';
 import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
-import { ProfileSession } from './session/profile-session.js';
+import { ProfileSession, type PendingProfileStart } from './session/profile-session.js';
 import type { RunSession } from './session/run-session.js';
 import { clearGuestSession } from './session/clear-guest-session.js';
 import { randomSeed } from './session/seed.js';
@@ -492,6 +492,10 @@ export function App({
     sessionRef.current = session;
   }, [session]);
   const [chargenSeed, setChargenSeed] = useState<Uint32State>();
+  /** The held `/ws/play` connection of a signed-in profile with no run yet -- set when connect
+   * resolves `{kind: 'chargen'}`, consumed by the chargen screen's profile confirm path, and torn
+   * down on sign-out with the rest of the profile state. */
+  const [pendingProfileStart, setPendingProfileStart] = useState<PendingProfileStart>();
   const [portraitGlyph, setPortraitGlyph] = useState<string>();
   const [conclusion, setConclusion] = useState<{
     projection: RunConclusionProjection;
@@ -588,6 +592,15 @@ export function App({
    * with the player left on a play screen no longer backed by an account. */
   function dropToGuest(): void {
     setAccount(GUEST_ACCOUNT);
+    // A held pre-run connection (profile chargen in progress) is torn down alongside everything
+    // else profile-shaped; without a live ProfileSession the instanceof branch below never runs.
+    if (pendingProfileStart !== undefined) {
+      pendingProfileStart.close();
+      setPendingProfileStart(undefined);
+      setProfileError(undefined);
+      closeOverlay();
+      router.toTitle();
+    }
     if (!(sessionRef.current instanceof ProfileSession)) return;
     setSession(undefined);
     setProfileError(undefined);
@@ -633,19 +646,30 @@ export function App({
     if (account.status !== 'signed-in') return;
     if (session !== undefined) return;
     if (profileError !== undefined) return;
+    if (pendingProfileStart !== undefined) return;
     let cancelled = false;
     void ProfileSession.connect({
       pack,
       url: playWsUrl(),
       ...(createSocket ? { createSocket } : {}),
     }).then(
-      (profileSession) => {
+      (outcome) => {
         if (cancelled) {
-          profileSession.close();
+          if (outcome.kind === 'session') outcome.session.close();
+          else outcome.pending.close();
           return;
         }
-        setSession(profileSession);
-        router.toPlay();
+        if (outcome.kind === 'session') {
+          setSession(outcome.session);
+          router.toPlay();
+          return;
+        }
+        // The profile has no run yet: hold the connection and route through the SAME chargen
+        // wizard guests use -- its confirm sends the choices over this connection (see the
+        // profile branch in the chargen screen's onConfirm below).
+        setPendingProfileStart(outcome.pending);
+        setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
+        router.toChargen();
       },
       (thrown: unknown) => {
         if (cancelled) return;
@@ -797,6 +821,33 @@ export function App({
           onChangeSettings={handleSettingsChange}
           unlockedClassIds={account.unlockedClassIds}
           onConfirm={(choices: HeroChoices, glyph: string, mode: RunMode) => {
+            try {
+              storage.set(PORTRAIT_KEY, glyph);
+            } catch {
+              // Best-effort, same as every other portrait/cosmetic persistence attempt in this app —
+              // the run itself is unaffected if this particular write fails.
+            }
+            setPortraitGlyph(glyph);
+            // A signed-in profile's confirm sends the CHOICES to the server over the held
+            // connection -- the server rebuilds and validates the hero itself and rolls its own
+            // seed (anti-cheat), so nothing hero-shaped is trusted from this client.
+            if (pendingProfileStart !== undefined) {
+              void pendingProfileStart.startRun(choices, mode).then(
+                (profileSession) => {
+                  setPendingProfileStart(undefined);
+                  setSession(profileSession);
+                  router.toPlay();
+                },
+                (thrown: unknown) => {
+                  // Rejected choices leave the connection open -- surface the reason and let the
+                  // wizard correct and resend.
+                  setChargenError(
+                    thrown instanceof Error ? thrown.message : 'Hero creation was refused.',
+                  );
+                },
+              );
+              return;
+            }
             let hero: ReturnType<typeof heroFromChoices>;
             try {
               hero = heroFromChoices({ pack, choices });
@@ -808,13 +859,6 @@ export function App({
               );
               return;
             }
-            try {
-              storage.set(PORTRAIT_KEY, glyph);
-            } catch {
-              // Best-effort, same as every other portrait/cosmetic persistence attempt in this app —
-              // the run itself is unaffected if this particular write fails.
-            }
-            setPortraitGlyph(glyph);
             setSession(
               new GuestSession({
                 pack,
@@ -864,8 +908,16 @@ export function App({
           logTail={conclusion.logTail}
           onHall={() => router.toHall('conclusion')}
           onNewHero={() => {
+            const wasProfile = session instanceof ProfileSession;
             setSession(undefined);
             setConclusion(undefined);
+            if (wasProfile) {
+              // Dropping `session` re-arms the profile connect effect: the finalized run's row is
+              // gone server-side, so the reconnect answers `no-run` and routes into chargen with a
+              // HELD connection -- the profile path. Pre-routing here would open the guest wizard
+              // instead and confirm into a GuestSession while signed in.
+              return;
+            }
             setChargenSeed(parseSeedFromQuery(window.location.search) ?? randomSeed());
             router.toChargen();
           }}
