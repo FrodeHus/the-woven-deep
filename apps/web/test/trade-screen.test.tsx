@@ -230,6 +230,69 @@ describe('TradeScreen', () => {
     expect(screen.getByText(/costs double/i)).toBeInTheDocument();
   });
 
+  it('prices each enchant target in the picker, doubling only the target the hero knows is enchanted', async () => {
+    const user = userEvent.setup();
+    // Two backpack items the projection already reports on: one carrying a revealed `enchantment`
+    // (so the client legitimately knows the doubling applies), one plain. `reEnchantUnitPrice` is
+    // the engine's exact re-enchant quote, not `unitPrice * 2` -- the picker must render the
+    // projected figure rather than doubling locally.
+    const heroWithPair = {
+      ...baseProjection.hero,
+      backpack: [
+        {
+          itemId: 'item.hero.plain-ring',
+          name: 'Iron ring',
+          category: 'trinket',
+          quantity: 1,
+          identified: true,
+          condition: 100,
+          fuel: null,
+          enabled: null,
+        },
+        {
+          itemId: 'item.hero.woven-ring',
+          name: 'Woven ring',
+          category: 'trinket',
+          quantity: 1,
+          identified: true,
+          condition: 100,
+          fuel: null,
+          enabled: null,
+          enchantment: { enchantmentId: 'enchantment.woven-thought', modifiers: { spellPower: 1 } },
+        },
+      ],
+    };
+    const projection = withTrade(
+      { ...baseProjection, hero: heroWithPair } as GameplayProjection,
+      {
+        services: [
+          {
+            serviceId: 'merchant-service.enchant',
+            unitPrice: 40,
+            reEnchantUnitPrice: 83,
+            remainingUses: 3,
+            targetItemIds: ['item.hero.plain-ring', 'item.hero.woven-ring'],
+          },
+        ],
+      },
+    );
+    render(
+      <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
+      { wrapper: Wrapper },
+    );
+
+    await user.keyboard('{Tab}{Tab}');
+    await user.keyboard('{Enter}');
+
+    const picker = screen.getByRole('listbox', { name: 'Enchant target' });
+    const [plain, woven] = within(picker).getAllByRole('option');
+    expect(plain).toHaveTextContent(/Iron ring/);
+    expect(plain).toHaveTextContent(/40g/);
+    expect(woven).toHaveTextContent(/Woven ring/);
+    expect(woven).toHaveTextContent(/83g/);
+    expect(woven).not.toHaveTextContent(/80g/);
+  });
+
   it('opens the identify target picker for a service with eligible targets, then dispatches the chosen target', async () => {
     const user = userEvent.setup();
     const onDispatch = vi.fn();
