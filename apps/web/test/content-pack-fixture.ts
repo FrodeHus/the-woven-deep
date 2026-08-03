@@ -86,8 +86,10 @@ const entries: readonly ContentEntry[] = [
       monstersPerThousandWalkable: { shallow: 7, mid: 8, deep: 10 },
       attemptCap: 16,
     },
+    // Zero across the board: this fixture packs no curse entries, and the compiler's cross-check
+    // (curse-crosscheck.test.ts) rejects a nonzero chance with an empty curse roster.
     curses: {
-      chanceBps: { shallow: 1000, mid: 2000, deep: 3500 },
+      chanceBps: { shallow: 0, mid: 0, deep: 0 },
       enchantedMultiplierBps: 20000,
       capBps: 5000,
     },

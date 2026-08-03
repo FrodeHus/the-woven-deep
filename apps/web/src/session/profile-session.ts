@@ -533,6 +533,10 @@ export class ProfileSession implements RunSession {
     switch (message.type) {
       case 'hello':
         return;
+      case 'no-run':
+        // Only ever meaningful during `connect`/`PendingProfileStart` (a live session by
+        // definition has a run); a stray one mid-session is ignored.
+        return;
       case 'state':
         this.applyServerState(message.snapshot, { foldEvents: true });
         this.settleInFlight();
