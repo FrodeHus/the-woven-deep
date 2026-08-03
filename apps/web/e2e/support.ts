@@ -77,9 +77,13 @@ function isoScreenPoint(
 ): Point {
   const dx = cell.x - camera.x;
   const dy = cell.y - camera.y;
+  // `worldToScreen` of the integer cell coordinate is the diamond's TOP vertex, which sits exactly
+  // on the boundary with the neighboring cells -- `cellAtScreen`'s floor() can then resolve the
+  // hover to a neighbor. Target the cell's center instead (u+0.5, v+0.5 in world space: same x,
+  // half a tile height further down), which is unambiguously inside the cell.
   return {
     x: (dx - dy) * 32 + viewport.width / 2,
-    y: (dx + dy) * 16 + viewport.height / 2,
+    y: (dx + dy) * 16 + 16 + viewport.height / 2,
   };
 }
 
