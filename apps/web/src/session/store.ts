@@ -11,3 +11,18 @@ export function useRunSession(session: RunSession): SessionSnapshot {
     () => session.getSnapshot(),
   );
 }
+
+/** A no-op subscription for the sessionless case below -- module-level so its identity is stable
+ * across renders and `useSyncExternalStore` never needlessly resubscribes. */
+const NO_SESSION_SUBSCRIBE = (): (() => void) => () => {};
+const NO_SESSION_SNAPSHOT = (): null => null;
+
+/** `useRunSession` for a component that must stay MOUNTED whether or not a session exists yet
+ * (see `UiProviders`' `SessionBridge`): with no session it subscribes to nothing and yields
+ * `null`, without the component having to conditionally call a hook. */
+export function useOptionalRunSession(session: RunSession | undefined): SessionSnapshot | null {
+  return useSyncExternalStore(
+    session ? (listener) => session.subscribe(listener) : NO_SESSION_SUBSCRIBE,
+    session ? () => session.getSnapshot() : NO_SESSION_SNAPSHOT,
+  );
+}
