@@ -547,8 +547,19 @@ describe('createNewRun records input', () => {
     // nothing shifts the draw order at creation, and every retuned knob is read during play rather
     // than during run creation. Expected schema and content-authoring drift, not an engine
     // regression.
+    // Re-pinned again for the out-of-danger recovery retune: `recoveryInterval` 500 -> 50,
+    // `recoveryAmount` 10 -> 2, `weaveRegenAmount` 2 -> 1. None of the three is reachable from
+    // `createNewRun` -- recovery accrues in `advanceSurvival` once the clock moves, and
+    // `weaveRegenAmount` only feeds the derived `weaveRegen` stat, which no actor or hero record
+    // stores. Verified by compiling the pack twice (this tree, and a scratch copy with the three
+    // preceding values restored), creating a run from each, and diffing the decoded objects
+    // key-by-key: `contentHash` is the ONLY key that differs -- every RNG stream, `items`,
+    // `identification`, `populations`, and `floors` are byte-identical. Expected content-authoring
+    // drift, not an engine regression. (Re-derived after merging #158/#231: the same single-key
+    // delta was re-verified on the merged tree, where the recovery block in `advanceSurvival` is
+    // untouched by the starvation ladder those PRs added.)
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '8ab2df3e649e8d77284e7e9f32cfd23ee613032a1b67764c308688ec698c75d1',
+      'b6a2babe9a4e28f28f7910cd2bfd87c35bf6d514e8b5c895ef252b7a31534593',
     );
   });
 
