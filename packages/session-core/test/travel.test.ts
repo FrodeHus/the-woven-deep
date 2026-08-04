@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GameplayProjection, Point } from '@woven-deep/engine';
-import type { PlayerIntent } from '../src/session/intents.js';
+import type { PlayerIntent } from '../src/intents.js';
 import {
   advanceTravel,
   beginTravel,
@@ -10,7 +10,7 @@ import {
   resolveClick,
   type ActiveTravel,
   type TravelPlan,
-} from '../src/session/travel.js';
+} from '../src/travel.js';
 import { buildIntent } from '@woven-deep/session-core';
 
 const WIDTH = 12;
