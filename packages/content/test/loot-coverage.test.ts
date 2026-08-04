@@ -9,29 +9,54 @@ import type {
 } from '../src/model.js';
 
 /**
- * Items that intentionally appear in no loot table because another system places them. Each is
- * named individually rather than matched by tag, so adding an item here is a deliberate act that
- * shows up in review.
+ * Tag the engine selects the Final Chamber's tablet fragments by, rather than by id.
+ * Mirrors `TABLET_FRAGMENT_TAG` in packages/engine/src/final-chamber-fragments.ts.
  */
-const PLACED_ELSEWHERE: Readonly<Record<string, string>> = {
-  // Artifact singleton circulation (one instance per world, provenance-tracked).
-  'item.bound-signet': 'artifact circulation',
-  'item.marias-grace': 'artifact circulation',
-  'item.thread-counts-needle': 'artifact circulation',
-  'item.last-cartographers-compass': 'artifact circulation',
-  'item.champion-fallback-relic': 'artifact circulation',
-  // Encounter reward tables under content/encounters/.
-  'item.ashfather-cinder': 'encounter reward',
-  'item.heart-cinder': 'encounter reward',
-  'item.warden-ember': 'encounter reward',
-  'item.tide-crown': 'encounter reward',
-  'item.herald-sigil': 'encounter reward',
-  'item.echo-heartstone': 'encounter reward',
-  // Placed by packages/engine/src/final-chamber-fragments.ts.
-  'item.tablet-fragment.a': 'final chamber fragments',
-  'item.tablet-fragment.b': 'final chamber fragments',
-  'item.tablet-fragment.c': 'final chamber fragments',
-};
+const TABLET_FRAGMENT_TAG = 'tablet-fragment';
+
+/**
+ * Items placed by a system other than a loot table. Every exemption below is *derived* from the
+ * pack rather than hand-listed, because a hand-maintained list of ids rots silently: an entry
+ * that stops being true goes on excusing a genuinely unreachable item forever. Deriving each
+ * exemption from the same field the placing system reads means an item can only be excused for
+ * as long as it is actually placed.
+ */
+function placedByAnotherSystem(entries: readonly ContentEntry[]): ReadonlySet<string> {
+  const excused = new Set<string>();
+  for (const entry of entries) {
+    if (entry.kind === 'item') {
+      // Artifact singleton circulation indexes on the `artifact` block (commerce.ts, artifactIndex).
+      if (entry.artifact !== null) excused.add(entry.id);
+      // The Final Chamber selects fragments by tag (final-chamber-fragments.ts).
+      if (entry.tags.includes(TABLET_FRAGMENT_TAG)) excused.add(entry.id);
+      continue;
+    }
+    // Loot tables are the thing being measured, not an alternative placement system: letting
+    // them excuse their own contents would make a weight-0 choice look like coverage.
+    if (entry.kind === 'loot-table') continue;
+    // Encounters name boss rewards via `uniqueItemId`, champions name theirs via
+    // `fallbackItemId`. Walking for any `item.`-prefixed string keeps this correct as those
+    // schemas grow, instead of hard-coding today's two field names.
+    for (const id of itemIdsWithin(entry)) excused.add(id);
+  }
+  return excused;
+}
+
+/** Every `item.`-prefixed string value reachable anywhere within a content entry. */
+function itemIdsWithin(value: unknown, found: Set<string> = new Set()): Set<string> {
+  if (typeof value === 'string') {
+    if (value.startsWith('item.')) found.add(value);
+    return found;
+  }
+  if (Array.isArray(value)) {
+    for (const element of value) itemIdsWithin(element, found);
+    return found;
+  }
+  if (typeof value === 'object' && value !== null) {
+    for (const nested of Object.values(value)) itemIdsWithin(nested, found);
+  }
+  return found;
+}
 
 /** The six tables the engine resolves by constructed id, one per kind per depth band. */
 const BAND_TABLES = [
@@ -67,7 +92,7 @@ function bandFloors(entries: readonly ContentEntry[]): Readonly<Record<string, n
 }
 
 describe('loot coverage', () => {
-  it('makes every item obtainable somewhere, or names the system that places it', async () => {
+  it('makes every item obtainable somewhere, by a loot table or another placement system', async () => {
     const pack = await loadPack();
     const stocked = new Set(
       tablesOf(pack.entries).flatMap((table) =>
@@ -76,9 +101,10 @@ describe('loot coverage', () => {
           .map((choice) => choice.contentId as string),
       ),
     );
+    const excused = placedByAnotherSystem(pack.entries);
     const orphans = itemsOf(pack.entries)
       .map((item) => item.id)
-      .filter((id) => !stocked.has(id) && PLACED_ELSEWHERE[id] === undefined)
+      .filter((id) => !stocked.has(id) && !excused.has(id))
       .sort();
     expect(orphans).toEqual([]);
   });
