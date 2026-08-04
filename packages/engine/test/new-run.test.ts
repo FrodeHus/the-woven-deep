@@ -473,8 +473,22 @@ describe('createNewRun records input', () => {
     // `potions`) are untouched, and no `items`, `populations`, `floors`, or other stream moved.
     // Expected content-authoring drift from growing an identification pool, not an engine
     // regression.
+    // Re-pinned again for issue #157 (dead and near-dead items ship as rewards) and content schema
+    // v15: every file's `schemaVersion` moves 14 -> 15, items gain the optional `modifiers` block,
+    // `item.weave-focus` trades its stopgap `combat.defense` for `modifiers: { weaveRegen: 1 }`,
+    // `item.champion-fallback-relic` gains an equipment block plus `modifiers: { search: 1 }`, and
+    // `loot-table.echo-spoils` gains two choices. None of that is reachable from `createNewRun`:
+    // the loomcaller kit places weave-focus by content ID (the instance records no stat), a
+    // definition's stat block is read only through `equipmentModifiers` at derive time, and
+    // echo-spoils is rolled on an Echo kill, never at creation -- `rolls` stays 2 there, so no
+    // stream shifts either way. Unlike the #145 re-pin directly above, this one moves NO stream:
+    // none of the touched items is `shuffled`, so `identification-pool.potions` is the same size it
+    // was and the `effects` cursor lands where #145 left it. Verified twice -- against the pre-#157
+    // tree before this branch merged main, and again against merged main afterwards -- by diffing
+    // the decoded run objects field-by-field: `contentHash` is the ONLY key that differs each time.
+    // Expected content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'd528cc24ebd084971e5de26ef68561b2b232f62763b862fdec9b11cc1d00158b',
+      'e7e69f52c8df35bd3964330208d1aff86fa8f67357f72da36faeb80bd661e121',
     );
   });
 

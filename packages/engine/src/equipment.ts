@@ -206,6 +206,14 @@ export function equipmentModifiers(
       base[definition.combat.ammunitionTag ? 'rangedAccuracy' : 'meleeAccuracy'] =
         definition.combat.accuracy;
     }
+    // Intrinsic modifiers are printed on the definition exactly like `combat`, so they ride
+    // `base` and stay visible pre-identification for the same reason: nothing about them is
+    // rolled onto the instance, so showing them leaks nothing the item's own entry withholds.
+    // Summed rather than assigned, so a definition may carry both a combat value and an
+    // intrinsic bonus on the same stat.
+    for (const [name, amount] of Object.entries(definition.modifiers ?? {})) {
+      base[name as DerivedStatName] = (base[name as DerivedStatName] ?? 0) + amount;
+    }
     // Artifact drawbacks apply only while equipped — carried-but-unequipped artifacts
     // contribute nothing, since equipmentModifiers is the sole stat path (spec amendment:
     // the design's "carried-or-equipped" wording resolves to equipped-only here). Folded into

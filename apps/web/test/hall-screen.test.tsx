@@ -75,6 +75,7 @@ const fallbackItem: ItemContentEntry = {
   minDepth: 1,
   maxDepth: 20,
   actionCost: 100,
+  modifiers: {},
   equipment: { slots: ['main-hand'], handedness: 'one-handed', reservedSlots: [] },
   combat: null,
   light: null,
