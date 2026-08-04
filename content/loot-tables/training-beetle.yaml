@@ -1,4 +1,4 @@
-schemaVersion: 15
+schemaVersion: 16
 entries:
   - kind: loot-table
     id: loot-table.training-beetle

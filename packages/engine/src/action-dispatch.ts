@@ -51,7 +51,8 @@ import { provokeMerchant } from './merchant-behavior.js';
 import { resolveOffer } from './haunt.js';
 import { compareCodeUnits } from './stable-json.js';
 import type { MerchantPopulation } from './merchant-model.js';
-import { combat, profile } from './combat-profile.js';
+import { profile } from './combat-profile.js';
+import { combatWithRiders } from './attack-riders.js';
 import { entryById, requireItem } from './content-index.js';
 import { chargeActionEnergy } from './scheduler.js';
 import { activateHeartBoss } from './final-chamber-boss.js';
@@ -242,7 +243,7 @@ const resolveBumpAttack: ActionResolver<Extract<GameAction, { type: 'bump-attack
       relationship: 'hostile',
     });
   }
-  const resolved = combat({
+  const resolved = combatWithRiders({
     actors: next.actors,
     combatState: next.rng.combat,
     attackerId: actor.actorId,
@@ -975,7 +976,7 @@ const ACTION_DISPATCH: ActionDispatchRegistry = {
       to: action.to,
       eventId,
       resolveAttack: (attack) =>
-        combat({
+        combatWithRiders({
           ...attack,
           content,
           items: next.items,

@@ -521,8 +521,18 @@ describe('createNewRun records input', () => {
     // `contentHash` only -- no curse trigger is rolled during run creation. Re-derived once more
     // after merging #157/content v15; the same three-key delta (`contentHash`, `identification`,
     // `rng.effects`) was re-verified against an origin/main build carrying v15.
+    // Re-pinned again for issue #153 (monster poison) and content schema v16: every file's
+    // `schemaVersion` moves 15 -> 16, `condition.poisoned` joins the pack, and the five
+    // poison-tagged monsters gain an `onHitConditions` rider. None of that is reachable from
+    // `createNewRun`: monsters spawn on first DESCENT rather than at creation, riders are only
+    // read when an attack lands, and the new condition belongs to no identification pool, so the
+    // `effects` shuffle is the same length it was. Verified by dumping the decoded run
+    // field-by-field against a build of this tree with the content and engine changes stashed:
+    // `contentHash` is the ONLY key that differs -- every RNG stream, `items`, `identification`,
+    // `populations`, and `floors` are byte-identical. Expected content-authoring drift, not an
+    // engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'c1b8df1b9337145852b73a797a884594259cb0936d34b92122a296c0a438236d',
+      '1b405347f2f358a7d89f8a19331902a576b2717e1e5027d9877b2bd3c2c9bb42',
     );
   });
 

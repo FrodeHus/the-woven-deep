@@ -46,6 +46,8 @@ export interface CombatResolution {
   readonly combatState: Uint32State;
   readonly events: readonly DomainEvent[];
   readonly targetDied: boolean;
+  /** Whether the attack roll landed. On-hit riders key off this rather than scanning events. */
+  readonly hit: boolean;
 }
 
 function safeInteger(label: string, value: number): number {
@@ -102,6 +104,7 @@ export function resolveAttack(input: AttackResolutionInput): CombatResolution {
       actors: [...input.actors],
       combatState: attackRoll.state,
       targetDied: false,
+      hit: false,
       events: [
         {
           type: 'attack.missed',
@@ -171,5 +174,5 @@ export function resolveAttack(input: AttackResolutionInput): CombatResolution {
       contentId: target.contentId,
       killerActorId: attacker.actorId,
     });
-  return { actors, combatState: cursor, events, targetDied };
+  return { actors, combatState: cursor, events, targetDied, hit: true };
 }

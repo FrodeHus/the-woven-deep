@@ -12,13 +12,13 @@ import {
   applyPopulationCombatModifiers,
   composePopulationCombatModifiers,
   resolveAttack,
+  type CombatResolution,
 } from './combat.js';
 import { deriveRunActorStats } from './stats.js';
 import { groupCombatModifiers } from './group-behavior.js';
 import { swarmCombatModifiers } from './swarm-behavior.js';
 import { bossCombatModifiers } from './boss-behavior.js';
 import { fallenHeroCombatModifiers } from './champion.js';
-import type { ReactionAttackResult } from './reactions.js';
 import type { ActiveRun, HeroState, OpaqueId, Uint32State } from './model.js';
 
 export interface CombatProfile {
@@ -238,22 +238,22 @@ export function profile(
   );
 }
 
-export function combat(
-  input: Readonly<{
-    actors: readonly ActorState[];
-    combatState: Uint32State;
-    attackerId: OpaqueId;
-    targetActorId: OpaqueId;
-    eventId: OpaqueId;
-    content: CompiledContentPack;
-    items: ActiveRun['items'];
-    survival: ActiveRun['survival'];
-    populations: ActiveRun['populations'];
-    fallenHeroStandings: ActiveRun['fallenHeroStandings'];
-    worldTime: number;
-    hero: HeroState;
-  }>,
-): ReactionAttackResult {
+export type CombatInput = Readonly<{
+  actors: readonly ActorState[];
+  combatState: Uint32State;
+  attackerId: OpaqueId;
+  targetActorId: OpaqueId;
+  eventId: OpaqueId;
+  content: CompiledContentPack;
+  items: ActiveRun['items'];
+  survival: ActiveRun['survival'];
+  populations: ActiveRun['populations'];
+  fallenHeroStandings: ActiveRun['fallenHeroStandings'];
+  worldTime: number;
+  hero: HeroState;
+}>;
+
+export function combat(input: CombatInput): CombatResolution {
   const attacker = input.actors.find((candidate) => candidate.actorId === input.attackerId);
   const target = input.actors.find((candidate) => candidate.actorId === input.targetActorId);
   if (!attacker || !target) throw new Error('internal invariant: combat actors must exist');
