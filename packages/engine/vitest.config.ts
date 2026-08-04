@@ -15,10 +15,17 @@ export default defineConfig({
     // content and replays a full demo. Keeping that CPU-bound tail in its own vitest process
     // stops it from monopolising the forks the rest of the suite needs.
     //
-    // Forks stay capped below the core count: a long synchronous CPU-bound test starves
-    // Vitest's worker-RPC heartbeat when every core is saturated, surfacing as "Timeout
-    // calling onTaskUpdate". Leaving a core free keeps the reporter channel serviced.
+    // Forks are held to half the cores, not cores-1. The suite's long synchronous CPU-bound
+    // tests block their worker for seconds at a time; if the forks saturate every core, the
+    // main process cannot service the worker's `onTaskUpdate` RPC inside birpc's fixed
+    // timeout (not configurable) and the run dies with `[vitest-worker]: Timeout calling
+    // "onTaskUpdate"` — every test having passed. Halving leaves the reporter real headroom.
+    // A two-core runner still resolves to a single fork, i.e. the old singleFork behaviour.
     pool: 'forks',
-    poolOptions: { forks: { maxForks: Math.max(1, cpuCount - 1), minForks: 1 } },
+    poolOptions: { forks: { maxForks: Math.max(1, Math.floor(cpuCount / 2)), minForks: 1 } },
+    // Same goal, second lever: the default reporter prints a line per slow test, and this
+    // suite has hundreds. On CI that is main-process work competing with the same RPC. The
+    // dot reporter still prints full failure detail and the summary.
+    reporters: process.env.CI ? ['dot'] : ['default'],
   },
 });

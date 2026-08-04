@@ -9,10 +9,12 @@ export default defineConfig({
     // above the 5s default; these limits keep them from false-failing.
     testTimeout: 60_000,
     hookTimeout: 60_000,
-    // Forks stay capped below the core count: a long synchronous CPU-bound test starves
-    // Vitest's worker-RPC heartbeat when every core is saturated, surfacing as "Timeout
-    // calling onTaskUpdate". Leaving a core free keeps the reporter channel serviced.
+    // Forks are held to half the cores, not cores-1, for the reason spelled out in
+    // packages/engine/vitest.config.ts: saturating every core starves the main process of the
+    // CPU it needs to answer a worker's `onTaskUpdate` inside birpc's fixed timeout, failing
+    // the run with every test passed. A two-core runner resolves to a single fork.
     pool: 'forks',
-    poolOptions: { forks: { maxForks: Math.max(1, cpuCount - 1), minForks: 1 } },
+    poolOptions: { forks: { maxForks: Math.max(1, Math.floor(cpuCount / 2)), minForks: 1 } },
+    reporters: process.env.CI ? ['dot'] : ['default'],
   },
 });
