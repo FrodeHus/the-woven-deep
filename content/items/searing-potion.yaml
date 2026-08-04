@@ -1,0 +1,26 @@
+schemaVersion: 14
+entries:
+  - kind: item
+    id: item.searing-potion
+    name: Searing phial
+    glyph: "!"
+    color: "#e0742b"
+    description: A restless amber liquid that throws heat through the glass. Swallowing it is a mistake you make exactly once.
+    lore: "Lampwrights bottle it as fuel and label it plainly. Labels do not survive the Deep; the phials do."
+    tags: [fire, identification, potion]
+    minDepth: 1
+    maxDepth: 20
+    category: potion
+    stackLimit: 4
+    price: 10
+    rarity: uncommon
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    artifact: null
+    identification: { mode: shuffled, poolId: identification-pool.potions }
+    effects:
+      - { effectId: effect.damage, parameters: { damageType: fire, dice: { count: 1, sides: 3, bonus: 0 } }, requiresLivingTarget: true }
+      - { effectId: effect.condition.apply, parameters: { conditionId: condition.burning }, requiresLivingTarget: true }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }
