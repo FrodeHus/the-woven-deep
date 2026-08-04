@@ -1,6 +1,10 @@
 # Batched Travel Intents — Design
 
-**Source:** follow-up to `2026-08-04-registered-mode-latency-design.md` ("step 3"), after the payload work landed in PR #216. **Date:** 2026-08-04. **Status:** proposed.
+**Source:** follow-up to `2026-08-04-registered-mode-latency-design.md` ("step 3"), after the payload work landed in PR #216. **Date:** 2026-08-04. **Status:** approved, implemented.
+
+Built with the approved answers: cap 16, `travel.ts`/`explore.ts` moved wholesale into session-core, stairs-travel excluded, held-key coalescing (Component 3) deferred.
+
+Two things changed during implementation. The reply is **one ordinary `state` message per applied step followed by `travel-ended`**, rather than a bespoke batch message: it needed no new snapshot machinery, the client already renders `state` frames, and the floor patches from PR #216 chain naturally because the connection's encoder sees them in order. And because those frames arrive in one burst, `ProfileSession` **queues and paces them** at the mode's step interval — otherwise a 16-step batch renders as a teleport rather than a walk, since `useAutoTravel`'s existing pacing only ever covered dispatches it made itself.
 
 ## Goal
 
