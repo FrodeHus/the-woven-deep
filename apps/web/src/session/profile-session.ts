@@ -1,7 +1,6 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
   FINAL_CHAMBER_DEPTH,
-  tabletFragmentIds,
   type FinalChamberChoiceCommand,
   type HallRecordEnrichment,
   type HeroChoices,
@@ -40,7 +39,6 @@ import {
   type OnboardingState,
 } from './onboarding.js';
 import { itemById, monsterById } from './pack-queries.js';
-import { heroOf } from './projection-view.js';
 import type { RunSession } from './run-session.js';
 import { classifyStorageFailure, type SessionStorageLike } from './storage.js';
 import { WsClient, type WebSocketFactory } from './ws-client.js';
@@ -102,33 +100,23 @@ function rejectionLine(reason: string): string {
 /**
  * `ProfileSession`'s counterpart to `GuestSession`'s private `computePendingFinalChamberChoice`.
  * The guest computes this straight off its own held `ActiveRun` (`isHeartBossActive`,
- * `heroHoldsAllFragments`) -- fields the wire's redacted `GameplayProjection` never carries, by
+ * `canAssembleTablet`) -- fields the wire's redacted `GameplayProjection` never carries, by
  * design (raw run state never crosses the wire; see `ServerRunSnapshot`'s own doc comment in
- * `play-session.ts`). The boss-active signal is the server's own authoritative, perception-free
- * `snapshot.bossActive` (NOT re-derived from the projection's visible actors -- those are
- * illumination-gated, so the boss can be alive but invisible when the hero's own tile is dark,
- * which would otherwise wrongly re-offer this choice mid-fight). `canBreakCycle` is still derived
- * from the projection: every tablet-fragment content id appears (by `contentId`) in the hero's
- * projected backpack -- tablet fragments are always `identification: { mode: known }`, so their
- * `contentId` is never redacted.
+ * `play-session.ts`). Both signals here are therefore the server's own authoritative,
+ * perception-free ones. `bossActive` is NOT re-derived from the projection's visible actors --
+ * those are illumination-gated, so the boss can be alive but invisible when the hero's own tile is
+ * dark, which would otherwise wrongly re-offer this choice mid-fight. `canBreakCycle` is not
+ * derived from the projected backpack either: fragments banked by earlier runs satisfy the tablet
+ * without being carried, and they live only in raw run state.
  */
 function computePendingFinalChamberChoice(
-  pack: CompiledContentPack,
   snapshot: ServerRunSnapshot,
 ): PendingFinalChamberChoice | null {
   if (snapshot.conclusion !== null) return null;
   if (snapshot.projection.floor.depth !== FINAL_CHAMBER_DEPTH) return null;
   if (snapshot.bossActive) return null;
 
-  const fragmentIds = tabletFragmentIds(pack);
-  const backpackContentIds = new Set(
-    heroOf(snapshot.projection).backpack.flatMap((item) =>
-      item.contentId === undefined ? [] : [item.contentId],
-    ),
-  );
-  const canBreakCycle =
-    fragmentIds.length > 0 && fragmentIds.every((fragmentId) => backpackContentIds.has(fragmentId));
-  return { canBreakCycle };
+  return { canBreakCycle: snapshot.canBreakCycle };
 }
 
 /** How a batched auto-walk finished, once every step it applied has been rendered. `reason` is
@@ -877,7 +865,7 @@ export class ProfileSession implements RunSession {
       log: this.log,
       lastEvents: this.lastEvents,
       pendingDecision: this.serverSnapshot.pendingDecision,
-      pendingFinalChamberChoice: computePendingFinalChamberChoice(this.pack, this.serverSnapshot),
+      pendingFinalChamberChoice: computePendingFinalChamberChoice(this.serverSnapshot),
       notice: this.notice,
       houseOpen: this.houseOpen,
       conclusion: this.serverSnapshot.conclusion,

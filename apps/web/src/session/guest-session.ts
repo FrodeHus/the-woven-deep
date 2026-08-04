@@ -7,7 +7,7 @@ import {
   encodeActiveRun,
   finalizeRun,
   FINAL_CHAMBER_DEPTH,
-  heroHoldsAllFragments,
+  canAssembleTablet,
   isHeartBossActive,
   projectDecision,
   projectGameplayState,
@@ -365,7 +365,7 @@ export class GuestSession implements RunSession {
     const activeFloor = this.run.floors.find((floor) => floor.floorId === this.run.activeFloorId);
     if (!activeFloor || activeFloor.depth !== FINAL_CHAMBER_DEPTH) return null;
     if (isHeartBossActive(this.run)) return null;
-    return { canBreakCycle: heroHoldsAllFragments(this.run, this.pack) };
+    return { canBreakCycle: canAssembleTablet(this.run, this.pack) };
   }
 
   /**

@@ -39,6 +39,11 @@ export interface ServerRunSnapshot {
    * light-out mechanic (0 illumination on the hero's own tile) the boss can be alive but invisible,
    * and re-deriving from visible actors would wrongly re-offer the Final Chamber choice mid-fight. */
   readonly bossActive: boolean;
+  /** Authoritative: whether the hero can assemble the Ancient Tablet (`canAssembleTablet`), which
+   * is what makes the "Assemble the tablet" choice available. Server-computed for the same reason
+   * as `bossActive`: fragments banked in earlier runs live in the raw run state, which never
+   * crosses the wire, so the projected backpack alone cannot answer it. */
+  readonly canBreakCycle: boolean;
   /** The lowest command-sequence number the client may safely mint from: one past the highest
    * profile-minted `commandId` still held in the run's `recentCommands` window (0 when the window
    * holds none).

@@ -162,7 +162,7 @@ export const RUN_MODES = ['classic', 'wanderer'] as const;
 export type RunMode = (typeof RUN_MODES)[number];
 
 export interface ActiveRun {
-  readonly schemaVersion: 17;
+  readonly schemaVersion: 18;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly mode: RunMode;
@@ -195,6 +195,13 @@ export interface ActiveRun {
   readonly fallenHeroStandings: readonly FallenHeroStandingSnapshot[];
   readonly fallenHeroDecisions: readonly FallenHeroRunDecision[];
   readonly conqueredChampionRecordIds: readonly OpaqueId[];
+  /**
+   * Ancient Tablet fragment content ids the player banked in earlier runs, sorted and
+   * duplicate-free: this run's snapshot of `LifetimeState.collectedFragmentIds`, fixed at creation
+   * and never mutated mid-run. A banked fragment satisfies the `broke-cycle` gate
+   * (`canAssembleTablet`) without being carried, and never spawns again.
+   */
+  readonly collectedFragmentIds: readonly OpaqueId[];
   /**
    * The artifact this run may still be offered, or `null` once it has been taken or never drawn.
    * Hidden: it never reaches a projection, so the hero learns of an artifact only when it appears.

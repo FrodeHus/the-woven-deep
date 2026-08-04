@@ -6,6 +6,7 @@ import {
   encodeActiveRun,
   finalizeRun,
   heroFromChoices,
+  canAssembleTablet,
   isHeartBossActive,
   projectGameplayState,
   newRunRecords,
@@ -700,6 +701,7 @@ export class ServerPlaySession {
       houseOpen: this.houseOpen,
       heroClassTags: this.run.hero.classTags,
       bossActive: isHeartBossActive(this.run),
+      canBreakCycle: canAssembleTablet(this.run, this.pack),
       nextCommandSequence: nextCommandSequenceFor(this.run),
     };
   }

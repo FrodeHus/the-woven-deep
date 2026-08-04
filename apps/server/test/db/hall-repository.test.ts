@@ -86,6 +86,7 @@ function emptyLifetime(): LifetimeState {
     conqueredChampionRecordIds: [],
     grantedAchievementIds: [],
     discoveryProtection: [],
+    collectedFragmentIds: [],
     totals: emptyRunMetrics(),
   };
 }
@@ -265,6 +266,7 @@ describe('ServerRunRecordRepository', () => {
       newlyConqueredChampionRecordIds: [],
       achievementGrants: [],
       discoveryProtectionUpdates: [],
+      newlyCollectedFragmentIds: [],
       metrics: legacyMetrics,
     };
     const legacyEnvelope = { appliedDeltas: [legacyDelta] }; // no `version` field
@@ -289,6 +291,43 @@ describe('ServerRunRecordRepository', () => {
     const { deltas } = buildStoredRecord();
     expect(() => reopened.applyDeltas(deltas)).not.toThrow();
     expect(reopened.lifetime().totals.kills).toBe(4 + deltas.metrics.kills);
+  });
+
+  it('lifetime() accumulates collected tablet fragments across persisted deltas', () => {
+    const { deltas } = buildStoredRecord();
+    repository.applyDeltas({
+      ...deltas,
+      newlyCollectedFragmentIds: ['item.tablet-fragment.c'],
+    });
+    repository.applyDeltas({
+      ...deltas,
+      recordId: 'record.second.1',
+      newlyCollectedFragmentIds: ['item.tablet-fragment.a', 'item.tablet-fragment.c'],
+    });
+
+    const expected = ['item.tablet-fragment.a', 'item.tablet-fragment.c'];
+    expect(repository.lifetime().collectedFragmentIds).toEqual(expected);
+    const reopened = new ServerRunRecordRepository({ database, profileId: 'p1' });
+    expect(reopened.lifetime().collectedFragmentIds).toEqual(expected);
+  });
+
+  it('lifetime() replays a delta stored before banked fragments existed', () => {
+    const { deltas } = buildStoredRecord();
+    const preFragmentDelta = { ...deltas } as Record<string, unknown>;
+    delete preFragmentDelta['newlyCollectedFragmentIds'];
+    const envelope = { version: 2, appliedDeltas: [preFragmentDelta] };
+
+    database
+      .prepare(
+        `insert into hall_state(profile_id, lifetime_json, heart_json, unlocks_json, achievements_json, updated_at)
+         values (?, ?, null, '[]', '[]', ?)`,
+      )
+      .run('p1', JSON.stringify(envelope), '2026-08-04T00:00:00.000Z');
+
+    const reopened = new ServerRunRecordRepository({ database, profileId: 'p1' });
+
+    expect(() => reopened.lifetime()).not.toThrow();
+    expect(reopened.lifetime().collectedFragmentIds).toEqual([]);
   });
 });
 

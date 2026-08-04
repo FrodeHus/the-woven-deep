@@ -18,6 +18,7 @@ import {
   legacyActiveRunV14Schema,
   legacyActiveRunV15Schema,
   legacyActiveRunV16Schema,
+  legacyActiveRunV17Schema,
   emptyLegacyRunMetricsV9,
   validateActiveRun,
 } from './save-schema.js';
@@ -248,137 +249,50 @@ function migrateV16ToV17(input: unknown): unknown {
   };
 }
 
-function migrateLegacy(
-  input: unknown,
-  schemaVersion: 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16,
-): ActiveRun {
+/**
+ * Cross-run tablet assembly banks fragments in `LifetimeState`; a save written before it has no
+ * banked fragments, which is exactly the empty list. The host's lifetime store is the source of
+ * truth from the next run creation onward.
+ */
+function migrateV17ToV18(input: unknown): unknown {
+  const v17 = legacyActiveRunV17Schema.parse(input);
+  return { ...v17, schemaVersion: 18, collectedFragmentIds: [] };
+}
+
+/**
+ * Every supported legacy save version, oldest first, and the ordered v(N)->v(N+1) transforms that
+ * carry one forward. `ORDERED_MIGRATIONS[i]` migrates `LEGACY_SCHEMA_VERSIONS[i]` to the next
+ * version, so a save enters the chain at its own version and runs every step above it.
+ */
+const LEGACY_SCHEMA_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] as const;
+type LegacySchemaVersion = (typeof LEGACY_SCHEMA_VERSIONS)[number];
+
+const ORDERED_MIGRATIONS: readonly ((input: unknown) => unknown)[] = [
+  migrateV4ToV5,
+  migrateV5ToV6,
+  migrateV6ToV7,
+  migrateV7ToV8,
+  migrateV8ToV9,
+  migrateV9ToV10,
+  migrateV10ToV11,
+  migrateV11ToV12,
+  migrateV12ToV13,
+  migrateV13ToV14,
+  migrateV14ToV15,
+  migrateV15ToV16,
+  migrateV16ToV17,
+  migrateV17ToV18,
+];
+
+function isLegacySchemaVersion(value: unknown): value is LegacySchemaVersion {
+  return (LEGACY_SCHEMA_VERSIONS as readonly unknown[]).includes(value);
+}
+
+function migrateLegacy(input: unknown, schemaVersion: LegacySchemaVersion): ActiveRun {
   try {
-    const migrated =
-      schemaVersion === 4
-        ? migrateV16ToV17(
-            migrateV15ToV16(
-              migrateV14ToV15(
-                migrateV13ToV14(
-                  migrateV12ToV13(
-                    migrateV11ToV12(
-                      migrateV10ToV11(
-                        migrateV9ToV10(
-                          migrateV8ToV9(
-                            migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(migrateV4ToV5(input)))),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          )
-        : schemaVersion === 5
-          ? migrateV16ToV17(
-              migrateV15ToV16(
-                migrateV14ToV15(
-                  migrateV13ToV14(
-                    migrateV12ToV13(
-                      migrateV11ToV12(
-                        migrateV10ToV11(
-                          migrateV9ToV10(
-                            migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(migrateV5ToV6(input)))),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            )
-          : schemaVersion === 6
-            ? migrateV16ToV17(
-                migrateV15ToV16(
-                  migrateV14ToV15(
-                    migrateV13ToV14(
-                      migrateV12ToV13(
-                        migrateV11ToV12(
-                          migrateV10ToV11(
-                            migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(migrateV6ToV7(input)))),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              )
-            : schemaVersion === 7
-              ? migrateV16ToV17(
-                  migrateV15ToV16(
-                    migrateV14ToV15(
-                      migrateV13ToV14(
-                        migrateV12ToV13(
-                          migrateV11ToV12(
-                            migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(migrateV7ToV8(input)))),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              : schemaVersion === 8
-                ? migrateV16ToV17(
-                    migrateV15ToV16(
-                      migrateV14ToV15(
-                        migrateV13ToV14(
-                          migrateV12ToV13(
-                            migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(migrateV8ToV9(input)))),
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                : schemaVersion === 9
-                  ? migrateV16ToV17(
-                      migrateV15ToV16(
-                        migrateV14ToV15(
-                          migrateV13ToV14(
-                            migrateV12ToV13(
-                              migrateV11ToV12(migrateV10ToV11(migrateV9ToV10(input))),
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                  : schemaVersion === 10
-                    ? migrateV16ToV17(
-                        migrateV15ToV16(
-                          migrateV14ToV15(
-                            migrateV13ToV14(
-                              migrateV12ToV13(migrateV11ToV12(migrateV10ToV11(input))),
-                            ),
-                          ),
-                        ),
-                      )
-                    : schemaVersion === 11
-                      ? migrateV16ToV17(
-                          migrateV15ToV16(
-                            migrateV14ToV15(
-                              migrateV13ToV14(migrateV12ToV13(migrateV11ToV12(input))),
-                            ),
-                          ),
-                        )
-                      : schemaVersion === 12
-                        ? migrateV16ToV17(
-                            migrateV15ToV16(
-                              migrateV14ToV15(migrateV13ToV14(migrateV12ToV13(input))),
-                            ),
-                          )
-                        : schemaVersion === 13
-                          ? migrateV16ToV17(
-                              migrateV15ToV16(migrateV14ToV15(migrateV13ToV14(input))),
-                            )
-                          : schemaVersion === 14
-                            ? migrateV16ToV17(migrateV15ToV16(migrateV14ToV15(input)))
-                            : schemaVersion === 15
-                              ? migrateV16ToV17(migrateV15ToV16(input))
-                              : migrateV16ToV17(input);
+    const migrated = ORDERED_MIGRATIONS.slice(
+      schemaVersion - LEGACY_SCHEMA_VERSIONS[0],
+    ).reduce<unknown>((state, migrate) => migrate(state), input);
     return validateActiveRun(migrated);
   } catch (cause) {
     if (cause instanceof SaveLoadError) throw cause;
@@ -418,21 +332,7 @@ export function decodeActiveRun(json: string, content?: CompiledContentPack): Ac
     typeof input === 'object' && input !== null
       ? (input as Readonly<Record<string, unknown>>).schemaVersion
       : undefined;
-  if (
-    schemaVersion === 4 ||
-    schemaVersion === 5 ||
-    schemaVersion === 6 ||
-    schemaVersion === 7 ||
-    schemaVersion === 8 ||
-    schemaVersion === 9 ||
-    schemaVersion === 10 ||
-    schemaVersion === 11 ||
-    schemaVersion === 12 ||
-    schemaVersion === 13 ||
-    schemaVersion === 14 ||
-    schemaVersion === 15 ||
-    schemaVersion === 16
-  ) {
+  if (isLegacySchemaVersion(schemaVersion)) {
     return migrateLegacy(input, schemaVersion);
   }
   if (schemaVersion !== SAVE_SCHEMA_VERSION) {

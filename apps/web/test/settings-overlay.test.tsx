@@ -458,6 +458,7 @@ describe('SettingsOverlay composed with PlayScreen/App', () => {
         conqueredChampionRecordIds: [],
         grantedAchievementIds: [],
         discoveryProtection: [],
+        collectedFragmentIds: [],
         totals: {
           kills: 0,
           killsByModel: { individual: 0, group: 0, swarm: 0, boss: 0 },

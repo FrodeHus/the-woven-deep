@@ -51,7 +51,7 @@ export class SessionHallCorruptError extends Error {
  * `deathInventory` is defaulted to `[heirloom]` in `migratePersistedState` below — the heirloom is
  * the one recorded item, so it becomes the whole death inventory.
  */
-const HALL_STORE_VERSION = 4;
+const HALL_STORE_VERSION = 5;
 
 interface PersistedHallState {
   readonly version: number;
@@ -64,10 +64,16 @@ interface PersistedHallState {
 }
 
 /** What a parsed blob is allowed to be before migration: a version-1 blob predates the artifact
- * ledger entirely, so both ledger keys are optional on the way in and always present on the way
- * out. */
-type ParsedHallState = Omit<PersistedHallState, 'artifactLedger' | 'appliedArtifactRecordIds'> &
-  Partial<Pick<PersistedHallState, 'artifactLedger' | 'appliedArtifactRecordIds'>>;
+ * ledger entirely and a version-4-and-earlier blob predates cross-run tablet assembly, so those
+ * keys are optional on the way in and always present on the way out. */
+type ParsedHallState = Omit<
+  PersistedHallState,
+  'artifactLedger' | 'appliedArtifactRecordIds' | 'lifetime'
+> &
+  Partial<Pick<PersistedHallState, 'artifactLedger' | 'appliedArtifactRecordIds'>> & {
+    readonly lifetime: Omit<LifetimeState, 'collectedFragmentIds'> &
+      Partial<Pick<LifetimeState, 'collectedFragmentIds'>>;
+  };
 
 function emptyLifetimeMetrics(): RunMetrics {
   return {
@@ -102,6 +108,7 @@ function emptyPersistedState(): PersistedHallState {
       conqueredChampionRecordIds: [],
       grantedAchievementIds: [],
       discoveryProtection: [],
+      collectedFragmentIds: [],
       totals: emptyLifetimeMetrics(),
     },
     appliedDeltaRecordIds: [],
@@ -143,6 +150,9 @@ function migratePersistedState(state: ParsedHallState): PersistedHallState {
     })),
     lifetime: {
       ...state.lifetime,
+      // Version-4-and-earlier blobs predate banked tablet fragments (no key at all): nobody had
+      // banked one before the store could hold them, which is exactly the empty list.
+      collectedFragmentIds: state.lifetime.collectedFragmentIds ?? [],
       totals: normalizeStoredMetrics(state.lifetime.totals),
     },
   };
@@ -375,6 +385,10 @@ export function createSessionRunRecordRepository(storage: SessionStorageLike): R
         discoveryProtection: mergedDiscoveryProtection(
           lifetime.discoveryProtection,
           deltas.discoveryProtectionUpdates,
+        ),
+        collectedFragmentIds: mergedSortedUnion(
+          lifetime.collectedFragmentIds,
+          deltas.newlyCollectedFragmentIds,
         ),
         totals: mergeMetrics(lifetime.totals, deltas.metrics),
       };

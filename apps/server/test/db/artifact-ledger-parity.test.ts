@@ -128,6 +128,7 @@ function runScenario(repository: RunRecordRepository): ArtifactLedger {
     newlyConqueredChampionRecordIds: [dain.recordId],
     achievementGrants: [],
     discoveryProtectionUpdates: [],
+    newlyCollectedFragmentIds: [],
     metrics: emptyRunMetrics(),
   });
   repository.appendRecord(conqueror);

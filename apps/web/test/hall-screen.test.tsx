@@ -117,6 +117,7 @@ function emptyLifetime(): LifetimeState {
     conqueredChampionRecordIds: [],
     grantedAchievementIds: [],
     discoveryProtection: [],
+    collectedFragmentIds: [],
     totals: emptyRunMetrics(),
   };
 }

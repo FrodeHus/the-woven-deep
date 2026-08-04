@@ -212,6 +212,7 @@ function realHallRecord(): StoredHallRecord {
       conqueredChampionRecordIds: [],
       grantedAchievementIds: [],
       discoveryProtection: [],
+      collectedFragmentIds: [],
       totals: emptyRunMetrics(),
     },
   });
@@ -315,6 +316,7 @@ describe('createSessionRunRecordRepository', () => {
       discoveryProtectionUpdates: [
         { encounterId: 'encounter.rats', previousBonus: 0, nextBonus: 0.2, outcome: 'unreached' },
       ],
+      newlyCollectedFragmentIds: [],
       metrics: metrics({ kills: 3, deepestDepth: 4, damageDealt: 50 }),
     };
     repository.applyDeltas(deltas);
@@ -338,6 +340,7 @@ describe('createSessionRunRecordRepository', () => {
       newlyConqueredChampionRecordIds: [],
       achievementGrants: [],
       discoveryProtectionUpdates: [],
+      newlyCollectedFragmentIds: [],
       metrics: metrics({ kills: 2 }),
     });
     const heart: HeartLineageRecord = {
@@ -361,6 +364,7 @@ describe('createSessionRunRecordRepository', () => {
       newlyConqueredChampionRecordIds: [],
       achievementGrants: [],
       discoveryProtectionUpdates: [],
+      newlyCollectedFragmentIds: [],
       metrics: metrics({ kills: 99 }),
     });
     expect(second.lifetime()).toEqual(first.lifetime());
@@ -419,6 +423,7 @@ describe('createSessionRunRecordRepository', () => {
         conqueredChampionRecordIds: [],
         grantedAchievementIds: [],
         discoveryProtection: [],
+        collectedFragmentIds: [],
         totals: legacyTotals,
       },
       appliedDeltaRecordIds: [],
@@ -447,6 +452,7 @@ describe('createSessionRunRecordRepository', () => {
         newlyConqueredChampionRecordIds: [],
         achievementGrants: [],
         discoveryProtectionUpdates: [],
+        newlyCollectedFragmentIds: [],
         metrics: metrics({ kills: 3, defeatedBossMonsterIds: ['monster.boss.new'] }),
       }),
     ).not.toThrow();
@@ -492,7 +498,7 @@ describe('session run record repository artifact ledger', () => {
     first.applyArtifactDeltas(lostToDeltas(record.recordId, record.heroName));
 
     const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
-    expect(persisted['version']).toBe(4);
+    expect(persisted['version']).toBe(5);
     expect(persisted['appliedArtifactRecordIds']).toEqual([record.recordId]);
 
     const reopened = createSessionRunRecordRepository(storage);
@@ -544,6 +550,7 @@ describe('session run record repository artifact ledger', () => {
           conqueredChampionRecordIds: [],
           grantedAchievementIds: [],
           discoveryProtection: [],
+          collectedFragmentIds: [],
           totals: metrics(),
         },
         appliedDeltaRecordIds: [],
@@ -561,7 +568,7 @@ describe('session run record repository artifact ledger', () => {
       enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
     });
     const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
-    expect(persisted['version']).toBe(4);
+    expect(persisted['version']).toBe(5);
     expect(persisted['artifactLedger']).toEqual([]);
     expect(persisted['appliedArtifactRecordIds']).toEqual([]);
   });
@@ -581,6 +588,7 @@ describe('session run record repository artifact ledger', () => {
         conqueredChampionRecordIds: [],
         grantedAchievementIds: [],
         discoveryProtection: [],
+        collectedFragmentIds: [],
         totals: metrics(),
       },
       appliedDeltaRecordIds: [],
@@ -602,7 +610,7 @@ describe('session run record repository artifact ledger', () => {
       enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
     });
     const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
-    expect(persisted['version']).toBe(4);
+    expect(persisted['version']).toBe(5);
     const persistedRecords = persisted['records'] as readonly Record<string, unknown>[];
     const persistedHeirloom = persistedRecords[0]?.['heirloom'] as Record<string, unknown>;
     expect(persistedHeirloom['curse']).toBeNull();
@@ -625,6 +633,7 @@ describe('session run record repository artifact ledger', () => {
         conqueredChampionRecordIds: [],
         grantedAchievementIds: [],
         discoveryProtection: [],
+        collectedFragmentIds: [],
         totals: metrics(),
       },
       appliedDeltaRecordIds: [],
@@ -647,17 +656,71 @@ describe('session run record repository artifact ledger', () => {
       enrichment: { achievedAt: 'Run #1', portraitGlyph: '@' },
     });
     const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
-    expect(persisted['version']).toBe(4);
+    expect(persisted['version']).toBe(5);
     const persistedRecords = persisted['records'] as readonly Record<string, unknown>[];
     expect(persistedRecords[0]?.['deathInventory']).toEqual([persistedRecords[0]?.['heirloom']]);
   });
 
-  it('writes back at version 4', () => {
+  it('writes back at version 5', () => {
     const storage = fakeStorage();
     const repository = createSessionRunRecordRepository(storage);
     repository.appendRecord(storedRecord());
     const persisted = JSON.parse(storage.peek(RECORDS_KEY) ?? '{}') as Record<string, unknown>;
-    expect(persisted['version']).toBe(4);
+    expect(persisted['version']).toBe(5);
+  });
+
+  it('accumulates and persists collected tablet fragments across runs', () => {
+    const storage = fakeStorage();
+    const repository = createSessionRunRecordRepository(storage);
+    expect(repository.lifetime().collectedFragmentIds).toEqual([]);
+
+    repository.applyDeltas({
+      recordId: 'record.eeeeeeee00000000.eeeeeeeeeeeeeeee',
+      newlyConqueredChampionRecordIds: [],
+      achievementGrants: [],
+      discoveryProtectionUpdates: [],
+      newlyCollectedFragmentIds: ['item.tablet-fragment.c'],
+      metrics: metrics(),
+    });
+    repository.applyDeltas({
+      recordId: 'record.ffffffff00000000.ffffffffffffffff',
+      newlyConqueredChampionRecordIds: [],
+      achievementGrants: [],
+      discoveryProtectionUpdates: [],
+      newlyCollectedFragmentIds: ['item.tablet-fragment.a', 'item.tablet-fragment.c'],
+      metrics: metrics(),
+    });
+
+    const expected = ['item.tablet-fragment.a', 'item.tablet-fragment.c'];
+    expect(repository.lifetime().collectedFragmentIds).toEqual(expected);
+    // Survives a reconstruction from the same storage: the banked set is the whole point.
+    expect(createSessionRunRecordRepository(storage).lifetime().collectedFragmentIds).toEqual(
+      expected,
+    );
+  });
+
+  it('migrates a version-4 blob by defaulting the banked tablet fragments to none', () => {
+    const storage = fakeStorage();
+    storage.set(
+      RECORDS_KEY,
+      JSON.stringify({
+        version: 4,
+        records: [],
+        heart: null,
+        lifetime: {
+          conqueredChampionRecordIds: [],
+          grantedAchievementIds: [],
+          discoveryProtection: [],
+          totals: metrics(),
+        },
+        appliedDeltaRecordIds: [],
+        artifactLedger: [],
+        appliedArtifactRecordIds: [],
+      }),
+    );
+
+    const repository = createSessionRunRecordRepository(storage);
+    expect(repository.lifetime().collectedFragmentIds).toEqual([]);
   });
 
   it('rejects a blob whose artifact ledger keys have the wrong shape', () => {
@@ -672,6 +735,7 @@ describe('session run record repository artifact ledger', () => {
           conqueredChampionRecordIds: [],
           grantedAchievementIds: [],
           discoveryProtection: [],
+          collectedFragmentIds: [],
           totals: metrics(),
         },
         appliedDeltaRecordIds: [],
@@ -695,6 +759,7 @@ describe('session run record repository artifact ledger', () => {
           conqueredChampionRecordIds: [],
           grantedAchievementIds: [],
           discoveryProtection: [],
+          collectedFragmentIds: [],
           totals: metrics(),
         },
         appliedDeltaRecordIds: [],

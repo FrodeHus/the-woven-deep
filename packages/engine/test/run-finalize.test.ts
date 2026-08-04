@@ -24,6 +24,7 @@ import {
   compareCodeUnits,
   selectRecordHeirloom,
   standingsFromRecords,
+  TABLET_FRAGMENT_TAG,
   type ActiveRun,
   type EncounterRunDecision,
   type FallenHeroRunDecision,
@@ -196,6 +197,7 @@ function emptyLifetime(overrides: Partial<LifetimeState> = {}): LifetimeState {
     conqueredChampionRecordIds: [],
     grantedAchievementIds: [],
     discoveryProtection: [],
+    collectedFragmentIds: [],
     totals: emptyRunMetrics(),
     ...overrides,
   };
@@ -992,5 +994,84 @@ describe('signature abilities recorded on the build snapshot', () => {
       10,
     );
     expect(standings[0]!.signatureAbilityIds).toEqual(['spell.ember']);
+  });
+});
+
+describe('finalizeRun lifetime fragment collection', () => {
+  const FRAGMENT_A = 'item.fragment.a';
+  const FRAGMENT_B = 'item.fragment.b';
+
+  function fragmentDef(id: string): ItemContentEntry {
+    return itemDef(id, {
+      tags: [TABLET_FRAGMENT_TAG],
+      category: 'misc',
+      heirloomEligible: false,
+      equipment: null,
+      minDepth: 15,
+    });
+  }
+
+  function fragmentPack(): CompiledContentPack {
+    return pack([fragmentDef(FRAGMENT_A), fragmentDef(FRAGMENT_B)]);
+  }
+
+  function carried(contentId: string): ItemInstance {
+    return {
+      ...equippedItem(`${contentId}.instance`, contentId),
+      location: { type: 'backpack', actorId: 'hero.demo' },
+    };
+  }
+
+  it('banks every fragment the hero holds when the run concludes', () => {
+    const run = concludedRun({ items: [carried(FRAGMENT_A), carried(FRAGMENT_B)] });
+    const { deltas } = finalizeRun({
+      run,
+      content: fragmentPack(),
+      lifetime: emptyLifetime(),
+    });
+    expect(deltas.newlyCollectedFragmentIds).toEqual([FRAGMENT_A, FRAGMENT_B]);
+  });
+
+  it('banks a fragment carried by a hero who died holding it', () => {
+    const run = concludedRun({ items: [carried(FRAGMENT_B)] });
+    expect(run.conclusion?.completionType).toBe('died');
+    const { deltas } = finalizeRun({
+      run,
+      content: fragmentPack(),
+      lifetime: emptyLifetime(),
+    });
+    expect(deltas.newlyCollectedFragmentIds).toEqual([FRAGMENT_B]);
+  });
+
+  it('omits fragments lifetime already banked', () => {
+    const run = concludedRun({ items: [carried(FRAGMENT_A), carried(FRAGMENT_B)] });
+    const { deltas } = finalizeRun({
+      run,
+      content: fragmentPack(),
+      lifetime: emptyLifetime({ collectedFragmentIds: [FRAGMENT_A] }),
+    });
+    expect(deltas.newlyCollectedFragmentIds).toEqual([FRAGMENT_B]);
+  });
+
+  it('banks nothing for a fragment left lying on the floor', () => {
+    const onFloor: ItemInstance = {
+      ...carried(FRAGMENT_A),
+      location: { type: 'floor', floorId: 'floor.demo', x: 2, y: 2 },
+    };
+    const { deltas } = finalizeRun({
+      run: concludedRun({ items: [onFloor] }),
+      content: fragmentPack(),
+      lifetime: emptyLifetime(),
+    });
+    expect(deltas.newlyCollectedFragmentIds).toEqual([]);
+  });
+
+  it('banks nothing when the hero carried no fragments', () => {
+    const { deltas } = finalizeRun({
+      run: concludedRun(),
+      content: fragmentPack(),
+      lifetime: emptyLifetime(),
+    });
+    expect(deltas.newlyCollectedFragmentIds).toEqual([]);
   });
 });

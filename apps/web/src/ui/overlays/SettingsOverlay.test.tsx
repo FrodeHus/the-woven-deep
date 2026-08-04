@@ -52,6 +52,7 @@ describe('SettingsOverlay -- Lifetime & achievements', () => {
         conqueredChampionRecordIds: [],
         grantedAchievementIds: ['achievement.first-blood'],
         discoveryProtection: [],
+        collectedFragmentIds: [],
         totals: { ...emptyRunMetrics(), kills: 42, deepestDepth: 7 },
       },
       achievements: [

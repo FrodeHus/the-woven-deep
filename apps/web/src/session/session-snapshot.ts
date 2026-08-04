@@ -43,7 +43,7 @@ export type SessionNotice =
  * with the bound Heart not yet fighting (`isHeartBossActive` false) and the run unconcluded --
  * mirrors `pendingDecision` below, but this one is never auto-answered: `FinalChamberChoice`
  * (the overlay) is the only thing that ever turns it into a `final-chamber-choice` command, via
- * `chooseFinalChamber`. `canBreakCycle` is `heroHoldsAllFragments` -- the "Assemble the tablet"
+ * `chooseFinalChamber`. `canBreakCycle` is `canAssembleTablet` -- the "Assemble the tablet"
  * option only ever appears when this is `true`.
  */
 export interface PendingFinalChamberChoice {
