@@ -5,9 +5,15 @@ entries:
     name: Travelling Lampwright stock
     tags: [lampwright, merchant]
     rolls: 1
+    # The lampwright is non-permanent, so `materializeMerchant` projects this table against the
+    # floor it appears on rather than the restock ladder: these bands open the moment the hero
+    # meets one deep enough, which is the only reason a late encounter is worth stopping for.
     choices:
       - { contentId: item.lamp-oil, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 2 }
       - { contentId: item.pitch-torch, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.brass-lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.travel-ration, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 2 }
       - { contentId: item.wooden-arrows, lootTableId: null, weight: 2, minimumQuantity: 3, maximumQuantity: 6 }
+      - { contentId: item.lamp-oil, lootTableId: null, weight: 3, minimumQuantity: 3, maximumQuantity: 5, minDepth: 8 }
+      - { contentId: item.lockpick, lootTableId: null, weight: 3, minimumQuantity: 2, maximumQuantity: 4, minDepth: 8 }
+      - { contentId: item.warded-lantern, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1, minDepth: 12 }
