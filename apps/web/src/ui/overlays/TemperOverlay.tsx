@@ -37,27 +37,40 @@ export function TemperOverlay({
       <p className="font-mono text-sm text-fg">
         {banked} {banked === 1 ? 'point' : 'points'} banked
       </p>
+      {/* The two reasons a row can be dead are independent, and both have to be said out loud or
+          the overlay is a wall of disabled buttons: nothing banked yet (every row dead, none
+          capped) and the attribute already at its ceiling (per-row, below). "Held by the Deep" is
+          only about banked points with nowhere to go, so it stays gated on `banked > 0` -- a hero
+          with nothing banked is holding nothing. Depth is the only currency tempering has
+          (`grantTemperingMilestones`), so the earn line points where the points actually come
+          from. */}
+      {banked <= 0 && <p className="text-sm italic text-subtle">Delve deeper to earn a point.</p>}
       {heldByTheDeep && <p className="text-sm italic text-subtle">Held by the Deep.</p>}
       <div className="flex flex-col gap-2">
         {ATTRIBUTE_ORDER.map((name) => {
-          const disabled = banked <= 0 || !temperable.includes(name);
+          const capped = !temperable.includes(name);
+          const disabled = banked <= 0 || capped;
           return (
             <div key={name} className="flex items-center gap-3 font-mono">
               <span className="w-10 shrink-0 text-fg-strong">{ATTRIBUTE_ABBREVIATIONS[name]}</span>
               <span className="flex-1 text-fg">{ATTRIBUTE_LABELS[name]}</span>
               <span className="text-subtle">{hero.attributes[name]}</span>
-              <button
-                type="button"
-                disabled={disabled}
-                onClick={() => onTemper(name)}
-                className={
-                  disabled
-                    ? 'cursor-not-allowed border border-subtle px-3 py-1.5 text-xs text-subtle'
-                    : 'cursor-pointer border border-accent px-3 py-1.5 text-xs text-accent-strong hover:bg-accent hover:text-deep'
-                }
-              >
-                {ATTRIBUTE_LABELS[name]}
-              </button>
+              {capped ? (
+                <span className="text-xs italic text-subtle">at maximum</span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onTemper(name)}
+                  className={
+                    disabled
+                      ? 'cursor-not-allowed border border-subtle px-3 py-1.5 text-xs text-subtle'
+                      : 'cursor-pointer border border-accent px-3 py-1.5 text-xs text-accent-strong hover:bg-accent hover:text-deep'
+                  }
+                >
+                  {ATTRIBUTE_LABELS[name]}
+                </button>
+              )}
             </div>
           );
         })}

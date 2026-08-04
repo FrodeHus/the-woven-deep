@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import {
+  createMerchantDemoRun,
   createNewRun,
   decodeActiveRun,
   DEFAULT_GUEST_HERO,
@@ -10,6 +11,7 @@ import {
   encodeActiveRun,
   grantTemperingMilestones,
   heroActor,
+  merchantDemoCommands,
   resolveCommand,
   resolveTemper,
   validateActiveRun,
@@ -478,9 +480,41 @@ describe('resolveTemper', () => {
         finalized: false,
       },
     };
-    expect(
-      resolveCommand(concluded, temperCommand('might'), { content: pack }).result,
-    ).toMatchObject({ reason: 'run.concluded' });
+    const rejected = resolveCommand(concluded, temperCommand('might'), { content: pack });
+    expect(rejected.result).toMatchObject({ reason: 'run.concluded' });
+    // Inert, same as the mid-trade refusal below: a dead hero's banked point is not spent and the
+    // attribute does not move.
+    expect(rejected.state.hero.tempering).toEqual({ banked: 1, spent: zeroSpent() });
+    expect(heroActor(rejected.state).attributes).toEqual(heroActor(concluded).attributes);
+  });
+
+  /** Temper is not a trade command, so it meets the reducer's modal gate (`reducer.ts`, the
+   * `activeTrade !== null` branch) like any other non-trade command and is refused with
+   * `trade.active` while a merchant session is open. Pinned because the refusal has to be
+   * INERT -- the point stays banked, the attribute is untouched, no turn passes, and the session
+   * the hero is standing in survives -- and nothing else in the suite says so. */
+  it('refuses a temper mid-trade without spending the point or disturbing the session', () => {
+    const initial = createMerchantDemoRun(pack);
+    const openCommand = merchantDemoCommands(initial).find(
+      (entry) => entry.boundary === 'before-open',
+    )!.command;
+    const opened = resolveCommand(initial, openCommand, { content: pack });
+    expect(opened.result.status).toBe('applied');
+    expect(opened.state.activeTrade).not.toBeNull();
+
+    const staged = withTempering(opened.state, { banked: 1, spent: zeroSpent() });
+    const tempered = resolveCommand(staged, temperCommand('vitality', staged.revision), {
+      content: pack,
+    });
+
+    expect(tempered.result).toMatchObject({
+      status: 'invalid',
+      reason: 'trade.active',
+      turn: staged.turn,
+    });
+    expect(tempered.state.hero.tempering).toEqual({ banked: 1, spent: zeroSpent() });
+    expect(heroActor(tempered.state).attributes).toEqual(heroActor(staged).attributes);
+    expect(tempered.state.activeTrade).toEqual(staged.activeTrade);
   });
 
   it('persists a rejected temper without throwing', () => {

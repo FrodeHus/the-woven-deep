@@ -244,19 +244,39 @@ export function normalizeFallenHero(
         Math.floor((championAccuracy * input.template.echoDamagePercent) / 100),
       )
     : championAccuracy;
+  // `run-finalize` selects a hero's signature spells BY WEAVE COST and only then sorts them by id,
+  // because the save schema validates the stored list as strictly increasing (see
+  // `signatureAbilityIds` there). Narrowing that list again -- the champion re-cap below when a
+  // build's template allows fewer abilities than the standing was recorded under, and the echo's
+  // strictly-weaker subset -- therefore has to re-rank by the SAME comparator first: a prefix slice
+  // of an id-sorted list keeps whatever sorts first alphabetically, which is not the champion's
+  // best. The result is re-sorted by id, since the placed population's own `abilityIds` carries the
+  // strictly-increasing invariant too.
+  const byCostThenId = (left: OpaqueId, right: OpaqueId): number => {
+    const leftSpell = entries.get(left);
+    const rightSpell = entries.get(right);
+    const leftCost = leftSpell?.kind === 'spell' ? leftSpell.weaveCost : 0;
+    const rightCost = rightSpell?.kind === 'spell' ? rightSpell.weaveCost : 0;
+    return rightCost - leftCost || compareCodeUnits(left, right);
+  };
   const championAbilityIds = input.standing.signatureAbilityIds
     .filter((id) => entries.get(id)?.kind === 'spell')
-    .slice(0, input.template.abilityLimit);
+    .toSorted(byCostThenId)
+    .slice(0, input.template.abilityLimit)
+    .toSorted(compareCodeUnits);
   if (echo && championAbilityIds.length === 0) {
     throw new RangeError(
       'Echo ability selection cannot be strictly weaker than the current Champion selection',
     );
   }
   const abilityIds = echo
-    ? championAbilityIds.slice(
-        0,
-        Math.min(input.template.echoAbilityLimit, Math.max(0, championAbilityIds.length - 1)),
-      )
+    ? championAbilityIds
+        .toSorted(byCostThenId)
+        .slice(
+          0,
+          Math.min(input.template.echoAbilityLimit, Math.max(0, championAbilityIds.length - 1)),
+        )
+        .toSorted(compareCodeUnits)
     : championAbilityIds;
   return {
     displayName: echo

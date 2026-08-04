@@ -792,6 +792,8 @@ entries:
 
 The bundled pack authors at least one enchantment per equippable category (`weapon`, `armor`/`shield`, `ring`, `light`) so the enchant service and the tempering-steel scroll never draw against an empty pool for an eligible item.
 
+`spellPower` is the one modifier whose authored magnitude is not what the caster feels. It reaches the spell only through `floor(max(0, spellPower) / spellPowerDivisor)` (bundled divisor `4`, bundled formula `{ base: -10, wits: 1 }`), so a `spellPower: 1` modifier moves a wits-10 caster from raw `0` to raw `1` and the bonus stays `0` — the enchantment reads as a dud until three more points arrive from somewhere. Author `spellPower` at or above the divisor when the modifier is meant to be felt on its own, or pair it with a stat that pays out immediately: the bundled `enchantment.woven-thought` carries `{ maxWeave: 2, spellPower: 1 }` for exactly that reason, so the ring is worth wearing on the draw even when the `spellPower` point is still short of the next crossing. Rarity scaling (`enchanting.rarityMagnitudeBps`) can carry a modifier over a crossing on a high-rarity item but never on a common one, where the scale is `10000` — a no-op.
+
 ## Loot-table entries
 
 Loot expansion is bounded across the complete reachable graph, including nested tables. Positive safe integers alone do not make a table safe: all local limits and the recursive worst case must pass together.
