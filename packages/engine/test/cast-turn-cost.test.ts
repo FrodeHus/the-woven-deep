@@ -122,6 +122,93 @@ describe('casting costs a turn', () => {
   });
 });
 
+/** The wax-crawler cluster the gameplay demo seeds around (9..10, 5..6): speed 65 against the
+ * hero's 100, which is the case worth pinning -- a monster slow enough that its retaliation could
+ * plausibly be skipped. The hero is walked to the cluster rather than the cluster teleported to the
+ * hero: relocating a grouped monster strands its group and parks it in `hold`/`regroup`, where it
+ * never swings at all, which would make this test pass for entirely the wrong reason. */
+function runBesideSlowMonsters(): ActiveRun {
+  const { run } = createGameplayDemoRun(pack);
+  return {
+    ...run,
+    hero: { ...run.hero, classTags: ['loomcaller'] },
+    actors: run.actors.map((actor) =>
+      actor.playerControlled
+        ? { ...actor, x: 11, y: 5, attributes: { ...actor.attributes, vitality: 30 }, health: 40 }
+        : // Health headroom only -- position and behaviour state untouched -- so the caster's own
+          // damage cannot shrink the sample by killing the monsters whose turns are being counted.
+          actor.contentId === 'monster.wax-crawler'
+          ? { ...actor, health: 900, maxHealth: 900 }
+          : actor,
+    ),
+  };
+}
+
+describe('a slow adjacent monster answers a cast', () => {
+  it('lands the same bump-attacks whether the hero casts or stands still', () => {
+    const start = runBesideSlowMonsters();
+    const crawlerIds = new Set(
+      start.actors
+        .filter((actor) => actor.contentId === 'monster.wax-crawler')
+        .map((actor) => actor.actorId),
+    );
+    const adjacentCrawlers = start.actors.filter(
+      (actor) =>
+        crawlerIds.has(actor.actorId) &&
+        Math.max(Math.abs(actor.x - 11), Math.abs(actor.y - 5)) === 1,
+    );
+    expect(adjacentCrawlers.length).toBeGreaterThan(0);
+    expect(adjacentCrawlers.every((actor) => actor.speed < heroOf(start).speed)).toBe(true);
+
+    // Weave and health are restored before each command so neither branch stalls on an empty pool
+    // or a dead hero. Position, energy, RNG and every other actor are left alone.
+    const restore = (state: ActiveRun): ActiveRun => ({
+      ...state,
+      actors: state.actors.map((actor) =>
+        actor.playerControlled ? { ...actor, weave: 99, health: actor.maxHealth } : actor,
+      ),
+    });
+    const target = { x: adjacentCrawlers[0]!.x, y: adjacentCrawlers[0]!.y };
+
+    function bumpAttacksOver(
+      makeCommand: (index: number, state: ActiveRun) => Parameters<typeof resolveCommand>[1],
+    ): number {
+      let state = start;
+      let attacks = 0;
+      for (let index = 0; index < 12; index += 1) {
+        const resolved = resolveCommand(restore(state), makeCommand(index, state), {
+          content: pack,
+        });
+        expect(resolved.result.status).toBe('applied');
+        state = resolved.state;
+        attacks += resolved.events.filter(
+          (event) =>
+            event.type === 'actor.turn.completed' &&
+            event.actionType === 'bump-attack' &&
+            crawlerIds.has(event.actorId),
+        ).length;
+      }
+      return attacks;
+    }
+
+    const whileWaiting = bumpAttacksOver((index, state) => ({
+      type: 'wait',
+      commandId: `command.wait-${String(index)}`,
+      expectedRevision: state.revision,
+    }));
+    const whileCasting = bumpAttacksOver((index, state) => ({
+      type: 'cast',
+      commandId: `command.cast-${String(index)}`,
+      expectedRevision: state.revision,
+      spellId: 'spell.ember-bolt',
+      target,
+    }));
+
+    expect(whileWaiting).toBeGreaterThan(0);
+    expect(whileCasting).toBe(whileWaiting);
+  });
+});
+
 describe('spell action costs', () => {
   it('gives every spell in the pack a cost the scheduler can charge', () => {
     const spells = pack.entries.filter(
