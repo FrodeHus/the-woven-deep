@@ -20,11 +20,13 @@ The recorded spells become a weave-budgeted ranged threat: a champion that opens
 
 Champions and echoes cast spells whose `targetingId` is `target.actor` or `target.self`, paying the spell's `weaveCost` from their own pool and its `actionCost` in energy.
 
+A candidate spell must also carry only effects on `champion-casting.ts`'s `SAFE_EFFECT_IDS` allow-list: `effect.damage`, `effect.heal`, `effect.condition.apply`, `effect.condition.remove`, `effect.force-move`. This narrows what a haunt can cast beyond targeting kind alone — a real narrowing of what was originally approved, added after final review found a path to effects that assume a hero caster (`effect.recall` moving the hero's town anchor, `effect.hunger.restore` throwing outside a survival-actor target). It is an allow-list rather than a deny-list on purpose: `effects.ts` gains new effect kinds regularly, and each one is written against a hero caster unless proven otherwise. A deny-list fails OPEN — a new effect ships castable by a haunt by default, and the first time that assumption is wrong is a crashed run or a monster mutating hero-only state. An allow-list fails CLOSED — a new effect is simply never picked by a haunt until someone reads it and adds it here deliberately.
+
 ## The weave pool
 
 `champion.ts` currently spawns champion and echo actors with `maxWeave: 0` — a placeholder from before anything could cast. It becomes a real derivation: `deriveActorStats` over the standing's already-clamped attributes — not `deriveRunActorStats`, because the placed actor is not yet in `state.actors` at construction time, so an equipment-modifier lookup by actor id would find nothing to look up — with `weave` starting full.
 
-This derivation runs for every placed champion and echo, not only ones carrying spells: `maxWeave` is a property of the haunt's attributes, unconditional on `abilityIds`. A spell-less haunt (either haunt in the population demo, for instance) ends up with a real Weave pool it simply never spends.
+This derivation runs for every placed champion and echo, not only ones carrying spells: `maxWeave` is a property of the haunt's attributes, unconditional on `abilityIds`. A spell-less haunt ends up with a real Weave pool it simply never spends — the population demo's echo, for instance: both of its standings carry `signatureAbilityIds: ['spell.ember-bolt']` (`population-fixture.ts`), but the echo's ability-subset slice narrows a one-spell champion list to zero (`champion.ts`), so only the echo ends up spell-less there, not the champion.
 
 Weave regeneration is hero-only: `survival.ts` restores weave to the hero actor and `rest.ts` refills only the hero. A champion's pool is therefore a one-way per-encounter budget — it opens dangerous and fades — with no new mechanism needed to enforce that shape.
 
@@ -40,7 +42,7 @@ It returns `null` unless all of:
 - a hostile, aware target exists (the same target the melee branch resolves, so goal-locking behaves identically)
 - the target is at distance > 1
 
-Candidates are `abilityIds` resolved to spell entries in the pack, then filtered by kind:
+Candidates are `abilityIds` resolved to spell entries in the pack, then filtered by targeting kind and then by the `SAFE_EFFECT_IDS` allow-list (see "Scope") — a spell with any effect outside that list is dropped before the kind-specific checks below run:
 
 - **`target.actor`** — affordable (`weaveCost <= actor.weave`), target within `spell.range`, and legal per the existing `validateTarget` call, so line of sight and illumination bind the champion exactly as they bind the hero.
 - **`target.self`** — affordable, and *useful*: the spell has a heal effect and the champion is below `maxHealth`, or it applies a condition the champion is not already carrying. A self spell that would do nothing is skipped, so a champion cannot burn its pool re-buffing itself every turn. The gate reads existing condition state; it adds no bookkeeping.

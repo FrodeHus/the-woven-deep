@@ -22,7 +22,9 @@ const SUPPORTED_TARGETING = new Set(['target.actor', 'target.self']);
  * allow-list fails CLOSED: a new effect is simply never picked by a haunt until someone reads it
  * and adds it here deliberately.
  *
- * Excluded on inspection of `effects.ts`, not by guessing:
+ * Excluded on inspection of `effects.ts`, not by guessing. Two different reasons are in play:
+ *
+ * Unsafe for a non-hero caster specifically:
  * - `effect.hunger.restore` throws a `TypeError` unless its target is the survival actor (the
  *   hero) -- a monster casting it at itself or another monster crashes the world step.
  * - `effect.recall` and `effect.spell.learn` are `RUN_LEVEL_EFFECTS`: `action-dispatch.ts`'s cast
@@ -34,6 +36,14 @@ const SUPPORTED_TARGETING = new Set(['target.actor', 'target.self']);
  *   haunt to curse-strip itself or the hero, so it stays out until a design asks for it.
  * - `effect.item.consume` and `effect.item.enchant` are already unreachable from a spell's effect
  *   list (`ITEM_ONLY_EFFECT_IDS`), so they are omitted here rather than listed and dead.
+ *
+ * Unreachable for ANY caster through the cast path, hero included, so excluding them here changes
+ * nothing about who can cast them -- they simply cannot appear in a legal spell's effect list:
+ * - `effect.reveal`, `effect.light.toggle`, `effect.fuel.transfer`, and `effect.feature.mutate`
+ *   are operations-seam effects (`resolveEffectSequence` looks them up in the caller-supplied
+ *   `operations` table, not `DIRECT_EFFECT_IDS`). `action-dispatch.ts`'s `cast` handler calls
+ *   `resolveEffectSequence` with `operations: {}`, so any of these four throws
+ *   `effect operation … is unavailable` regardless of who cast the spell.
  */
 const SAFE_EFFECT_IDS = new Set([
   'effect.damage',
