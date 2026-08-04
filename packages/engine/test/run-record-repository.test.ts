@@ -313,6 +313,7 @@ describe('createInMemoryRunRecordRepository', () => {
       discoveryProtectionUpdates: [
         { encounterId: 'encounter.rats', previousBonus: 0, nextBonus: 0.2, outcome: 'unreached' },
       ],
+      newlyCollectedFragmentIds: [],
       metrics: metrics({ kills: 3, deepestDepth: 4, damageDealt: 50 }),
     };
     repository.applyDeltas(deltas);
@@ -335,6 +336,7 @@ describe('createInMemoryRunRecordRepository', () => {
           outcome: 'reached-unseen',
         },
       ],
+      newlyCollectedFragmentIds: [],
       metrics: metrics({ kills: 2, deepestDepth: 2, damageDealt: 10 }),
     };
     repository.applyDeltas(secondDeltas);
@@ -354,6 +356,41 @@ describe('createInMemoryRunRecordRepository', () => {
     const mergedOnce = afterSecond.totals;
     expect(repository.lifetime().totals).toEqual(mergedOnce);
     expect(repository.lifetime()).toEqual(afterSecond);
+  });
+
+  it('applyDeltas accumulates collected tablet fragments as a sorted union across runs', () => {
+    const repository = createInMemoryRunRecordRepository();
+    expect(repository.lifetime().collectedFragmentIds).toEqual([]);
+
+    const base: Omit<LifetimeDeltas, 'recordId' | 'newlyCollectedFragmentIds'> = {
+      newlyConqueredChampionRecordIds: [],
+      achievementGrants: [],
+      discoveryProtectionUpdates: [],
+      metrics: metrics({}),
+    };
+    const first: LifetimeDeltas = {
+      ...base,
+      recordId: 'record.cccccccc00000000.cccccccccccccccc',
+      newlyCollectedFragmentIds: ['item.tablet-fragment.c'],
+    };
+    repository.applyDeltas(first);
+    expect(repository.lifetime().collectedFragmentIds).toEqual(['item.tablet-fragment.c']);
+
+    repository.applyDeltas({
+      ...base,
+      recordId: 'record.dddddddd00000000.dddddddddddddddd',
+      newlyCollectedFragmentIds: ['item.tablet-fragment.a', 'item.tablet-fragment.c'],
+    });
+    expect(repository.lifetime().collectedFragmentIds).toEqual([
+      'item.tablet-fragment.a',
+      'item.tablet-fragment.c',
+    ]);
+
+    repository.applyDeltas(first);
+    expect(repository.lifetime().collectedFragmentIds).toEqual([
+      'item.tablet-fragment.a',
+      'item.tablet-fragment.c',
+    ]);
   });
 });
 

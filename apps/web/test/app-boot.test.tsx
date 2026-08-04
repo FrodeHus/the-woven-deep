@@ -234,6 +234,7 @@ function serverSnapshotOf(run: ActiveRun): ServerRunSnapshot {
     lastEvents: [],
     revision: run.revision,
     pendingDecision: null,
+    canBreakCycle: false,
     conclusion:
       run.conclusion === null
         ? null

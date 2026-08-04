@@ -281,6 +281,7 @@ describe('auth routes', () => {
       conqueredChampionRecordIds: [],
       grantedAchievementIds: [],
       discoveryProtection: [],
+      collectedFragmentIds: [],
       totals: emptyRunMetrics(),
     });
   });
@@ -320,6 +321,7 @@ describe('auth routes', () => {
         },
       ],
       discoveryProtectionUpdates: [],
+      newlyCollectedFragmentIds: [],
       metrics: { ...emptyRunMetrics(), kills: 12, deepestDepth: 4 },
     });
     hallRepo.appendAchievements([

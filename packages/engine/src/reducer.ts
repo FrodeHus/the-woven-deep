@@ -36,7 +36,7 @@ import { concludeRunOnChoice, concludeRunOnHeroDeath } from './run-conclusion.js
 import { applyCurseTriggers } from './curse-triggers.js';
 import { isTownFloorActive } from './town-floor.js';
 import { FINAL_CHAMBER_DEPTH } from './final-chamber.js';
-import { heroHoldsAllFragments } from './final-chamber-fragments.js';
+import { canAssembleTablet } from './final-chamber-fragments.js';
 import { isHeartBossActive, isHeartBossDefeated } from './final-chamber-boss-state.js';
 
 function sameCommand(left: GameCommand, right: GameCommand): boolean {
@@ -197,7 +197,7 @@ export function resolveCommand(
     if (isHeartBossActive(state)) {
       return recordInvalid(state, context.content, command, 'final-chamber.boss-active', [], []);
     }
-    if (command.choice === 'break-cycle' && !heroHoldsAllFragments(state, context.content)) {
+    if (command.choice === 'break-cycle' && !canAssembleTablet(state, context.content)) {
       return recordInvalid(
         state,
         context.content,

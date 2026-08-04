@@ -13,6 +13,7 @@ const EMPTY_LIFETIME = {
   conqueredChampionRecordIds: [],
   grantedAchievementIds: [],
   discoveryProtection: [],
+  collectedFragmentIds: [],
   totals: emptyRunMetrics(),
 };
 
@@ -204,6 +205,7 @@ describe('loadAccount', () => {
       conqueredChampionRecordIds: ['champion.a'],
       grantedAchievementIds: ['achievement.first-blood'],
       discoveryProtection: [],
+      collectedFragmentIds: [],
       totals: { ...emptyRunMetrics(), kills: 12, deepestDepth: 4 },
     };
     const achievements = [

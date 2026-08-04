@@ -608,13 +608,16 @@ function fragmentItemEntry(content: CompiledContentPack, fragmentId: string): It
 /**
  * Fragment ids the spawn roll may pick from this floor: within the fragment's own authored
  * minDepth/maxDepth band, not already held in the hero's backpack this run (the run-local
- * no-duplicate rule, via `heroHoldsFragment`), and not already lying on this floor.
+ * no-duplicate rule, via `heroHoldsFragment`), not already banked by an earlier run (a banked
+ * fragment already satisfies the tablet, so re-finding it would be a wasted spawn), and not already
+ * lying on this floor.
  */
 function eligibleFragmentSpawnIds(input: PlacePopulationInput): readonly OpaqueId[] {
   return tabletFragmentIds(input.content).filter((fragmentId) => {
     const entry = fragmentItemEntry(input.content, fragmentId);
     if (input.floor.depth < entry.minDepth || input.floor.depth > entry.maxDepth) return false;
     if (heroHoldsFragment(input.run, fragmentId)) return false;
+    if (input.run.collectedFragmentIds.includes(fragmentId)) return false;
     return !input.run.items.some(
       (item) =>
         item.location.type === 'floor' &&

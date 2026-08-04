@@ -32,6 +32,7 @@ import {
 } from './heirloom-selection.js';
 import type { ArtifactDeltas, ArtifactStint } from './artifact-ledger.js';
 import { fallenChampionTemplate } from './haunt-need.js';
+import { heroHoldsFragment, tabletFragmentIds } from './final-chamber-fragments.js';
 import { compareCodeUnits } from './stable-json.js';
 
 /**
@@ -162,6 +163,26 @@ function newlyConqueredChampionRecordIds(
 }
 
 /**
+ * The Ancient Tablet fragments this run banks: every fragment the hero is holding as the run
+ * concludes — including a death grip — minus what lifetime already has. Sorted.
+ *
+ * Held at the end is the whole test. A fragment sold, dropped, or never picked up banks nothing:
+ * the Deep remembers what the hero carried out of it, or died with.
+ */
+function newlyCollectedFragmentIds(
+  run: ActiveRun,
+  content: CompiledContentPack,
+  lifetime: LifetimeState,
+): readonly OpaqueId[] {
+  return tabletFragmentIds(content)
+    .filter(
+      (fragmentId) =>
+        heroHoldsFragment(run, fragmentId) && !lifetime.collectedFragmentIds.includes(fragmentId),
+    )
+    .sort(compareCodeUnits);
+}
+
+/**
  * One run's effect on the artifact ledger: the artifact that became this record's heirloom is
  * `lost` to the record (`died-with`, or `escaped-with` when the hero left the Deep any other way),
  * and every other artifact the hero was carrying is recycled straight back into circulation
@@ -269,6 +290,7 @@ export function finalizeRun(
       run.fallenHeroDecisions,
       lifetime,
     ),
+    newlyCollectedFragmentIds: newlyCollectedFragmentIds(run, content, lifetime),
     achievementGrants: grants,
     discoveryProtectionUpdates: [
       ...evaluateDiscoveryProtection({ decisions: run.encounterDecisions, encounters }),

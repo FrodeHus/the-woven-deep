@@ -52,6 +52,7 @@ import {
   fallenDecision,
   fallenStanding,
   heirloom,
+  hero,
   heroV6,
   identification,
   legacyPopulation,
@@ -586,6 +587,76 @@ const legacyItemV13 = z.strictObject({ ...legacyItemFieldsV13, location: itemLoc
 // `fallenStanding`/`fallenDecision` because haunts (v16) already shipped by this point. Spelled out
 // as a frozen literal (not derived from the live `activeRunSchema`) so a future schema bump can't
 // silently change what a real v16 save is validated against.
+// The twelve RNG streams a v17 save carries. Frozen literal, like every legacy shape here: a future
+// stream added to `RNG_STREAM_NAMES` must not change what a real v17 save is validated against.
+const LEGACY_V17_RNG_STREAM_NAMES = [
+  'generation',
+  'encounters',
+  'population-gates',
+  'merchant-stock',
+  'merchant-runtime',
+  'combat',
+  'loot',
+  'effects',
+  'narrative',
+  'run-records',
+  'loot-placement',
+  'enchanting',
+] as const;
+const legacyV17RngEntries = Object.fromEntries(
+  LEGACY_V17_RNG_STREAM_NAMES.map((name) => [name, uint32State]),
+) as Record<(typeof LEGACY_V17_RNG_STREAM_NAMES)[number], typeof uint32State>;
+
+// The pre-lifetime-fragments save shape: identical to the current run schema except it carries no
+// `collectedFragmentIds`, which cross-run tablet assembly introduced at v18.
+export const legacyActiveRunV17Schema = z.strictObject({
+  schemaVersion: z.literal(17),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  mode: z.enum(RUN_MODES),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(legacyV17RngEntries),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(actor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  offeredArtifact: identifier.nullable(),
+  artifactsUndiscovered: z.array(identifier).readonly(),
+  metrics: runMetrics,
+  conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
+});
+
 export const legacyActiveRunV16Schema = z.strictObject({
   schemaVersion: z.literal(16),
   gameVersion: z.literal(ENGINE_GAME_VERSION),

@@ -121,6 +121,7 @@ export const activeRunSchema = z.strictObject({
   fallenHeroStandings: z.array(fallenStanding).max(MAX_STANDINGS).readonly(),
   fallenHeroDecisions: z.array(fallenDecision).max(MAX_STANDINGS).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
+  collectedFragmentIds: z.array(identifier).readonly(),
   offeredArtifact: identifier.nullable(),
   artifactsUndiscovered: z.array(identifier).readonly(),
   metrics: runMetrics,
@@ -1007,6 +1008,7 @@ function validateSemantics(run: z.infer<typeof activeRunSchema>): ActiveRun {
     'conqueredChampionRecordIds',
     'conquered Champion record',
   );
+  validateOrderedIds(run.collectedFragmentIds, 'collectedFragmentIds', 'collected tablet fragment');
   validateOrderedIds(run.artifactsUndiscovered, 'artifactsUndiscovered', 'undiscovered artifact');
   // An offer is always drawn from the undrawn pool, so a run can never offer an artifact it has
   // already handed out (or one that was never in circulation).

@@ -126,6 +126,7 @@ describe('run record shapes', () => {
       conqueredChampionRecordIds: [],
       grantedAchievementIds: [],
       discoveryProtection: [],
+      collectedFragmentIds: [],
       totals: emptyRunMetrics(),
     };
     const deltas: LifetimeDeltas = {

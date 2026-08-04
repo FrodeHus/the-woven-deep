@@ -46,19 +46,26 @@ dialogue/decision overlay; `broke-cycle` appears only when the full fragment set
 
 ## The Ancient Tablet fragments
 
-Scoped here to **single-run** collection (Part A):
+The tablet is assembled **across runs**:
 
 - **3 fragment items** (tunable count), special, non-stackable, distinct ids.
 - Placed by a **rare seeded roll on deep floors** (depth ≥ 15, tunable) from a dedicated
   deterministic stream; each type distinct; a type already held this run won't respawn
-  (run-local no-duplicate). A full set in one run is intentionally rare.
-- Holding all fragments at the Chamber unlocks `broke-cycle`. No house/account store is involved
-  in Part A.
+  (run-local no-duplicate), and neither will one already banked by an earlier run.
+- Every fragment the hero holds when a run concludes — including on death — is banked in
+  `LifetimeState.collectedFragmentIds` by `finalizeRun`'s lifetime deltas. A fragment sold,
+  dropped, or never picked up banks nothing.
+- At the Chamber, `canAssembleTablet` unlocks `broke-cycle` when each fragment is either carried
+  now or already banked. Three runs that each turn up one fragment are enough; a full set in a
+  single dive stays vanishingly rare and is no longer the only path.
+- Both hosts persist this the same way: the guest client's session-storage Hall merges the delta
+  itself, and the server replays its stored delta history (`hall_state.lifetime_json`) through the
+  engine repository, so neither needs bespoke merge math. Guests bank fragments too — their Hall
+  simply lives in `sessionStorage` and does not roam.
 
-**Deferred to server progression (6C) — "Part B":** an account-level (profile) fragment store,
-promoted by depositing a fragment in the house, granting collected fragments into future heroes,
-cross-run spawn-exclusion, and the registration incentive (guests accumulate nothing across
-runs, so their only path is a single-run full set). Part B layers on without reworking Part A.
+There is no house deposit ritual: a fragment found on the run where the hero dies at depth 18 is
+exactly the run this progression is meant to reward.
+
 See [[locks-and-lockpicking]] and [[light-out-feats]] for the same content-hash-embed regen
 discipline.
 
@@ -66,9 +73,11 @@ discipline.
 
 The choice command and Chamber generation add no new RNG streams; fragment spawn threads a
 dedicated seeded stream. `completionType`, `RunConclusion`, and `HeartLineageRecord` already
-exist in the save; new run state is limited to run-local fragment tracking (added only if not
-derivable from inventory). Ships a content bump (Chamber layout, fragment items, dialogue) and
-regenerates the content-hash-embed demo fixtures (benign — no behavioural drift).
+exist in the save. `ActiveRun.collectedFragmentIds` — the run's snapshot of the banked set, fixed
+at creation and never mutated mid-run — is a save-schema bump (v18) with an ordered migration
+defaulting it empty; every existing save, Hall blob, and pinned demo replay is therefore
+byte-identical across the change. Excluding a banked fragment from the spawn pool consumes no
+randomness of its own.
 
 ## Supersedes
 

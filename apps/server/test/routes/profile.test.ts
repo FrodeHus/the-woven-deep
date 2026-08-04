@@ -396,6 +396,7 @@ describe('GET /api/profile/export', () => {
       conqueredChampionRecordIds: [],
       grantedAchievementIds: [],
       discoveryProtection: [],
+      collectedFragmentIds: [],
       totals: emptyRunMetrics(),
     });
     expect(body.settings).toEqual({ settingsJson: null, settingsVersion: 0 });
@@ -423,6 +424,7 @@ describe('GET /api/profile/export', () => {
         },
       ],
       discoveryProtectionUpdates: [],
+      newlyCollectedFragmentIds: [],
       metrics: { ...emptyRunMetrics(), kills: 7, deepestDepth: 3 },
     });
     hallRepo.appendAchievements([

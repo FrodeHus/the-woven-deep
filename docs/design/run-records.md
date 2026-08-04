@@ -72,7 +72,7 @@ stores every line item plus the total; nothing downstream recomputes it.
 finalizeRun(input: {
   run: ActiveRun;               // conclusion non-null, finalized false
   content: CompiledContentPack;
-  lifetime: LifetimeState;      // conquered champion IDs, granted achievements, discovery protection, lifetime totals
+  lifetime: LifetimeState;      // conquered champion IDs, granted achievements, discovery protection, banked tablet fragments, lifetime totals
 }): {
   run: ActiveRun;                // finalized: true
   record: HallRecord;

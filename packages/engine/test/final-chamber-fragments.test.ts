@@ -6,7 +6,7 @@ import {
   createDemoContentPack,
   createDemoRun,
   createUnknownKnowledge,
-  heroHoldsAllFragments,
+  canAssembleTablet,
   nextUint32,
   placeFloorPopulations,
   stableJson,
@@ -61,15 +61,15 @@ describe('tabletFragmentIds', () => {
   });
 });
 
-describe('heroHoldsAllFragments', () => {
+describe('canAssembleTablet', () => {
   it('is true when the hero backpack holds all 3 fragments', () => {
     const run = runWithItems(FRAGMENT_IDS.map((id) => fragment(id)));
-    expect(heroHoldsAllFragments(run, pack)).toBe(true);
+    expect(canAssembleTablet(run, pack)).toBe(true);
   });
 
   it('is false when one fragment is missing', () => {
     const run = runWithItems(FRAGMENT_IDS.slice(0, 2).map((id) => fragment(id)));
-    expect(heroHoldsAllFragments(run, pack)).toBe(false);
+    expect(canAssembleTablet(run, pack)).toBe(false);
   });
 
   it('is false when a fragment sits on the floor rather than the hero backpack', () => {
@@ -81,13 +81,40 @@ describe('heroHoldsAllFragments', () => {
       }),
     ];
     const run = runWithItems(items);
-    expect(heroHoldsAllFragments(run, pack)).toBe(false);
+    expect(canAssembleTablet(run, pack)).toBe(false);
   });
 
   it('is false when content defines zero fragments (guard against a vacuous true)', () => {
     const emptyPack: CompiledContentPack = { ...pack, entries: [] };
     const run = runWithItems(FRAGMENT_IDS.map((id) => fragment(id)));
-    expect(heroHoldsAllFragments(run, emptyPack)).toBe(false);
+    expect(canAssembleTablet(run, emptyPack)).toBe(false);
+  });
+
+  it('is true when the missing fragments were collected in earlier runs', () => {
+    const run = {
+      ...runWithItems([fragment(FRAGMENT_IDS[0])]),
+      collectedFragmentIds: [FRAGMENT_IDS[1], FRAGMENT_IDS[2]],
+    };
+    expect(canAssembleTablet(run, pack)).toBe(true);
+  });
+
+  it('is true when every fragment was collected in earlier runs and none is carried', () => {
+    const run = { ...runWithItems([]), collectedFragmentIds: FRAGMENT_IDS };
+    expect(canAssembleTablet(run, pack)).toBe(true);
+  });
+
+  it('is false when one fragment is neither carried nor collected in an earlier run', () => {
+    const run = {
+      ...runWithItems([fragment(FRAGMENT_IDS[0])]),
+      collectedFragmentIds: [FRAGMENT_IDS[1]],
+    };
+    expect(canAssembleTablet(run, pack)).toBe(false);
+  });
+
+  it('is false when content defines zero fragments even with lifetime-collected ids', () => {
+    const emptyPack: CompiledContentPack = { ...pack, entries: [] };
+    const run = { ...runWithItems([]), collectedFragmentIds: FRAGMENT_IDS };
+    expect(canAssembleTablet(run, emptyPack)).toBe(false);
   });
 });
 
@@ -229,6 +256,25 @@ describe('deep-floor fragment spawn', () => {
       content: fragmentPack(),
     });
     expect(placedFragmentContentIds(withHolding.state, floor)).not.toContain(spawnedId);
+  });
+
+  it('never places a fragment collected in an earlier run (lifetime exclusion)', () => {
+    const seed = findSeedThatSpawnsAFragment();
+    const floor = testFloor(15);
+    const withoutCollected = placeFloorPopulations({
+      run: runAt(seed),
+      floor,
+      content: fragmentPack(),
+    });
+    const spawnedId = placedFragmentContentIds(withoutCollected.state, floor)[0]!;
+
+    const alreadyCollected = runAt(seed, { collectedFragmentIds: [spawnedId] });
+    const withCollected = placeFloorPopulations({
+      run: alreadyCollected,
+      floor,
+      content: fragmentPack(),
+    });
+    expect(placedFragmentContentIds(withCollected.state, floor)).not.toContain(spawnedId);
   });
 
   it('never places a fragment on a shallow floor (depth < 15)', () => {

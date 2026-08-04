@@ -193,6 +193,7 @@ export function createInMemoryRunRecordRepository(): RunRecordRepository {
     conqueredChampionRecordIds: [],
     grantedAchievementIds: [],
     discoveryProtection: [],
+    collectedFragmentIds: [],
     totals: emptyRunMetrics(),
   };
 
@@ -243,6 +244,10 @@ export function createInMemoryRunRecordRepository(): RunRecordRepository {
           lifetime.grantedAchievementIds,
           deltas.achievementGrants.map((grant) => grant.achievementId),
         ),
+        collectedFragmentIds: mergedSortedUnion(
+          lifetime.collectedFragmentIds,
+          deltas.newlyCollectedFragmentIds,
+        ),
         discoveryProtection: mergedDiscoveryProtection(
           lifetime.discoveryProtection,
           deltas.discoveryProtectionUpdates,
@@ -285,5 +290,6 @@ export function newRunRecords(
       artifactItemIds(content),
     ),
     conqueredChampionRecordIds: repository.lifetime().conqueredChampionRecordIds,
+    collectedFragmentIds: repository.lifetime().collectedFragmentIds,
   };
 }

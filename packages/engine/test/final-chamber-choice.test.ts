@@ -153,6 +153,34 @@ describe('final-chamber-choice', () => {
     expect(resolution.state.conclusion).toBeNull();
   });
 
+  it('break-cycle completes with fragments collected in earlier runs', () => {
+    const base = inChamberRun();
+    const run = {
+      ...base,
+      collectedFragmentIds: [...tabletFragmentIds(pack)].sort(),
+    };
+
+    const resolution = resolveCommand(run, choiceCommand('break-cycle', run.revision), context());
+
+    expect(resolution.result).toMatchObject({ status: 'applied' });
+    expect(resolution.state.conclusion).toMatchObject({ completionType: 'broke-cycle' });
+  });
+
+  it('break-cycle is still rejected when one fragment is neither carried nor banked', () => {
+    const base = inChamberRun();
+    const [first, ...rest] = [...tabletFragmentIds(pack)].sort();
+    const run = { ...base, collectedFragmentIds: rest };
+    expect(first).toBeDefined();
+
+    const resolution = resolveCommand(run, choiceCommand('break-cycle', run.revision), context());
+
+    expect(resolution.result).toMatchObject({
+      status: 'invalid',
+      reason: 'final-chamber.fragments-required',
+    });
+    expect(resolution.state.conclusion).toBeNull();
+  });
+
   it('rejects any choice made off the Final Chamber floor', () => {
     const run = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const activeFloor = run.floors.find((floor) => floor.floorId === run.activeFloorId)!;

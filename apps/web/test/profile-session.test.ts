@@ -50,6 +50,7 @@ function snapshotOf(
   return {
     projection: projectGameplayState({ state: run, content: pack }),
     lastEvents: overrides.lastEvents ?? [],
+    canBreakCycle: false,
     revision: run.revision,
     pendingDecision: overrides.pendingDecision ?? null,
     conclusion:

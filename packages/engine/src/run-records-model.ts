@@ -62,6 +62,12 @@ export interface LifetimeState {
   readonly conqueredChampionRecordIds: readonly OpaqueId[]; // sorted unique
   readonly grantedAchievementIds: readonly OpaqueId[]; // sorted unique
   readonly discoveryProtection: readonly DiscoveryProtectionBonus[]; // sorted by encounterId
+  /**
+   * Ancient Tablet fragment content ids this player has ever finished a run holding, sorted and
+   * unique. The tablet assembles across runs: a banked fragment satisfies the `broke-cycle` gate in
+   * every later run and stops spawning, so each run only rolls for what is still missing.
+   */
+  readonly collectedFragmentIds: readonly OpaqueId[]; // sorted unique
   readonly totals: RunMetrics;
 }
 
@@ -73,6 +79,7 @@ export function emptyLifetimeState(): LifetimeState {
     conqueredChampionRecordIds: [],
     grantedAchievementIds: [],
     discoveryProtection: [],
+    collectedFragmentIds: [],
     totals: emptyRunMetrics(),
   };
 }
@@ -80,6 +87,8 @@ export function emptyLifetimeState(): LifetimeState {
 export interface LifetimeDeltas {
   readonly recordId: OpaqueId; // idempotence key at the repository
   readonly newlyConqueredChampionRecordIds: readonly OpaqueId[];
+  /** Fragments this run banked that lifetime did not already have, sorted. */
+  readonly newlyCollectedFragmentIds: readonly OpaqueId[];
   readonly achievementGrants: readonly AchievementGrant[];
   readonly discoveryProtectionUpdates: readonly DiscoveryProtectionUpdate[];
   readonly metrics: RunMetrics; // this run's metrics, merged by the host

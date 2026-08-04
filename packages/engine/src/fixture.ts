@@ -358,6 +358,7 @@ export function createDemoRun(): ActiveRun {
     fallenHeroStandings: [],
     fallenHeroDecisions: [],
     conqueredChampionRecordIds: [],
+    collectedFragmentIds: [],
     offeredArtifact: null,
     artifactsUndiscovered: [],
     metrics: emptyRunMetrics(),

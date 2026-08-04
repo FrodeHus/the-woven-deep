@@ -59,11 +59,16 @@ interface HallStateRow {
  * in-memory reference and the guest client do — and `appliedArtifactRecordIds` carries the
  * idempotence set. Still a `lifetime_json` payload change only: no DB migration.
  */
-const HALL_STORE_VERSION = 2;
+const HALL_STORE_VERSION = 3;
+
+/** A delta as it may sit on disk: one written before cross-run tablet assembly existed carries no
+ * `newlyCollectedFragmentIds`, which `normalizeEnvelopeForReplay` fills in before replay. */
+type StoredLifetimeDeltas = Omit<LifetimeDeltas, 'newlyCollectedFragmentIds'> &
+  Partial<Pick<LifetimeDeltas, 'newlyCollectedFragmentIds'>>;
 
 interface LifetimeEnvelope {
   readonly version: number;
-  readonly appliedDeltas: readonly LifetimeDeltas[];
+  readonly appliedDeltas: readonly StoredLifetimeDeltas[];
   readonly artifactLedger: ArtifactLedger;
   readonly appliedArtifactRecordIds: readonly string[];
 }
@@ -91,15 +96,22 @@ function parseLifetimeEnvelope(json: string): LifetimeEnvelope {
   };
 }
 
-/** Normalizes every stored delta's `metrics` to the current `RunMetrics` shape before replay,
- * so a delta persisted before a `RunMetrics` field existed (e.g. `defeatedBossMonsterIds`)
- * doesn't throw inside the engine's `mergeMetrics`/`mergedSortedUnion`. */
-function normalizeEnvelopeForReplay(envelope: LifetimeEnvelope): LifetimeEnvelope {
+/** An envelope whose every delta is complete enough to hand to the engine's merge math. */
+type NormalizedLifetimeEnvelope = Omit<LifetimeEnvelope, 'appliedDeltas'> & {
+  readonly appliedDeltas: readonly LifetimeDeltas[];
+};
+
+/** Fills every stored delta out to the current `LifetimeDeltas` shape before replay, so a delta
+ * persisted before a field existed — a `RunMetrics` field such as `defeatedBossMonsterIds`, or
+ * `newlyCollectedFragmentIds` — doesn't throw inside the engine's
+ * `mergeMetrics`/`mergedSortedUnion`. */
+function normalizeEnvelopeForReplay(envelope: LifetimeEnvelope): NormalizedLifetimeEnvelope {
   return {
     ...envelope,
     version: HALL_STORE_VERSION,
     appliedDeltas: envelope.appliedDeltas.map((delta) => ({
       ...delta,
+      newlyCollectedFragmentIds: delta.newlyCollectedFragmentIds ?? [],
       metrics: normalizeStoredMetrics(delta.metrics),
     })),
   };

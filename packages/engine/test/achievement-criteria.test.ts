@@ -98,6 +98,7 @@ function emptyLifetime(overrides: Partial<LifetimeState> = {}): LifetimeState {
     conqueredChampionRecordIds: [],
     grantedAchievementIds: [],
     discoveryProtection: [],
+    collectedFragmentIds: [],
     totals: createDemoRun().metrics,
     ...overrides,
   };

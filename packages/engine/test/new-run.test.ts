@@ -36,12 +36,12 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v17 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v18 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(17);
+    expect(first.schemaVersion).toBe(18);
     expect(first.mode).toBe('classic');
     expect(first.hero.tempering).toEqual({
       banked: 0,
@@ -359,6 +359,7 @@ describe('createNewRun records input', () => {
     standings: [],
     undiscoveredArtifactIds: [],
     conqueredChampionRecordIds: [],
+    collectedFragmentIds: [],
   } as const;
 
   it('leaves the omitted-records run byte-identical to the recordless creation path', () => {
@@ -520,9 +521,12 @@ describe('createNewRun records input', () => {
     // `curse.cold-tether`/`curse.embermarked`'s out-of-range trigger durations, which touches
     // `contentHash` only -- no curse trigger is rolled during run creation. Re-derived once more
     // after merging #157/content v15; the same three-key delta (`contentHash`, `identification`,
-    // `rng.effects`) was re-verified against an origin/main build carrying v15.
+    // `rng.effects`) was re-verified against an origin/main build carrying v15. Moved once more by
+    // the v17->v18 save bump: re-encoding this run with `collectedFragmentIds` removed and
+    // `schemaVersion` forced back to 17 reproduces the previous digest exactly, so the delta is
+    // those two keys and nothing else -- no RNG stream, no placement, no content hash moved.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'c1b8df1b9337145852b73a797a884594259cb0936d34b92122a296c0a438236d',
+      '66f1de34f3cd7f7a8335e5c68012f5f2c2ee37bbba6c9214d5253eb039da6710',
     );
   });
 
@@ -551,6 +555,39 @@ describe('createNewRun records input', () => {
     expect(run.fallenHeroDecisions[1]?.gateRoll).not.toBeNull();
     expect(() => validateActiveRun(run)).not.toThrow();
     expect(() => validateContentBoundRun(run, pack)).not.toThrow();
+  });
+
+  it('seeds the tablet fragments collected in earlier runs, and defaults them empty', () => {
+    const collected = ['item.tablet-fragment.a', 'item.tablet-fragment.c'];
+    const run = createNewRun({
+      pack,
+      seed: SEED,
+      hero: DEFAULT_GUEST_HERO,
+      records: { ...EMPTY_RECORDS, collectedFragmentIds: collected },
+    });
+    expect(run.collectedFragmentIds).toEqual(collected);
+    expect(() => validateActiveRun(run)).not.toThrow();
+
+    const base = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
+    expect(base.collectedFragmentIds).toEqual([]);
+    // Banked fragments are a starting fact, not a draw: they must not move the run's RNG streams.
+    expect(run.rng).toEqual(base.rng);
+  });
+
+  it('rejects a records input whose collected fragment ids are unsorted or duplicated', () => {
+    const create = (collectedFragmentIds: readonly string[]) =>
+      createNewRun({
+        pack,
+        seed: SEED,
+        hero: DEFAULT_GUEST_HERO,
+        records: { ...EMPTY_RECORDS, collectedFragmentIds },
+      });
+    expect(() => create(['item.tablet-fragment.c', 'item.tablet-fragment.a'])).toThrow(
+      /collectedFragmentIds/,
+    );
+    expect(() => create(['item.tablet-fragment.a', 'item.tablet-fragment.a'])).toThrow(
+      /collectedFragmentIds/,
+    );
   });
 
   it('sorts undiscovered artifact ids and drops ids the pack does not define as artifacts', () => {

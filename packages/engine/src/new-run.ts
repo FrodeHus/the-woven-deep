@@ -189,6 +189,12 @@ export interface NewRunRecordsInput {
    * `RunRecordRepository.lifetime().conqueredChampionRecordIds` is maintained that way.
    */
   readonly conqueredChampionRecordIds: readonly OpaqueId[];
+  /**
+   * Ancient Tablet fragment content ids the player has banked in earlier runs. Must be SORTED and
+   * UNIQUE (`validateActiveRun` throws otherwise);
+   * `RunRecordRepository.lifetime().collectedFragmentIds` is maintained that way.
+   */
+  readonly collectedFragmentIds: readonly OpaqueId[];
 }
 
 function championTemplate(pack: CompiledContentPack): FallenChampionTemplateContentEntry {
@@ -406,6 +412,7 @@ export function createNewRun(
     fallenHeroStandings: standings,
     fallenHeroDecisions: fallenHeroes.decisions,
     conqueredChampionRecordIds: records?.conqueredChampionRecordIds ?? [],
+    collectedFragmentIds: records?.collectedFragmentIds ?? [],
     offeredArtifact,
     artifactsUndiscovered,
     // The town never counts toward floorsEntered/deepestDepth: those track dungeon progress, and
