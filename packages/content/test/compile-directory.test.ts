@@ -52,7 +52,7 @@ function backgroundEntry(extraItemContentId: string | null): string {
 }
 
 function contentFile(...entries: readonly string[]): string {
-  return `schemaVersion: 15\nentries: [${entries.join(', ')}]\n`;
+  return `schemaVersion: 16\nentries: [${entries.join(', ')}]\n`;
 }
 
 async function fixture(files: Record<string, string>): Promise<string> {
@@ -1703,7 +1703,7 @@ describe('compileContentDirectory', () => {
       ),
     });
     await expect(compileContentDirectory({ rootDir: root })).resolves.toMatchObject({
-      schemaVersion: 15,
+      schemaVersion: 16,
     });
   });
 

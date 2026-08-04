@@ -1,0 +1,15 @@
+schemaVersion: 16
+entries:
+  # Venom injected by a bite or a spit, as opposed to condition.sickened, which is what a bad
+  # draught does to the gut. Refresh rather than intensify: tickEffects do not scale with stacks,
+  # so a stacking poison would promise damage it could never deal. A second bite resets the clock.
+  - kind: condition
+    id: condition.poisoned
+    name: Poisoned
+    tags: [poison, debuff]
+    description: Venom is running its course, burning through the blood a little at a time.
+    color: '#5f8f3a'
+    duration: { mode: timed, default: 5, maximum: 10 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    tickEffects:
+      - { effectId: effect.damage, parameters: { damageType: poison, dice: { count: 1, sides: 3, bonus: 0 } }, requiresLivingTarget: true }

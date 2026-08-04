@@ -521,12 +521,23 @@ describe('createNewRun records input', () => {
     // `curse.cold-tether`/`curse.embermarked`'s out-of-range trigger durations, which touches
     // `contentHash` only -- no curse trigger is rolled during run creation. Re-derived once more
     // after merging #157/content v15; the same three-key delta (`contentHash`, `identification`,
-    // `rng.effects`) was re-verified against an origin/main build carrying v15. Moved once more by
-    // the v17->v18 save bump: re-encoding this run with `collectedFragmentIds` removed and
-    // `schemaVersion` forced back to 17 reproduces the previous digest exactly, so the delta is
-    // those two keys and nothing else -- no RNG stream, no placement, no content hash moved.
+    // `rng.effects`) was re-verified against an origin/main build carrying v15.
+    // Re-pinned again for issue #153 (monster poison) and content schema v16: every file's
+    // `schemaVersion` moves 15 -> 16, `condition.poisoned` joins the pack, and the five
+    // poison-tagged monsters gain an `onHitConditions` rider. None of that is reachable from
+    // `createNewRun`: monsters spawn on first DESCENT rather than at creation, riders are only
+    // read when an attack lands, and the new condition belongs to no identification pool, so the
+    // `effects` shuffle is the same length it was. Verified by dumping the decoded run
+    // field-by-field against a build of this tree with the content and engine changes stashed:
+    // `contentHash` is the ONLY key that differs -- every RNG stream, `items`, `identification`,
+    // `populations`, and `floors` are byte-identical. Expected content-authoring drift, not an
+    // engine regression.
+    // Moved once more by the v17->v18 save bump: re-encoding this run with
+    // `collectedFragmentIds` removed and `schemaVersion` forced back to 17 reproduces the
+    // preceding v16-content digest (`1b405347...`) exactly, so the delta is those two keys and
+    // nothing else -- no RNG stream, no placement, no content hash moved.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '66f1de34f3cd7f7a8335e5c68012f5f2c2ee37bbba6c9214d5253eb039da6710',
+      'a66f456609ee6ea088585276515d5fc3654350aaa3bf6563d6eda4da36621f91',
     );
   });
 

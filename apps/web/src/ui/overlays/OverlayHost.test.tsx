@@ -74,6 +74,7 @@ describe('OverlayHost', () => {
       rarity: 'common',
       lootTableId: null,
       dropChance: 1,
+      onHitConditions: [],
     };
     const pack = { entries: [caveRat] } as unknown as CompiledContentPack;
 

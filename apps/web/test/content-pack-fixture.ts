@@ -206,6 +206,7 @@ const entries: readonly ContentEntry[] = [
     threat: 1,
     lootTableId: null,
     dropChance: 1,
+    onHitConditions: [],
   },
   {
     kind: 'spell',

@@ -109,6 +109,7 @@ const fallbackMonster: MonsterContentEntry = {
   threat: 4,
   lootTableId: null,
   dropChance: 1,
+  onHitConditions: [],
 };
 
 function emptyLifetime(): LifetimeState {

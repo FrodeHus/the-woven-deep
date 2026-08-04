@@ -36,6 +36,7 @@ const boneGnawer: MonsterContentEntry = {
   threat: 1,
   lootTableId: null,
   dropChance: 1,
+  onHitConditions: [],
 };
 
 // Deliberately defines no `monster.shade` -- that absence is what makes the "content-drifted id"

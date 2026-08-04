@@ -1,4 +1,4 @@
-schemaVersion: 15
+schemaVersion: 16
 entries:
   - kind: monster
     id: monster.tallow-slither
@@ -134,3 +134,5 @@ entries:
     rarity: rare
     lootTableId: loot-table.tallow-oozes
     dropChance: 0.4
+    onHitConditions:
+      - { conditionId: condition.poisoned, chance: 0.4 }
