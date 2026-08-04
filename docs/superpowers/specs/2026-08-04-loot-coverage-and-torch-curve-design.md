@@ -116,17 +116,21 @@ PR #196 ("light pressure runs forwards") set the standing rule that deep fuel is
 
 ## Testing
 
-RED-first, in this order.
+RED-first, in this order. All three are pure invariants of the compiled pack — they need no engine state, no run, and no RNG — so all three live in `packages/content/test/`, following the `potion-risk.test.ts` idiom of compiling `content/` and asserting over `pack.entries`. Keeping them out of `packages/engine` also keeps them off the dist-rebuild treadmill described in CLAUDE.md.
 
-1. **Coverage tripwire** (`packages/content`) — assert every `item.*` id in the compiled pack is either referenced by some loot table or present in an explicit allowlist of items placed by another system (the fourteen tabulated above, named individually with the system that places each). Fails today on the seven tomes. This is the regression guard: the next item added without a home fails the build rather than sitting dead for a fortnight.
-2. **Depth-safety pin** (`packages/engine`) — for every loot table and every depth in its band, assert no resolvable choice yields an item whose own `minDepth` exceeds that depth. This converts the implicit safety argument above into an enforced one, and would catch a future tome dropped into the wrong band even though `inventory.ts` will not.
-3. **Torch curve pin** (`packages/engine`) — assert the `pitch-torch` weight share per scatter band is strictly decreasing across shallow → mid → deep, and that deep is zero. Pins the shape of the curve rather than the literal numbers, so retuning weights stays cheap while reversing the curve does not.
+1. **Coverage tripwire** — `packages/content/test/loot-coverage.test.ts`. Assert every `item.*` id in the compiled pack is either referenced by some loot table with `weight > 0` or present in an explicit allowlist of items placed by another system (the fourteen tabulated above, named individually with the system that places each). Fails today on the seven tomes. This is the regression guard: the next item added without a home fails the build rather than sitting dead for a fortnight.
+2. **Depth-safety pin** — same file. For each of the six band tables (`loot-table.floor-scatter-<band>`, `loot-table.chest-<band>`), compute the lowest depth that band can roll at (`shallow` → 1, `mid` → `shallowMaxDepth + 1`, `deep` → `midMaxDepth + 1`, mirroring `validateRequiredFloorLootTables`' own `representativeDepth`) and assert no choice offers an item whose `minDepth` exceeds the lowest depth that choice is reachable at, accounting for any choice-level `minDepth`. This converts the implicit safety argument above into an enforced one, and would catch a future tome dropped into the wrong band even though `inventory.ts` will not. Town tables are deliberately out of scope: merchant stock enforces item-level bounds itself.
+3. **Torch curve pin** — `packages/content/test/torch-curve.test.ts`. Assert the `pitch-torch` weight share across the three scatter tables is strictly decreasing shallow → mid → deep, and that deep is exactly zero. Pins the shape of the curve rather than the literal numbers, so retuning weights stays cheap while reversing the curve does not.
+
+`packages/content/test/default-content.test.ts` pins per-kind entry counts (`item: 58`, `loot-table: 28`). This change adds no items and no tables, so those counts must remain untouched — if either moves, something unintended was added.
 
 ### Expected fixture fallout
 
-Both changes edit compiled content, so `contentHash` moves and the demo hash fixtures move with it. #196 made exactly these edits and documented the resulting pattern: hashes that embed the save (which encodes `contentHash`) and hashes that embed the `deriveHallRecordId(seed, contentHash)` Hall record ID shift, while event, projection, records, and standings hashes stay byte-identical.
+Both changes edit compiled content, so `contentHash` moves and the demo hash fixtures move with it. Seven fixtures exist (`dungeon`, `endgame`, `gameplay`, `magic`, `merchant`, `population`, `run-records`); #196 moved six of them and documented the resulting pattern: hashes that embed the save (which encodes `contentHash`) and hashes that embed the `deriveHallRecordId(seed, contentHash)` Hall record ID shift, while event, projection, records, and standings hashes stay byte-identical.
 
 Per CLAUDE.md, a drifted hash is never re-pinned over an unexplained change. The procedure is: rebuild both dists (`content` then `engine` — workspace-scoped vitest does not rebuild them, and a stale dist produces green misattributions, as #196's own transcript records), then diff full demo transcripts rather than `--verify` hash-only output, and confirm every moved component traces to `contentHash` propagation. Any component that moves for another reason is a STOP — the tables edited here *are* read by table-draw fixtures, unlike #196's, so a genuine draw shift is plausible and must be explained rather than absorbed.
+
+Re-pinning has no `--update` flag. `--verify` is the demo scripts' only argument; running a script without it writes a candidate hashes file and prints `candidate hashes written <path>`, which is then copied over the reviewed fixture.
 
 ## Files touched
 
@@ -136,5 +140,6 @@ Per CLAUDE.md, a drifted hash is never re-pinned over an unexplained change. The
 - `content/loot-tables/chest-mid.yaml` — add `enervate-tome`, `arc-lance-tome`, `cinder-breath-tome`
 - `content/loot-tables/chest-deep.yaml` — add `fireball-tome`, `frost-nova-tome`
 - `content/loot-tables/town-spellvendor.yaml` — add `chain-spark-tome` w2, `fireball-tome` w1 `minDepth: 8`
-- new tests in `packages/content/test/` and `packages/engine/test/`
+- `packages/content/test/loot-coverage.test.ts` (new) — coverage tripwire and depth-safety pin
+- `packages/content/test/torch-curve.test.ts` (new) — torch curve shape pin
 - `packages/engine/test/fixtures/*-demo-hashes.json` — re-pin after transcript verification
