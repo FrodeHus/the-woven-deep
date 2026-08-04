@@ -106,8 +106,8 @@ describe('potion risk', () => {
           entry.kind === 'loot-table' && TOWN_TABLE_IDS.includes(entry.id),
       )
       .flatMap((table) => table.choices.map((choice) => choice.contentId));
-    expect(townStock.filter((contentId) => contentId !== null && harmfulIds.has(contentId))).toEqual(
-      [],
-    );
+    expect(
+      townStock.filter((contentId) => contentId !== null && harmfulIds.has(contentId)),
+    ).toEqual([]);
   });
 });

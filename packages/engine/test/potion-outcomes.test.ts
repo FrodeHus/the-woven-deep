@@ -145,7 +145,9 @@ describe('drinking a potion', () => {
     const resolved = drink(run);
     const hero = heroActor(resolved.state);
     expect(hero.health).toBeGreaterThan(5);
-    expect(hero.conditions.map((condition) => condition.conditionId)).toContain('condition.chilled');
+    expect(hero.conditions.map((condition) => condition.conditionId)).toContain(
+      'condition.chilled',
+    );
   });
 
   it('feeds on a clouded draught and drinks even with nothing to cure', () => {
