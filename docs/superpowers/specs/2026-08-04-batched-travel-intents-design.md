@@ -78,7 +78,36 @@ This is bounded but not eliminated, and the mitigation is the stop set itself: e
 
 I would not go to "whole leg in one message" even though it is tempting: a 3,100-step leg would be uninterruptible, would produce an enormous `lastEvents` array, and would make the walk feel like a cutscene rather than something the player is doing.
 
-## Component 3 — Idempotency
+## Component 3 — Held-key navigation: coalesce, do not debounce
+
+The same machinery applies to a held or rapidly-tapped movement key, because a held key **is** a straight-line travel path. But the obvious framing — "debounce, then send once the player pauses" — is the wrong primitive, and it is worth being precise about why.
+
+**What happens today.** Two throttles stack:
+
+- `createKeyDispatcher` drops `event.repeat` keydowns arriving within `REPEAT_INTERVAL_MS` (80 ms), capping input at ~12.5 steps/sec.
+- `ProfileSession.dispatch` allows one command in flight with a **size-1, latest-wins** queue. Repeats that arrive during a round trip overwrite each other, so at most one step survives per round trip.
+
+So held-key movement runs at one step per RTT. At 100 ms that is ~10 steps/sec against the input layer's 12.5 — barely noticeable. At 300 ms it is ~3.3 against 12.5, roughly **4x slower than guest mode**, and every dropped repeat is a step the player asked for and did not get. (Derived from the two constants above, not yet measured over a real link — worth confirming before acting on it.)
+
+**Why not debounce.** Debouncing waits for a pause before issuing the intent, which adds that wait to the *first* step of every press. Pressing a direction must move the hero immediately; deliberately delaying it trades a throughput problem for an input-lag problem, which is the worse of the two in a game where one keypress is one turn.
+
+**Coalesce instead:**
+
+1. The first press dispatches immediately, exactly as today — no added latency, ever.
+2. Repeats arriving while that command is in flight **accumulate a count** instead of overwriting each other.
+3. When the reply lands, the accumulated run goes out as one batched intent of N steps in that direction.
+
+This keeps the first step instant and recovers the steps latest-wins currently discards, at one round trip per batch instead of per step.
+
+**The catch this creates, and the fix.** Latest-wins is not an oversight — its doc comment states the intent plainly: *"releasing the key never replays a backlog of queued steps."* Accumulating reintroduces exactly that rubber-banding: release the key and the hero keeps walking through a queue the player has already stopped asking for.
+
+Coalescing is therefore only safe if **keyup cancels the pending remainder**, which needs keyup tracking the input layer does not have today (it reads `event.repeat` on keydown and nothing else). That is a small addition, but it is a real prerequisite, not a detail — without it this change makes held-key navigation worse, not better.
+
+**The stop set matters here too.** A held-key batch must use `baseStopPredicate` (stop on damage or a newly-appeared hostile), not the classic set. Holding a direction into a monster currently auto-attacks it one round trip at a time, which at least lets the player react between blows; batching eight attacks with no chance to disengage would be a straight downgrade.
+
+**Sequencing.** The win here is much smaller than auto-explore's — bounded by how long a human holds a key, and near-parity with guest mode at low latency. Auto-explore's 5,500 round trips are the problem worth solving first. I would land that, measure over a real connection, and only then decide whether held-key coalescing earns its keyup plumbing.
+
+## Component 4 — Idempotency
 
 A batch is N engine commands but ONE client-minted `commandId`, so it does not fit `recentCommands` as-is. Two options, and I recommend the first:
 
@@ -108,3 +137,4 @@ A batch is N engine commands but ONE client-minted `commandId`, so it does not f
 1. **Chunk cap value** — 16 proposed; it trades round trips against abort overshoot and is worth an opinion from someone who has played it.
 2. **Does `travel.ts` move wholesale to session-core, or only its pure core?** Wholesale is simpler and keeps guest/profile identical; it does mean `session-core` gains the planning code that is today web-only. I lean wholesale.
 3. **Should the stairs mode batch at all?** Its path is short and already known; the win is smaller and it may not be worth the surface.
+4. **Is held-key coalescing (Component 3) in scope now or later?** It needs keyup tracking in the input layer as a prerequisite, and its payoff only becomes real above ~200 ms RTT. My recommendation is later, after auto-explore batching can be measured over a real connection.
