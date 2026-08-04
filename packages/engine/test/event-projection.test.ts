@@ -1061,3 +1061,52 @@ describe('public event projection', () => {
     ).toEqual([event]);
   });
 });
+
+describe('spell.cast projection', () => {
+  it('names the hero own cast', () => {
+    const input = fixture();
+    const projected = projectDomainEvents({
+      state: input.state,
+      content: input.content,
+      heroId: input.state.hero.actorId,
+      events: [
+        {
+          type: 'spell.cast',
+          eventId: 'command.wait',
+          actorId: input.state.hero.actorId,
+          spellId: 'spell.ember',
+        },
+      ],
+    });
+    expect(projected).toContainEqual(
+      expect.objectContaining({ type: 'spell.cast', actorId: input.state.hero.actorId }),
+    );
+  });
+
+  it('reduces an unseen caster to a sound, naming neither caster nor spell', () => {
+    // Before this gate, `spell.cast` was pushed unconditionally -- harmless while only the hero
+    // could cast, and a leak of an unseen actor's existence, identity, and spell list the moment
+    // a haunt casts. `fixture()`'s monster is unlit and unseen, which is the whole point of it.
+    const input = fixture();
+    const projected = projectDomainEvents({
+      state: input.state,
+      content: input.content,
+      heroId: input.state.hero.actorId,
+      events: [
+        {
+          type: 'spell.cast',
+          eventId: 'command.wait',
+          actorId: 'monster.hidden',
+          spellId: 'spell.ember',
+        },
+      ],
+    });
+    const json = stableJson(projected);
+    expect(projected.some((event) => event.type === 'spell.cast')).toBe(false);
+    expect(json).not.toContain('spell.ember');
+    expect(json).not.toContain('monster.hidden');
+    expect(projected).toContainEqual(
+      expect.objectContaining({ type: 'sound.heard', category: 'combat' }),
+    );
+  });
+});

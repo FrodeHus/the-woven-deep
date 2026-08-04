@@ -314,9 +314,22 @@ export function projectDomainEvents(
       case 'hero.tempering-banked':
       case 'hero.tempered':
       case 'hero.recalled':
-      case 'spell.cast':
         output.push(event);
         break;
+      // Hero-visible only. The hero is always visible to itself, so its own casts project
+      // exactly as they always have; an unseen caster is reduced to the same directional sound
+      // any other unseen combat makes, naming neither the caster nor the spell. Grouping this
+      // with `spell.learned` and the tempering events was correct while casting was hero-only,
+      // and became a leak the moment a haunt could cast.
+      case 'spell.cast': {
+        if (actorVisible(event.actorId)) {
+          output.push(event);
+          break;
+        }
+        const heard = sound(event, input.state, hero);
+        if (heard) output.push(heard);
+        break;
+      }
       case 'item.equipped':
       case 'item.unequipped':
       case 'item.light-toggled':
