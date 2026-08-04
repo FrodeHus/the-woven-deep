@@ -86,6 +86,33 @@ const selfWard: SpellContentEntry = {
   ],
 };
 
+/**
+ * A self-cast whose heal is legitimately useful (wounded caster) but which ALSO carries
+ * `effect.hunger.restore` -- the effect that throws unless its target is the hero. Recorded
+ * content is free to combine effects on one spell; this is what proves the safety filter looks
+ * at every effect on the spell, not just the ones `selfCastIsUseful` understands.
+ */
+const selfMendWithHunger: SpellContentEntry = {
+  ...emberBolt,
+  id: 'spell.mend-hungry',
+  name: 'Mend and Sate',
+  targetingId: 'target.self',
+  range: 0,
+  weaveCost: 2,
+  effects: [
+    { effectId: 'effect.heal', parameters: { dice: { count: 1, sides: 4, bonus: 0 } } },
+    { effectId: 'effect.hunger.restore', parameters: { amount: 100 } },
+  ],
+};
+
+/** An attack spell that also recalls -- `effect.recall` mutates the run's anchor unconditionally. */
+const emberWithRecall: SpellContentEntry = {
+  ...emberBolt,
+  id: 'spell.ember-recall',
+  name: 'Ember and Recall',
+  effects: [...emberBolt.effects, { effectId: 'effect.recall', parameters: {} }],
+};
+
 function packWith(...spells: readonly SpellContentEntry[]): CompiledContentPack {
   const base = createDemoContentPack();
   return {
@@ -322,6 +349,45 @@ describe('championCastAction', () => {
     expect(
       championCastAction({ state: dark, actorId: CHAMPION_ACTOR_ID, content: packWith(emberBolt) }),
     ).toBeNull();
+  });
+
+  it('never selects a self spell carrying effect.hunger.restore, even while wounded', () => {
+    const state = runWithChampion({
+      abilityIds: ['spell.mend-hungry'],
+      distance: 3,
+      health: 5,
+    });
+    expect(
+      championCastAction({
+        state,
+        actorId: CHAMPION_ACTOR_ID,
+        content: packWith(selfMendWithHunger),
+      }),
+    ).toBeNull();
+  });
+
+  it('never selects an attack spell carrying a non-safe effect (effect.recall)', () => {
+    const state = runWithChampion({ abilityIds: ['spell.ember-recall'], distance: 3 });
+    expect(
+      championCastAction({
+        state,
+        actorId: CHAMPION_ACTOR_ID,
+        content: packWith(emberWithRecall),
+      }),
+    ).toBeNull();
+  });
+
+  it('still selects the safe attack and self spells once an unsafe candidate is filtered out', () => {
+    const state = runWithChampion({
+      abilityIds: ['spell.ember-recall', 'spell.ember', 'spell.mend-hungry', 'spell.mend'],
+      distance: 3,
+    });
+    const action = championCastAction({
+      state,
+      actorId: CHAMPION_ACTOR_ID,
+      content: packWith(emberWithRecall, emberBolt, selfMendWithHunger, selfMend),
+    });
+    expect(action?.spellId).toBe('spell.ember');
   });
 
   it('consumes no randomness', () => {

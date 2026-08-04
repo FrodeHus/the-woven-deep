@@ -1,6 +1,14 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import type { HauntView, PublicEvent } from '@woven-deep/engine';
-import { hauntEncounterLine, hauntFarewellLine } from './haunt-lines.js';
+import { hauntDisplayName, hauntEncounterLine, hauntFarewellLine } from './haunt-lines.js';
+
+/** A spell entry's name, or the honest degradation `haunt-lines.ts`'s `killerPhrase` uses for a
+ * content-drifted id -- a `spell.cast` event outlives the pack it was cast against exactly the
+ * way a kill record does. */
+function spellDisplayName(pack: CompiledContentPack, spellId: string): string {
+  const entry = pack.entries.find((candidate) => candidate.id === spellId);
+  return entry !== undefined && entry.kind === 'spell' ? entry.name : 'a spell';
+}
 
 export interface LogLine {
   readonly id: number;
@@ -117,6 +125,19 @@ function renderEvent(event: PublicEvent, context: LogContext | undefined): Rende
       }
     case 'spell.learned':
       return { text: 'You learn a new spell.', tone: 'info' };
+    case 'spell.cast': {
+      // A seen cast only ever names the hero or a haunt (see `champion-casting.ts`: no other
+      // monster carries `abilityIds`), so "not a recognized haunt actor" means "the hero" -- the
+      // hero is always visible to itself, so this branch covers the hero's own casts too. Silent
+      // without context, exactly like `haunt.sighted`: the spell's name lives in the content pack
+      // this renderer does not otherwise carry.
+      if (!context) return null;
+      const spell = spellDisplayName(context.pack, event.spellId);
+      const haunt = context.haunts.find((candidate) => candidate.actorId === event.actorId);
+      return haunt
+        ? { text: `${hauntDisplayName(haunt)} casts ${spell}.`, tone: 'combat' }
+        : { text: `You cast ${spell}.`, tone: 'combat' };
+    }
     case 'run.concluded':
       return { text: 'Your run has concluded.', tone: 'system' };
     case 'curse.revealed':

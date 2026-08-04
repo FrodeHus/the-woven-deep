@@ -27,6 +27,7 @@ import {
   mergeStacks,
   pickupItem,
   projectGameplayState,
+  resolveWorldStep,
   retainEchoCandidates,
   rollDie,
   validateContentBoundRun,
@@ -2050,7 +2051,7 @@ describe('a placed haunt carries a weave pool', () => {
     const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
     const actor = placed.actors.find((candidate) => candidate.actorId === population.actorId)!;
     // The demo pack's formula is `maxWeave: { base: 4, wits: 1 }` and `standing()` records
-    // wits 10, so the pool is 14 -- derived, never the placeholder zero it used to be.
+    // wits 11, so the pool is 15 -- derived, never the placeholder zero it used to be.
     const balance = balanceEntry(pack());
     const expected = deriveActorStats({
       attributes: actor.attributes,
@@ -2095,5 +2096,63 @@ describe('a placed haunt carries a weave pool', () => {
     const actor = placed.actors.find((candidate) => candidate.actorId === population.actorId)!;
     expect(actor.maxWeave).toBeGreaterThanOrEqual(0);
     expect(actor.weave).toBe(actor.maxWeave);
+  });
+});
+
+describe('a real placed haunt casts through the world step', () => {
+  it('fires a spell.cast event and spends weave when a real placement is driven by a real turn', () => {
+    // Nothing in `champion-casting.test.ts` proves the wiring: hall record -> signatureAbilityIds
+    // -> placed actor -> behavior turn -> cast. This drives that whole chain through
+    // `resolveWorldStep`, the same seam `world-step.test.ts` uses to run a monster's turn, against
+    // a champion built by the real `placeFallenHeroEncounters` path rather than a hand-built actor.
+    const content = pack();
+    const run = withArena(initialized([standing(1, { signatureAbilityIds: ['spell.ember'] })]), 4);
+    const floor = run.floors[0]!;
+    const placed = placeFallenHeroEncounters({ run, floor, content });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    expect(population.abilityIds).toEqual(['spell.ember']);
+    const placedActor = placed.actors.find(
+      (candidate) => candidate.actorId === population.actorId,
+    )!;
+    // The hero is at (1, 1); the arena cells placeFallenHeroEncounters chooses from sit at x=5,
+    // well outside melee range and Ember's range of 5 -- close enough to cast, not to bump.
+    expect(placedActor.x).toBeGreaterThan(2);
+
+    const hero = run.actors[0]!;
+    const champion: ActorState = {
+      ...placedActor,
+      // Awareness is ordinarily earned over several turns of perception; setting it directly here
+      // isolates the wiring this test targets (does a cast fire at all) from the separate,
+      // already-tested question of how a haunt becomes aware.
+      awareActorIds: [hero.actorId],
+      energy: 100,
+    };
+    const state: ActiveRun = {
+      ...run,
+      actors: [hero, champion],
+      populations: placed.populations,
+      fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor],
+    };
+
+    const result = resolveWorldStep({
+      state,
+      content,
+      eventId: 'event.real-haunt-cast',
+      action: { type: 'wait', actorId: hero.actorId, cost: 100 },
+    });
+
+    const cast = result.events.find(
+      (event) => event.type === 'spell.cast' && event.actorId === champion.actorId,
+    );
+    expect(cast).toMatchObject({
+      type: 'spell.cast',
+      actorId: champion.actorId,
+      spellId: 'spell.ember',
+    });
+    const afterCast = result.state.actors.find(
+      (candidate) => candidate.actorId === champion.actorId,
+    )!;
+    expect(afterCast.weave).toBeLessThan(champion.weave);
   });
 });

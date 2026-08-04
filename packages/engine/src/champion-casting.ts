@@ -14,6 +14,41 @@ import { validateTarget } from './targeting.js';
 const SUPPORTED_TARGETING = new Set(['target.actor', 'target.self']);
 
 /**
+ * Effect kinds a non-hero caster may resolve. This is an ALLOW-list, not a deny-list, on purpose:
+ * `effects.ts` gains new effect kinds regularly (spell content is free to combine any of them, per
+ * `nonItemEffect` in the content schema), and each one is written against a hero caster unless
+ * proven otherwise. A deny-list fails OPEN -- a new effect ships castable by a haunt by default,
+ * and the first time that assumption is wrong is a crashed run or a corrupted hero-only field. An
+ * allow-list fails CLOSED: a new effect is simply never picked by a haunt until someone reads it
+ * and adds it here deliberately.
+ *
+ * Excluded on inspection of `effects.ts`, not by guessing:
+ * - `effect.hunger.restore` throws a `TypeError` unless its target is the survival actor (the
+ *   hero) -- a monster casting it at itself or another monster crashes the world step.
+ * - `effect.recall` and `effect.spell.learn` are `RUN_LEVEL_EFFECTS`: `action-dispatch.ts`'s cast
+ *   handler mutates `returnAnchorFloorId` (and emits `hero.recalled`) whenever ANY cast spell
+ *   carries `effect.recall`, regardless of who cast it -- a monster casting it would move the
+ *   hero's town anchor.
+ * - `effect.curse.remove` reaches into the target's revealed cursed items by convention written
+ *   for the hero's own inventory ("the steel you are holding"); nothing in this version needs a
+ *   haunt to curse-strip itself or the hero, so it stays out until a design asks for it.
+ * - `effect.item.consume` and `effect.item.enchant` are already unreachable from a spell's effect
+ *   list (`ITEM_ONLY_EFFECT_IDS`), so they are omitted here rather than listed and dead.
+ */
+const SAFE_EFFECT_IDS = new Set([
+  'effect.damage',
+  'effect.heal',
+  'effect.condition.apply',
+  'effect.condition.remove',
+  'effect.force-move',
+]);
+
+/** Every effect the spell carries must be safe for a non-hero caster -- see `SAFE_EFFECT_IDS`. */
+function safeForHauntCast(spell: SpellContentEntry): boolean {
+  return spell.effects.every((effect) => SAFE_EFFECT_IDS.has(effect.effectId));
+}
+
+/**
  * Would this self-targeted spell do anything? A haunt has one Weave pool and no way to earn it
  * back, so casting a heal at full health or re-applying a condition it already carries would
  * burn the pool for nothing and read as broken. Heals count as useful below maximum health;
@@ -74,6 +109,7 @@ export function championCastAction(
       const entry = entryById(input.content, spellId);
       return entry?.kind === 'spell' && SUPPORTED_TARGETING.has(entry.targetingId) ? [entry] : [];
     })
+    .filter((spell) => safeForHauntCast(spell))
     .filter((spell) => spell.weaveCost <= actor.weave)
     .sort((left, right) => right.weaveCost - left.weaveCost || compareCodeUnits(left.id, right.id));
 

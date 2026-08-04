@@ -22,7 +22,9 @@ Champions and echoes cast spells whose `targetingId` is `target.actor` or `targe
 
 ## The weave pool
 
-`champion.ts` currently spawns champion and echo actors with `maxWeave: 0` — a placeholder from before anything could cast. It becomes a real derivation: `deriveRunActorStats` over the standing's already-clamped attributes, the same call the hero's own maxima go through, with `weave` starting full.
+`champion.ts` currently spawns champion and echo actors with `maxWeave: 0` — a placeholder from before anything could cast. It becomes a real derivation: `deriveActorStats` over the standing's already-clamped attributes — not `deriveRunActorStats`, because the placed actor is not yet in `state.actors` at construction time, so an equipment-modifier lookup by actor id would find nothing to look up — with `weave` starting full.
+
+This derivation runs for every placed champion and echo, not only ones carrying spells: `maxWeave` is a property of the haunt's attributes, unconditional on `abilityIds`. A spell-less haunt (either haunt in the population demo, for instance) ends up with a real Weave pool it simply never spends.
 
 Weave regeneration is hero-only: `survival.ts` restores weave to the hero actor and `rest.ts` refills only the hero. A champion's pool is therefore a one-way per-encounter budget — it opens dangerous and fades — with no new mechanism needed to enforce that shape.
 
