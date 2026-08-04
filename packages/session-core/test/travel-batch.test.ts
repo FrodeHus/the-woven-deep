@@ -151,6 +151,62 @@ function referenceWalk(
   return { run: current, steps, reason: null };
 }
 
+/** The `apply` a plain engine caller supplies: resolve the intent and hand back the new run. The
+ * server instead routes each step through `ServerPlaySession.applyIntent`, which is the whole
+ * reason application is injected rather than hard-coded. */
+function engineApply(
+  getRun: () => ActiveRun,
+  getProjection: () => GameplayProjection,
+  mint: (index: number) => string,
+) {
+  return (
+    intent: PlayerIntent,
+    index: number,
+  ): { run: ActiveRun; events: readonly PublicEvent[] } | null => {
+    const run = getRun();
+    const built = buildIntent({
+      intent,
+      projection: getProjection(),
+      commandId: mint(index),
+      expectedRevision: run.revision,
+      pack,
+    });
+    if (built.kind !== 'command') return null;
+    const resolution = resolveCommand(run, built.command, { content: pack });
+    return { run: resolution.state, events: resolution.events };
+  };
+}
+
+/** Wraps `runTravelBatch` with the engine-backed `apply`, tracking the run as it advances. */
+function batch(
+  run: ActiveRun,
+  request: TravelBatchRequest,
+  options: { mint?: (index: number) => string; cap?: number } = {},
+) {
+  const mint = options.mint ?? commandId;
+  let current = run;
+  let projection = project(run);
+  const apply = engineApply(
+    () => current,
+    () => projection,
+    mint,
+  );
+  const result = runTravelBatch({
+    run,
+    pack,
+    request,
+    apply: (intent, index) => {
+      const applied = apply(intent, index);
+      if (applied === null) return null;
+      current = applied.run;
+      projection = project(current);
+      return applied;
+    },
+    ...(options.cap === undefined ? {} : { cap: options.cap }),
+  });
+  return result;
+}
+
 const exploreRequest: TravelBatchRequest = {
   mode: 'explore',
   steps: [],
@@ -174,12 +230,13 @@ function midLegRun(): { run: ActiveRun; nextCommandIndex: number } {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const before = current;
     const beforeIssued = issued;
-    const chunk = runTravelBatch({
-      run: current,
-      pack,
-      request: { ...exploreRequest, offeredItemIds },
-      mintCommandId: (index) => commandId(issued + index),
-    });
+    const chunk = batch(
+      current,
+      { ...exploreRequest, offeredItemIds },
+      {
+        mint: (index) => commandId(issued + index),
+      },
+    );
     if (chunk.reason === null && chunk.steps.length === TRAVEL_BATCH_CAP) {
       return { run: before, nextCommandIndex: beforeIssued };
     }
@@ -195,12 +252,7 @@ describe('runTravelBatch', () => {
   it('matches a step-at-a-time walk byte-for-byte (explore)', () => {
     const run = depthOneRun();
     const reference = referenceWalk(run, exploreRequest, TRAVEL_BATCH_CAP);
-    const batched = runTravelBatch({
-      run,
-      pack,
-      request: exploreRequest,
-      mintCommandId: commandId,
-    });
+    const batched = batch(run, exploreRequest);
 
     expect(batched.steps).toHaveLength(reference.steps);
     expect(batched.reason).toBe(reference.reason);
@@ -227,7 +279,7 @@ describe('runTravelBatch', () => {
       offeredItemIds: [],
     };
     const reference = referenceWalk(run, request, TRAVEL_BATCH_CAP);
-    const batched = runTravelBatch({ run, pack, request, mintCommandId: commandId });
+    const batched = batch(run, request);
 
     expect(batched.steps).toHaveLength(reference.steps);
     expect(batched.reason).toBe(reference.reason);
@@ -236,11 +288,8 @@ describe('runTravelBatch', () => {
 
   it('stops at the cap with a null reason so the client asks for more', () => {
     const { run, nextCommandIndex } = midLegRun();
-    const batched = runTravelBatch({
-      run,
-      pack,
-      request: exploreRequest,
-      mintCommandId: (index) => commandId(nextCommandIndex + index),
+    const batched = batch(run, exploreRequest, {
+      mint: (index) => commandId(nextCommandIndex + index),
       cap: 4,
     });
     expect(batched.steps).toHaveLength(4);
@@ -252,28 +301,23 @@ describe('runTravelBatch', () => {
   it('resumes across batches to the same place a single long walk reaches', () => {
     const { run, nextCommandIndex } = midLegRun();
     const mint = (index: number): string => commandId(nextCommandIndex + index);
-    const single = runTravelBatch({
-      run,
-      pack,
-      request: exploreRequest,
-      mintCommandId: mint,
-      cap: 12,
-    });
+    const single = batch(run, exploreRequest, { mint, cap: 12 });
     expect(single.steps).toHaveLength(12);
 
     let current = run;
     let taken = 0;
     let offeredItemIds: readonly string[] = [];
-    for (let batch = 0; batch < 4 && taken < 12; batch += 1) {
-      const chunk = runTravelBatch({
-        run: current,
-        pack,
-        request: { ...exploreRequest, offeredItemIds },
-        // Continue the SAME id sequence across batches: restarting at 0 would collide with ids the
-        // reducer still holds in `recentCommands` and every step would be refused.
-        mintCommandId: (index) => mint(taken + index),
-        cap: 3,
-      });
+    for (let round = 0; round < 4 && taken < 12; round += 1) {
+      // Continue the SAME id sequence across batches: restarting at 0 would collide with ids
+      // the reducer still holds in `recentCommands` and every step would be refused.
+      const chunk = batch(
+        current,
+        { ...exploreRequest, offeredItemIds },
+        {
+          mint: (index) => mint(taken + index),
+          cap: 3,
+        },
+      );
       if (chunk.steps.length === 0) break;
       current = chunk.steps.at(-1)!.run;
       taken += chunk.steps.length;
@@ -287,12 +331,7 @@ describe('runTravelBatch', () => {
 
   it('reports every step so a batch can be animated rather than snapped', () => {
     const run = depthOneRun();
-    const batched = runTravelBatch({
-      run,
-      pack,
-      request: exploreRequest,
-      mintCommandId: commandId,
-    });
+    const batched = batch(run, exploreRequest);
     expect(batched.steps.length).toBeGreaterThan(1);
     // Strictly increasing revisions: one engine turn per entry, in order.
     const revisions = batched.steps.map((step) => step.run.revision);
@@ -302,22 +341,18 @@ describe('runTravelBatch', () => {
 
   it('carries the offered-item set forward so a declined item does not re-halt the walk', () => {
     const run = depthOneRun();
-    const batched = runTravelBatch({
-      run,
-      pack,
-      request: { ...exploreRequest, offeredItemIds: ['item.already-declined'] },
-      mintCommandId: commandId,
-    });
+    const batched = batch(run, { ...exploreRequest, offeredItemIds: ['item.already-declined'] });
     expect(batched.offeredItemIds).toContain('item.already-declined');
   });
 
   it('reports a walk with nothing to do as arrived without applying anything', () => {
     const run = depthOneRun();
-    const batched = runTravelBatch({
-      run,
-      pack,
-      request: { mode: 'travel', steps: [], onArrive: null, autoPickup: null, offeredItemIds: [] },
-      mintCommandId: commandId,
+    const batched = batch(run, {
+      mode: 'travel',
+      steps: [],
+      onArrive: null,
+      autoPickup: null,
+      offeredItemIds: [],
     });
     expect(batched.steps).toHaveLength(0);
     expect(batched.reason).toBe('arrived');

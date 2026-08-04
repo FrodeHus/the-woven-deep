@@ -1,14 +1,12 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import {
   projectGameplayState,
-  resolveCommand,
   type ActiveRun,
   type GameplayProjection,
   type Point,
   type PublicEvent,
 } from '@woven-deep/engine';
 import { createAutoPickupPolicy } from './auto-pickup.js';
-import { buildIntent } from './command-builder.js';
 import { computeExplorePath } from './explore.js';
 import type { PlayerIntent } from './intents.js';
 import {
@@ -80,24 +78,31 @@ export interface TravelBatchResult {
  *
  * It reuses `advanceTravel` verbatim rather than reimplementing the walk: the stepper, the stop
  * predicates and the frontier planner are the same code the guest runs in-process, so a batched
- * walk and a stepped one cannot diverge. The only thing this adds is the loop and the engine
- * application that the client would otherwise do a round trip at a time.
+ * walk and a stepped one cannot diverge. The only thing this adds is the loop that the client would
+ * otherwise drive a round trip at a time.
  *
- * Every step is an ordinary `resolveCommand` against the authoritative run -- batching changes when
- * the client is asked, never who decides.
+ * Application is the caller's `apply`, which on the server is the same per-command path a single
+ * dispatched intent takes -- so batching changes when the client is asked, never who decides.
  */
 export function runTravelBatch(
   input: Readonly<{
     run: ActiveRun;
     pack: CompiledContentPack;
     request: TravelBatchRequest;
-    /** Mints the command id for step `index`. The caller owns id shape (and therefore idempotency);
-     * this only guarantees each step gets a distinct one. */
-    mintCommandId: (index: number) => string;
+    /**
+     * Applies one step's intent and returns the run it produced, or null if it was refused (which
+     * ends the batch).
+     *
+     * Injected rather than resolved here so the SERVER can route each step through
+     * `ServerPlaySession.applyIntent` -- the path that also handles floor transitions, Wanderer
+     * checkpoints, the persistence cadence and finalize-on-conclusion. A batch that called the
+     * engine directly would silently bypass all of that.
+     */
+    apply: (intent: PlayerIntent, index: number) => TravelBatchStep | null;
     cap?: number;
   }>,
 ): TravelBatchResult {
-  const { run, pack, request, mintCommandId } = input;
+  const { run, pack, request, apply } = input;
   const cap = input.cap ?? TRAVEL_BATCH_CAP;
 
   const project = (state: ActiveRun): GameplayProjection =>
@@ -165,24 +170,17 @@ export function runTravelBatch(
     }
     if (dispatched === null) return { steps, reason: null, offeredItemIds: [...offered] };
 
-    const built = buildIntent({
-      intent: dispatched,
-      projection,
-      commandId: mintCommandId(steps.length),
-      expectedRevision: current.revision,
-      pack,
-    });
-    // A non-command build (a client-only intent) has no place in a travel walk; stopping is the
-    // safe reading, and the client re-drives from the snapshot it gets back.
-    if (built.kind !== 'command') {
+    // A refused step (a client-only intent, a rejection, a finalized run) ends the batch; the
+    // client re-drives from the snapshot it gets back rather than guessing.
+    const applied = apply(dispatched, steps.length);
+    if (applied === null) {
       return { steps, reason: 'action-invalid', offeredItemIds: [...offered] };
     }
 
-    const resolution = resolveCommand(current, built.command, { content: pack });
-    current = resolution.state;
-    lastEvents = resolution.events;
+    current = applied.run;
+    lastEvents = applied.events;
     projection = project(current);
-    steps.push({ run: current, events: resolution.events });
+    steps.push(applied);
 
     if (outcome.status !== 'stepping') {
       return {
