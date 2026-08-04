@@ -2325,6 +2325,43 @@ describe('vault door/chest feature slot spawn', () => {
     ]);
   });
 
+  it('spawns the door/chest features on a floor where every encounter attempt fails', () => {
+    // Vault item slots are filled at the `placeFloorPopulations` tail regardless of placement
+    // outcomes (#131); the door/chest slots owe the same guarantee. The encounter here is already
+    // at its instance cap, so the loop ends on a `no-eligible-encounter` skip with nothing placed.
+    const encounter = individual('encounter.feature-cache-no-placement', {
+      maximumInstancesPerRun: 1,
+    });
+    const vault = featureCacheVault('vault.feature-cache-no-placement-test');
+    const generated = featureCacheFloor(vault.id);
+    const run: ActiveRun = {
+      ...runFor([encounter]),
+      encounterDecisions: [
+        {
+          encounterId: encounter.id,
+          baseProbability: 1,
+          protectionBonus: 0,
+          effectiveProbability: 1,
+          eligible: true,
+          reachedEligibleDepth: false,
+          encountered: false,
+          instancesCreated: 1,
+        },
+      ],
+    };
+
+    const result = placeFloorPopulations({
+      run,
+      floor: generated,
+      content: pack([encounter], [vault, directItemEntryForChest]),
+    });
+
+    expect(result.placements.every((placement) => placement.status !== 'placed')).toBe(true);
+    const featureIds = result.state.features.map((feature) => feature.featureId);
+    expect(featureIds).toContain('feature.vault.slot.test.1.vault-chest');
+    expect(featureIds).toContain('feature.vault.slot.test.1.vault-door');
+  });
+
   it('leaves run.features unchanged on a floor with no door/chest slots', () => {
     const encounter = individual('encounter.feature-cache-none');
     const generated = floor({});
