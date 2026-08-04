@@ -8,7 +8,9 @@ import type { HauntView, OpaqueId } from '@woven-deep/engine';
  * screen.
  */
 
-function displayName(haunt: HauntView): string {
+/** Shared with `event-log.ts`, which names a seen haunt caster the same way the encounter and
+ * farewell lines do -- "the champion's signature spell" reads as one voice everywhere. */
+export function hauntDisplayName(haunt: HauntView): string {
   return haunt.role === 'champion'
     ? `${haunt.heroName}, the Deep's Champion`
     : `Echo of ${haunt.heroName}`;
@@ -27,12 +29,12 @@ export function killerPhrase(pack: CompiledContentPack, killerContentId: OpaqueI
 
 /** The line a haunt speaks on first sight. Host-rendered prose from record data only. */
 export function hauntEncounterLine(haunt: HauntView, pack: CompiledContentPack): string {
-  const name = displayName(haunt);
+  const name = hauntDisplayName(haunt);
   if (haunt.causeDepth === null) return `${name}. The Deep remembers.`;
   return `${name} — fell to ${killerPhrase(pack, haunt.killerContentId)} at depth ${haunt.causeDepth}. The Deep remembers.`;
 }
 
 /** The line an appeased haunt leaves behind. */
 export function hauntFarewellLine(haunt: HauntView): string {
-  return `${displayName(haunt)} is at peace. The Deep releases what it held.`;
+  return `${hauntDisplayName(haunt)} is at peace. The Deep releases what it held.`;
 }

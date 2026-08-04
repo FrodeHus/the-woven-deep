@@ -12,11 +12,13 @@ import type {
 import {
   advanceBosses,
   advanceFallenHeroEncounters,
+  balanceEntry,
   createPopulationLoot,
   createDemoContentPack,
   createDemoRun,
   createFallenHeroRunDecisions,
   decodeActiveRun,
+  deriveActorStats,
   dropItem,
   encodeActiveRun,
   normalizeFallenHero,
@@ -25,6 +27,7 @@ import {
   mergeStacks,
   pickupItem,
   projectGameplayState,
+  resolveWorldStep,
   retainEchoCandidates,
   rollDie,
   validateContentBoundRun,
@@ -2093,5 +2096,118 @@ describe('a multi-ability haunt stays savable', () => {
       floors: [placed.floor],
     };
     expect(decodeActiveRun(encodeActiveRun(withHaunt))).toEqual(withHaunt);
+  });
+});
+
+describe('a placed haunt carries a weave pool', () => {
+  it('derives the champion pool from its standing attributes and starts it full', () => {
+    const run = withArena(initialized([standing(1)]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    const actor = placed.actors.find((candidate) => candidate.actorId === population.actorId)!;
+    // The demo pack's formula is `maxWeave: { base: 4, wits: 1 }` and `standing()` records
+    // wits 11, so the pool is 15 -- derived, never the placeholder zero it used to be.
+    const balance = balanceEntry(pack());
+    const expected = deriveActorStats({
+      attributes: actor.attributes,
+      formulas: balance.formulas,
+      weaveRegenAmount: balance.weaveRegenAmount,
+      equipmentModifiers: [],
+      conditionModifiers: [],
+    }).maxWeave;
+    expect(expected).toBeGreaterThan(0);
+    expect(actor.maxWeave).toBe(expected);
+    expect(actor.weave).toBe(expected);
+  });
+
+  it('gives an echo the same derivation as a champion', () => {
+    const standings = [standing(1), standing(2)];
+    const selected = initialized(standings);
+    const forced = {
+      ...selected,
+      fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) =>
+        decision.rank === 2 ? { ...decision, retained: true, gateRoll: 1 } : decision,
+      ),
+    };
+    const run = withArena(forced, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const echo = placed.populations.find((candidate) => candidate.model === 'echo')!;
+    const actor = placed.actors.find((candidate) => candidate.actorId === echo.actorId)!;
+    // The echo's combat boundaries are weakened; its Weave is not -- nothing in the template
+    // describes an echo weave percentage, and inventing one is out of scope.
+    expect(actor.maxWeave).toBeGreaterThan(0);
+    expect(actor.weave).toBe(actor.maxWeave);
+  });
+
+  it('places a haunt with no attributes-driven pool without throwing', () => {
+    // A standing whose attributes are all zero derives `base` only. Pinned so the clamp below
+    // zero is never needed and a zero pool stays a legal, non-casting haunt.
+    const zeroed = standing(1, {
+      attributes: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+    });
+    const run = withArena(initialized([zeroed]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    const actor = placed.actors.find((candidate) => candidate.actorId === population.actorId)!;
+    expect(actor.maxWeave).toBeGreaterThanOrEqual(0);
+    expect(actor.weave).toBe(actor.maxWeave);
+  });
+});
+
+describe('a real placed haunt casts through the world step', () => {
+  it('fires a spell.cast event and spends weave when a real placement is driven by a real turn', () => {
+    // Nothing in `champion-casting.test.ts` proves the wiring: hall record -> signatureAbilityIds
+    // -> placed actor -> behavior turn -> cast. This drives that whole chain through
+    // `resolveWorldStep`, the same seam `world-step.test.ts` uses to run a monster's turn, against
+    // a champion built by the real `placeFallenHeroEncounters` path rather than a hand-built actor.
+    const content = pack();
+    const run = withArena(initialized([standing(1, { signatureAbilityIds: ['spell.ember'] })]), 4);
+    const floor = run.floors[0]!;
+    const placed = placeFallenHeroEncounters({ run, floor, content });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    expect(population.abilityIds).toEqual(['spell.ember']);
+    const placedActor = placed.actors.find(
+      (candidate) => candidate.actorId === population.actorId,
+    )!;
+    // The hero is at (1, 1); the arena cells placeFallenHeroEncounters chooses from sit at x=5,
+    // well outside melee range and Ember's range of 5 -- close enough to cast, not to bump.
+    expect(placedActor.x).toBeGreaterThan(2);
+
+    const hero = run.actors[0]!;
+    const champion: ActorState = {
+      ...placedActor,
+      // Awareness is ordinarily earned over several turns of perception; setting it directly here
+      // isolates the wiring this test targets (does a cast fire at all) from the separate,
+      // already-tested question of how a haunt becomes aware.
+      awareActorIds: [hero.actorId],
+      energy: 100,
+    };
+    const state: ActiveRun = {
+      ...run,
+      actors: [hero, champion],
+      populations: placed.populations,
+      fallenHeroDecisions: placed.decisions,
+      floors: [placed.floor],
+    };
+
+    const result = resolveWorldStep({
+      state,
+      content,
+      eventId: 'event.real-haunt-cast',
+      action: { type: 'wait', actorId: hero.actorId, cost: 100 },
+    });
+
+    const cast = result.events.find(
+      (event) => event.type === 'spell.cast' && event.actorId === champion.actorId,
+    );
+    expect(cast).toMatchObject({
+      type: 'spell.cast',
+      actorId: champion.actorId,
+      spellId: 'spell.ember',
+    });
+    const afterCast = result.state.actors.find(
+      (candidate) => candidate.actorId === champion.actorId,
+    )!;
+    expect(afterCast.weave).toBeLessThan(champion.weave);
   });
 });
