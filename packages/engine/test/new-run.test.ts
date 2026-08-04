@@ -504,8 +504,25 @@ describe('createNewRun records input', () => {
     // fireball-tome is correctly ineligible at depth 1 by its minDepth-8 guard, and chain-spark-tome
     // was simply not selected by these draws. Expected content-authoring drift from widening a
     // merchant table, not an engine regression.
+    // Re-pinned again for issue #149 (gold sinks): `content/items/deep-catalog.yaml` adds four
+    // instance-identified items (deepsteel blade, warded hauberk, bulwark shield, warded lantern).
+    // `allocateIdentificationMap` draws one `effects` roll per instance-identified item at run
+    // creation, so four new pool members add four rolls and shift that stream from turn zero.
+    // Verified by dumping the decoded run field-by-field against the prior pin: exactly three keys
+    // differ -- `contentHash`, `identification` (gaining precisely those four appearance entries
+    // and losing none), and `rng.effects`. Every other key, including `items`, `populations`, and
+    // every other RNG stream (notably `merchant-stock`), is byte-identical; the new town/lampwright
+    // loot-table choices are all depth-banded at 8 or deeper, so `projectLootGraph` prunes them at
+    // the town's depth and the stock weights are unchanged at creation. Expected content-authoring
+    // drift, not an engine regression. (Re-derived after merging #145's potion pins: the same
+    // three-key delta was re-verified against an origin/main build in a scratch worktree, so this
+    // digest carries both pool growths and nothing else.) Moved once more by clamping
+    // `curse.cold-tether`/`curse.embermarked`'s out-of-range trigger durations, which touches
+    // `contentHash` only -- no curse trigger is rolled during run creation. Re-derived once more
+    // after merging #157/content v15; the same three-key delta (`contentHash`, `identification`,
+    // `rng.effects`) was re-verified against an origin/main build carrying v15.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '2bf2019b78ab4ab56a4b418edea9c1e8a52351c9914d1808c034bd411a2ce31a',
+      'c1b8df1b9337145852b73a797a884594259cb0936d34b92122a296c0a438236d',
     );
   });
 

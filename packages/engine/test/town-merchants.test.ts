@@ -10,10 +10,16 @@ import {
   encodeActiveRun,
   heroActor,
   heroPerception,
+  factionReputation,
   projectDomainEvents,
+  projectGameplayState,
+  quoteMerchantService,
   refreshKnowledge,
+  reputationTier,
   resolveCommand,
   restockMerchant,
+  scaledServiceBasePrice,
+  serviceDepthMultiplier,
   validateActiveRun,
   type ActiveRun,
   type FloorSnapshot,
@@ -320,7 +326,7 @@ describe('strongbox purchase', () => {
 });
 
 describe('milestone restock', () => {
-  it('re-rolls stock exactly once per milestone, preserving reputation/services/identity, and emits merchant.restocked', () => {
+  it('re-rolls stock exactly once per milestone, preserving reputation/service identity, and emits merchant.restocked', () => {
     const started = townRun();
     const before = townMerchants(started);
     const descended = descendRepeatedly(started, 5);
@@ -333,7 +339,17 @@ describe('milestone restock', () => {
       expect(restocked.actorId).toBe(merchant.actorId);
       expect(restocked.npcId).toBe(merchant.npcId);
       expect(restocked.factionId).toBe(merchant.factionId);
-      expect(restocked.services).toEqual(merchant.services);
+      // A restock re-arms `remainingUses` (that is the point), so only the offer's identity,
+      // price, and tier gating are expected to survive it unchanged.
+      expect(restocked.services.map((service) => service.serviceId)).toEqual(
+        merchant.services.map((service) => service.serviceId),
+      );
+      expect(restocked.services.map((service) => service.basePrice)).toEqual(
+        merchant.services.map((service) => service.basePrice),
+      );
+      expect(restocked.services.map((service) => service.tierIds)).toEqual(
+        merchant.services.map((service) => service.tierIds),
+      );
       expect(restocked.lifecycle).toBe(merchant.lifecycle);
       expect(restocked.stockItemIds).not.toEqual(merchant.stockItemIds);
     }
@@ -451,5 +467,100 @@ describe('restockMerchant', () => {
     const result = restockMerchant(dead, { content: pack, populationId: merchant.populationId });
     expect(result.events).toEqual([]);
     expect(result.state).toBe(dead);
+  });
+
+  it('re-arms every service offer within its authored use band without touching identity or price', () => {
+    const run = townRun();
+    const merchant = townMerchants(run).find(
+      (candidate) => candidate.services.length > 0 && candidate.encounterId,
+    )!;
+    const spent: ActiveRun = {
+      ...run,
+      populations: run.populations.map((candidate) =>
+        candidate.populationId === merchant.populationId
+          ? {
+              ...candidate,
+              services: merchant.services.map((service) => ({ ...service, remainingUses: 0 })),
+            }
+          : candidate,
+      ),
+    };
+    const encounter = pack.entries.find((entry) => entry.id === merchant.encounterId)!;
+    if (encounter.kind !== 'encounter' || encounter.model !== 'merchant')
+      throw new Error('test setup failure: merchant encounter not found');
+    const result = restockMerchant(spent, { content: pack, populationId: merchant.populationId });
+    const after = result.state.populations.find(
+      (candidate): candidate is MerchantPopulation =>
+        candidate.model === 'merchant' && candidate.populationId === merchant.populationId,
+    )!;
+    expect(after.services).toHaveLength(merchant.services.length);
+    for (const [index, service] of after.services.entries()) {
+      const authored = encounter.definition.services.find(
+        (candidate) => candidate.serviceId === service.serviceId,
+      )!;
+      expect(service.remainingUses).toBeGreaterThanOrEqual(authored.minimumUses);
+      expect(service.remainingUses).toBeLessThanOrEqual(authored.maximumUses);
+      expect(service.serviceId).toBe(merchant.services[index]!.serviceId);
+      expect(service.basePrice).toBe(merchant.services[index]!.basePrice);
+      expect(service.tierIds).toEqual(merchant.services[index]!.tierIds);
+    }
+    expect(validateActiveRun(result.state)).toBeDefined();
+  });
+});
+
+describe('service pricing pressure', () => {
+  const SERVICE_ID = 'merchant-service.identify';
+
+  function servicedMerchant(run: ActiveRun): MerchantPopulation {
+    return townMerchants(run).find((candidate) =>
+      candidate.services.some((service) => service.serviceId === SERVICE_ID),
+    )!;
+  }
+
+  it('steps the multiplier once per fired restock milestone', () => {
+    const base = townRun();
+    const at = (milestones: readonly number[]): number =>
+      serviceDepthMultiplier({ ...base, restockedMilestones: [...milestones] });
+    expect(at([])).toBe(1);
+    expect(at([5])).toBe(2);
+    expect(at([5, 10])).toBe(3);
+    expect(at([5, 10, 15, 20])).toBe(5);
+  });
+
+  /** The projected offer must be the number `planService` will charge, at every milestone. */
+  it('projects and charges the multiplied price', () => {
+    const base = townRun();
+    const merchant = servicedMerchant(base);
+    const actor = base.actors.find((candidate) => candidate.actorId === merchant.actorId)!;
+    const heroCell = adjacentFreeCell(base, actor);
+    const authored = merchant.services.find((service) => service.serviceId === SERVICE_ID)!;
+    const faction = pack.entries.find((entry) => entry.id === merchant.factionId)!;
+    if (faction.kind !== 'npc-faction') throw new Error('test setup failure: faction not found');
+    const tier = reputationTier(factionReputation(base, faction), faction);
+
+    const priced = (milestones: readonly number[]): number => {
+      const state: ActiveRun = validateActiveRun({
+        ...teleportHero(base, heroCell),
+        hero: { ...base.hero, currency: 10_000 },
+        restockedMilestones: [...milestones],
+      });
+      const projected = projectGameplayState({
+        state: openTrade(state, merchant.actorId),
+        content: pack,
+      });
+      return projected.trade!.services.find((service) => service.serviceId === SERVICE_ID)!
+        .unitPrice;
+    };
+
+    const expected = (multiplier: number): number =>
+      quoteMerchantService({
+        basePrice: scaledServiceBasePrice(authored.basePrice, multiplier),
+        factionBps: tier.purchasePriceBps,
+      });
+
+    expect(priced([])).toBe(expected(1));
+    expect(priced([5, 10])).toBe(expected(3));
+    expect(priced([5, 10, 15, 20])).toBe(expected(5));
+    expect(priced([5, 10, 15, 20])).toBeGreaterThan(priced([]));
   });
 });

@@ -15,6 +15,7 @@ import { monsterIssues } from './monster.js';
 import { npcIssues } from './npc.js';
 import { buildById, compareCodeUnits, type LocatedContentEntry } from './shared.js';
 import { spellTrapIssues } from './spell-trap.js';
+import { curseIssues } from './curse.js';
 import { buildVaultTags } from './vault-tags.js';
 
 export type { LocatedContentEntry } from './shared.js';
@@ -36,6 +37,7 @@ export function validateContentEntries(
   issues.push(...classEntriesIssues(locatedEntries, byId));
   issues.push(...backgroundEntriesIssues(locatedEntries, byId));
   issues.push(...spellTrapIssues(locatedEntries, byId));
+  issues.push(...curseIssues(locatedEntries, byId));
   issues.push(...encounterEntriesIssues(locatedEntries, byId, vaultTags));
   issues.push(...identificationEntriesIssues(locatedEntries, byId));
   issues.push(...lootIssues(locatedEntries, byId));

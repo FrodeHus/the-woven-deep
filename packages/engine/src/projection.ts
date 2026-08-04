@@ -21,6 +21,7 @@ import {
   quoteMerchantService,
   reputationTier,
   scaledServiceBasePrice,
+  serviceDepthMultiplier,
 } from './commerce.js';
 import { conditionDefinition } from './conditions.js';
 import { projectFeature } from './features.js';
@@ -690,14 +691,19 @@ function projectActiveTrade(
     .sort((left, right) => compareCodeUnits(left.serviceId, right.serviceId))
     .map((service) => ({
       serviceId: service.serviceId,
+      // Both quotes carry the milestone step `planService` will charge; a projection that showed
+      // the authored price would advertise a number the hero can never actually pay.
       unitPrice: quoteMerchantService({
-        basePrice: service.basePrice,
+        basePrice: scaledServiceBasePrice(service.basePrice, serviceDepthMultiplier(state)),
         factionBps: tier.purchasePriceBps,
       }),
       ...(service.serviceId === 'merchant-service.enchant'
         ? {
             reEnchantUnitPrice: quoteMerchantService({
-              basePrice: scaledServiceBasePrice(service.basePrice, 2),
+              basePrice: scaledServiceBasePrice(
+                service.basePrice,
+                2 * serviceDepthMultiplier(state),
+              ),
               factionBps: tier.purchasePriceBps,
             }),
           }

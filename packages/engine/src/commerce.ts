@@ -91,6 +91,24 @@ export function scaledServiceBasePrice(basePrice: number, multiplier: number): n
   return checkedProduct(basePrice, multiplier, 'service price multiplier');
 }
 
+/**
+ * The service-price step the run has reached: one, plus one per restock milestone already fired.
+ * The town charges more for the same work the deeper the hero has proven willing to go, which is
+ * the run's one repeatable gold sink.
+ *
+ * It reads `restockedMilestones` rather than `metrics.deepestDepth` on purpose: that is the same
+ * saved state `applyMerchantRestocks` writes when it widens the stock pool and re-arms the service
+ * uses, so all three land on the same beat and stay tunable from `balance.restockMilestones`
+ * alone. It is pure arithmetic over existing state -- no RNG, no new field in either schema.
+ */
+export function serviceDepthMultiplier(run: ActiveRun): number {
+  const steps = run.restockedMilestones.length;
+  if (!Number.isSafeInteger(steps) || steps < 0) {
+    throw new RangeError('restocked milestone count must be a non-negative safe integer');
+  }
+  return steps + 1;
+}
+
 function assertFactionBounds(faction: NpcFactionContentEntry): void {
   if (
     !Number.isSafeInteger(faction.minimumReputation) ||
