@@ -691,3 +691,119 @@ describe('DELETE /api/profile', () => {
     expect(response.statusCode).toBe(204);
   });
 });
+
+describe('DELETE /api/profile/active-run', () => {
+  let app: FastifyInstance;
+  let database: Database.Database;
+  let bundle: AuthBundle;
+
+  beforeEach(() => {
+    database = freshDatabase();
+    bundle = createAuthBundle({ db: database, config: makeConfig() });
+    app = buildApp({ pack, auth: bundle, database });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  function storeRun(profileId: string, contentHash: string): void {
+    new ActiveRunRepository(database).upsert({
+      profileId,
+      runBlob: '{}',
+      revision: 1,
+      contentHash,
+      updatedAt: new Date().toISOString(),
+      checkpointBlob: null,
+    });
+  }
+
+  async function signIn(email: string): Promise<{
+    profileId: string;
+    csrfToken: string;
+    cookies: string[];
+  }> {
+    const sessionCookies = await verifyAndGetCookies(app, database, email);
+    const profile = new ProfileRepository(database).findByEmail(email);
+    expect(profile).toBeDefined();
+    const { csrfToken, cookies } = await getCsrfToken(app, sessionCookies);
+    return { profileId: profile!.id, csrfToken, cookies };
+  }
+
+  function discard(input: { csrfToken?: string; cookies?: string[]; origin?: string }) {
+    return app.inject({
+      method: 'DELETE',
+      url: '/api/profile/active-run',
+      headers: {
+        ...(input.origin === null ? {} : { origin: input.origin ?? PUBLIC_URL }),
+        ...(input.cookies ? { cookie: cookieHeader(input.cookies) } : {}),
+        ...(input.csrfToken ? { 'x-csrf-token': input.csrfToken } : {}),
+      },
+    });
+  }
+
+  function storedHash(profileId: string): string | undefined {
+    return new ActiveRunRepository(database).get(profileId)?.contentHash;
+  }
+
+  it('returns 401 when unauthenticated', async () => {
+    const response = await discard({});
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('returns 403 for a mismatched Origin', async () => {
+    const { csrfToken, cookies } = await signIn('discard-bad-origin@example.com');
+    const response = await discard({ csrfToken, cookies, origin: 'https://evil.example.com' });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'origin_mismatch' });
+  });
+
+  it('returns 403 without a CSRF token', async () => {
+    const { cookies } = await signIn('discard-no-csrf@example.com');
+    const response = await discard({ cookies });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('discards a run whose content hash no longer matches the server pack', async () => {
+    const { profileId, csrfToken, cookies } = await signIn('discard-stale@example.com');
+    storeRun(profileId, 'a'.repeat(64));
+
+    const response = await discard({ csrfToken, cookies });
+
+    expect(response.statusCode).toBe(204);
+    expect(storedHash(profileId)).toBeUndefined();
+  });
+
+  it('refuses to discard a run that still matches the server pack', async () => {
+    const { profileId, csrfToken, cookies } = await signIn('discard-resumable@example.com');
+    storeRun(profileId, pack.hash);
+
+    const response = await discard({ csrfToken, cookies });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({ error: 'run_resumable' });
+    expect(storedHash(profileId)).toBe(pack.hash);
+  });
+
+  it('succeeds when the profile has no stored run at all', async () => {
+    const { profileId, csrfToken, cookies } = await signIn('discard-none@example.com');
+
+    const response = await discard({ csrfToken, cookies });
+
+    expect(response.statusCode).toBe(204);
+    expect(storedHash(profileId)).toBeUndefined();
+  });
+
+  it("leaves another profile's stale run untouched", async () => {
+    const mine = await signIn('discard-mine@example.com');
+    const theirs = await signIn('discard-theirs@example.com');
+    storeRun(mine.profileId, 'a'.repeat(64));
+    storeRun(theirs.profileId, 'c'.repeat(64));
+
+    const response = await discard({ csrfToken: mine.csrfToken, cookies: mine.cookies });
+
+    expect(response.statusCode).toBe(204);
+    expect(storedHash(mine.profileId)).toBeUndefined();
+    expect(storedHash(theirs.profileId)).toBe('c'.repeat(64));
+  });
+});

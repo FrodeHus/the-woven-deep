@@ -127,6 +127,22 @@ export interface TravelWalkEnd {
   readonly offeredItemIds: readonly string[];
 }
 
+/**
+ * A server `error` frame that settled a handshake as a rejection. Carries the frame's `code`
+ * alongside the human text so callers can branch on WHICH failure they got (`content-mismatch` is
+ * recoverable by discarding the stranded run; a version mismatch is not) without re-parsing the
+ * message. `message` stays exactly `"<code>: <text>"`, the shape shown to the player.
+ */
+export class ProtocolConnectError extends Error {
+  constructor(
+    readonly code: string,
+    text: string,
+  ) {
+    super(`${code}: ${text}`);
+    this.name = 'ProtocolConnectError';
+  }
+}
+
 /** What `ProfileSession.connect` resolves to: an immediately-playable session (the profile had a
  * run, stored or live), or a held connection awaiting the chargen wizard's choices. */
 export type ProfileConnectOutcome =
@@ -165,7 +181,7 @@ export class PendingProfileStart {
         if (message.type === 'error') {
           settled = true;
           unsubscribe();
-          reject(new Error(`${message.code}: ${message.message}`));
+          reject(new ProtocolConnectError(message.code, message.message));
           return;
         }
         settled = true;
@@ -358,7 +374,7 @@ export class ProfileSession implements RunSession {
           settled = true;
           unsubscribe();
           ws.close();
-          reject(new Error(`${message.code}: ${message.message}`));
+          reject(new ProtocolConnectError(message.code, message.message));
           return;
         }
         if (message.type === 'no-run') {

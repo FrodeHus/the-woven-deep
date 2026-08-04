@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { deleteAccount, loadContentPack, loadContentSummary } from '../src/api.js';
+import {
+  deleteAccount,
+  discardStrandedRun,
+  loadContentPack,
+  loadContentSummary,
+} from '../src/api.js';
 import { CONTENT_KIND_IDS, type ContentKind } from '@woven-deep/content';
 import { contentPack } from './content-pack-fixture.js';
 
@@ -107,5 +112,36 @@ describe('deleteAccount', () => {
     await expect(deleteAccount('csrf-token', request as unknown as typeof fetch)).rejects.toThrow(
       /failed to delete the account/i,
     );
+  });
+});
+
+describe('discardStrandedRun', () => {
+  it('sends a CSRF-bearing DELETE and resolves when the server clears the run', async () => {
+    const request = vi.fn().mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(
+      discardStrandedRun('csrf-token', request as unknown as typeof fetch),
+    ).resolves.toBeUndefined();
+    expect(request).toHaveBeenCalledWith(
+      '/api/profile/active-run',
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: { 'x-csrf-token': 'csrf-token' },
+      }),
+    );
+  });
+
+  // The server refuses a run it can still open. Resolving on that would tell the player their
+  // stranded run was thrown away when nothing changed, so it has to surface as a failure.
+  it('throws when the server refuses because the run is still resumable', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'run_resumable' }), { status: 409 }),
+      );
+
+    await expect(
+      discardStrandedRun('csrf-token', request as unknown as typeof fetch),
+    ).rejects.toThrow(/failed to discard the stranded run/i);
   });
 });
