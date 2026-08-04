@@ -487,6 +487,23 @@ describe('createNewRun records input', () => {
     // tree before this branch merged main, and again against merged main afterwards -- by diffing
     // the decoded run objects field-by-field: `contentHash` is the ONLY key that differs each time.
     // Expected content-authoring drift, not an engine regression.
+    // Re-pinned again for the loot-coverage/torch-curve change: seven previously unreachable spell
+    // tomes joined the three chest tables, `loot-table.town-spellvendor-stock` gained
+    // `item.chain-spark-tome` (w2, unbanded) and `item.fireball-tome` (w1, minDepth 8), and the
+    // pitch-torch weights moved in floor-scatter-shallow (3 -> 7) and floor-scatter-mid (new, w2).
+    // Unlike the #154 light-pressure re-pin above -- which touched only tables unreachable from
+    // creation -- this one DOES reach `createNewRun`, because the town is materialized at creation
+    // and `materializeMerchant` rolls the spellvendor stock there. It still moves no stream: the
+    // table's `rolls` stays 3, so the draw count is unchanged and `rng` is byte-identical; what
+    // moved is which choice each unchanged draw lands on, because two added choices shifted the
+    // table's cumulative weight boundaries. Verified by diffing the decoded run objects
+    // field-by-field against the prior pin: only `contentHash` and `items` differ, and the entire
+    // `items` delta is two of the vendor's three stock slots swapping contents
+    // (stock.000001 ember-scroll <-> stock.000003 frost-shard-tome) -- same 17 items, same stock
+    // size, nothing added or removed. Neither new tome appears in town stock at creation:
+    // fireball-tome is correctly ineligible at depth 1 by its minDepth-8 guard, and chain-spark-tome
+    // was simply not selected by these draws. Expected content-authoring drift from widening a
+    // merchant table, not an engine regression.
     // Re-pinned again for issue #149 (gold sinks): `content/items/deep-catalog.yaml` adds four
     // instance-identified items (deepsteel blade, warded hauberk, bulwark shield, warded lantern).
     // `allocateIdentificationMap` draws one `effects` roll per instance-identified item at run
@@ -505,7 +522,7 @@ describe('createNewRun records input', () => {
     // after merging #157/content v15; the same three-key delta (`contentHash`, `identification`,
     // `rng.effects`) was re-verified against an origin/main build carrying v15.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '6160e19511ab7835428a96c51c6e08f346c4a4febaf7af47d6ba905fa786dd8e',
+      'c1b8df1b9337145852b73a797a884594259cb0936d34b92122a296c0a438236d',
     );
   });
 

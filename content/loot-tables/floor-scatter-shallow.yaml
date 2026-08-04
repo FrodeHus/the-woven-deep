@@ -12,7 +12,7 @@ entries:
       - { contentId: item.crimson-potion, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.bitter-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.searing-potion, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
-      - { contentId: item.pitch-torch, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.pitch-torch, lootTableId: null, weight: 7, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.cloth-wrap, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.lockpick, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 2 }
       - { contentId: item.ember-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
