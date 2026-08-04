@@ -5,6 +5,8 @@ import type {
   PopulationCombatModifiers,
 } from '@woven-deep/content';
 import { emptyEquipment, type ActorState, type BaseAttributes } from './actor-model.js';
+import { deriveActorStats } from './attributes.js';
+import { balanceEntry } from './balance.js';
 import { preservesRequiredRoutes } from './connectivity.js';
 import {
   hauntDropItemIdPrefix,
@@ -486,6 +488,24 @@ export function placeFallenHeroEncounters(
     const populationId = `population.fallen-${suffix}.${standing.hallRecordId}`;
     const actorId = `actor.${populationId}.001`;
     const fallback = monster(input.content, definition);
+    // A haunt's Weave is derived from the attributes its standing recorded, exactly as the
+    // hero's own maximum is -- a placed champion used to carry a hardcoded 0 because nothing
+    // could cast. `deriveActorStats` rather than `deriveRunActorStats`: this actor is not in
+    // `state.actors` yet, so an equipment lookup would find nothing to look up. A fresh haunt
+    // has no equipped instances and no conditions, so both modifier lists are genuinely empty
+    // rather than merely convenient. The pool starts full and never refills: Weave regen is
+    // hero-only (`survival.ts`), which is what makes a caster haunt a burst that fades.
+    const balance = balanceEntry(input.content);
+    const maxWeave = Math.max(
+      0,
+      deriveActorStats({
+        attributes: normalized.attributes,
+        formulas: balance.formulas,
+        weaveRegenAmount: balance.weaveRegenAmount,
+        equipmentModifiers: [],
+        conditionModifiers: [],
+      }).maxWeave,
+    );
     const actor: ActorState = {
       actorId,
       contentId: normalized.monsterId,
@@ -496,8 +516,8 @@ export function placeFallenHeroEncounters(
       attributes: normalized.attributes,
       health: normalized.health,
       maxHealth: normalized.health,
-      weave: 0,
-      maxWeave: 0,
+      weave: maxWeave,
+      maxWeave,
       energy: 100,
       speed: fallback.speed,
       reactionReady: true,

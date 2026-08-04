@@ -12,11 +12,13 @@ import type {
 import {
   advanceBosses,
   advanceFallenHeroEncounters,
+  balanceEntry,
   createPopulationLoot,
   createDemoContentPack,
   createDemoRun,
   createFallenHeroRunDecisions,
   decodeActiveRun,
+  deriveActorStats,
   dropItem,
   encodeActiveRun,
   normalizeFallenHero,
@@ -2038,5 +2040,60 @@ describe('a multi-ability haunt stays savable', () => {
       floors: [placed.floor],
     };
     expect(decodeActiveRun(encodeActiveRun(withHaunt))).toEqual(withHaunt);
+  });
+});
+
+describe('a placed haunt carries a weave pool', () => {
+  it('derives the champion pool from its standing attributes and starts it full', () => {
+    const run = withArena(initialized([standing(1)]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    const actor = placed.actors.find((candidate) => candidate.actorId === population.actorId)!;
+    // The demo pack's formula is `maxWeave: { base: 4, wits: 1 }` and `standing()` records
+    // wits 10, so the pool is 14 -- derived, never the placeholder zero it used to be.
+    const balance = balanceEntry(pack());
+    const expected = deriveActorStats({
+      attributes: actor.attributes,
+      formulas: balance.formulas,
+      weaveRegenAmount: balance.weaveRegenAmount,
+      equipmentModifiers: [],
+      conditionModifiers: [],
+    }).maxWeave;
+    expect(expected).toBeGreaterThan(0);
+    expect(actor.maxWeave).toBe(expected);
+    expect(actor.weave).toBe(expected);
+  });
+
+  it('gives an echo the same derivation as a champion', () => {
+    const standings = [standing(1), standing(2)];
+    const selected = initialized(standings);
+    const forced = {
+      ...selected,
+      fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) =>
+        decision.rank === 2 ? { ...decision, retained: true, gateRoll: 1 } : decision,
+      ),
+    };
+    const run = withArena(forced, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const echo = placed.populations.find((candidate) => candidate.model === 'echo')!;
+    const actor = placed.actors.find((candidate) => candidate.actorId === echo.actorId)!;
+    // The echo's combat boundaries are weakened; its Weave is not -- nothing in the template
+    // describes an echo weave percentage, and inventing one is out of scope.
+    expect(actor.maxWeave).toBeGreaterThan(0);
+    expect(actor.weave).toBe(actor.maxWeave);
+  });
+
+  it('places a haunt with no attributes-driven pool without throwing', () => {
+    // A standing whose attributes are all zero derives `base` only. Pinned so the clamp below
+    // zero is never needed and a zero pool stays a legal, non-casting haunt.
+    const zeroed = standing(1, {
+      attributes: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
+    });
+    const run = withArena(initialized([zeroed]), 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    const actor = placed.actors.find((candidate) => candidate.actorId === population.actorId)!;
+    expect(actor.maxWeave).toBeGreaterThanOrEqual(0);
+    expect(actor.weave).toBe(actor.maxWeave);
   });
 });
