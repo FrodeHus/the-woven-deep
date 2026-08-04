@@ -262,20 +262,17 @@ describe('TradeScreen', () => {
         },
       ],
     };
-    const projection = withTrade(
-      { ...baseProjection, hero: heroWithPair } as GameplayProjection,
-      {
-        services: [
-          {
-            serviceId: 'merchant-service.enchant',
-            unitPrice: 40,
-            reEnchantUnitPrice: 83,
-            remainingUses: 3,
-            targetItemIds: ['item.hero.plain-ring', 'item.hero.woven-ring'],
-          },
-        ],
-      },
-    );
+    const projection = withTrade({ ...baseProjection, hero: heroWithPair } as GameplayProjection, {
+      services: [
+        {
+          serviceId: 'merchant-service.enchant',
+          unitPrice: 40,
+          reEnchantUnitPrice: 83,
+          remainingUses: 3,
+          targetItemIds: ['item.hero.plain-ring', 'item.hero.woven-ring'],
+        },
+      ],
+    });
     render(
       <TradeScreen snapshot={snapshotOf(projection)} onDispatch={vi.fn()} onClose={vi.fn()} />,
       { wrapper: Wrapper },
