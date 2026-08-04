@@ -15,6 +15,7 @@ entries:
       - { contentId: item.searing-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.clouded-potion, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.lamp-oil, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.pitch-torch, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.frost-shard-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.chain-spark-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.lockpick, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 2 }
