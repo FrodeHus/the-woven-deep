@@ -12,6 +12,34 @@ import { registerWsPlayRoute } from './routes/ws-play.js';
 import { decorateProfileId } from './auth/http-guards.js';
 import { ActiveRunRepository } from './db/active-run-repository.js';
 
+/**
+ * `permessage-deflate` for `/ws/play`. Off by default in `ws` because it costs CPU and memory, but
+ * a command reply on a dungeon floor is dominated by `floor.cells` -- thousands of near-identical
+ * cell objects -- which deflate collapses dramatically. Measured against the real content pack on a
+ * depth-1 reply (526,923 B raw), single message, no window carried between messages:
+ *
+ *   level 1 -> 49,328 B (10.7x, 0.43 ms)   level 3 -> 35,276 B (14.9x, 0.51 ms)
+ *   level 6 -> 31,674 B (16.6x, 2.39 ms)   level 9 -> 31,644 B (16.7x, 12.38 ms)
+ *
+ * Level 3 is the knee: 93% of level 6's ratio for 21% of its CPU, and level 9 buys nothing at all
+ * for 24x the cost of level 3. Compression happens on the event loop, so the per-message cost is
+ * paid against every other connection's latency -- the cheap-and-nearly-as-good point is the right
+ * one here, not the best ratio.
+ *
+ * Context takeover (retaining the zlib window across messages) is DISABLED in both directions. It
+ * would improve the ratio for successive similar replies, but costs a few hundred KB of retained
+ * window per connection per direction, and the measured win above is already intra-message -- the
+ * redundancy is inside a single reply, not between replies. Bounded memory per connection is worth
+ * more here than the remainder.
+ */
+const PER_MESSAGE_DEFLATE = {
+  zlibDeflateOptions: { level: 3 },
+  // Below roughly a MTU there is nothing to win, and deflate would still cost a zlib round trip.
+  threshold: 1024,
+  clientNoContextTakeover: true,
+  serverNoContextTakeover: true,
+} as const;
+
 function isReservedApiUrl(url: string): boolean {
   let pathname = new URL(url, 'http://localhost').pathname;
   try {
@@ -62,7 +90,7 @@ export function buildApp(input: {
     // build an `AuthBundle` without a database wired in here, so this stays additionally gated.
     if (input.database) {
       const repo = new ActiveRunRepository(input.database);
-      void app.register(fastifyWebsocket);
+      void app.register(fastifyWebsocket, { options: { perMessageDeflate: PER_MESSAGE_DEFLATE } });
       const database = input.database;
       void app.register((instance, _opts, done) => {
         registerWsPlayRoute(instance, { auth, pack: input.pack, repo, database });

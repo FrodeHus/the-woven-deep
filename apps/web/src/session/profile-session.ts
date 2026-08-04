@@ -10,11 +10,14 @@ import {
   type RunMode,
   type RunRecordRepository,
 } from '@woven-deep/engine';
-import type {
-  ClientMessage,
-  PlayerIntent,
-  ServerMessage,
-  ServerRunSnapshot,
+import {
+  FloorWireDecoder,
+  type ClientMessage,
+  type PlayerIntent,
+  type ServerMessage,
+  type ServerRunSnapshot,
+  type WireRunSnapshot,
+  type WireServerMessage,
 } from '@woven-deep/session-core';
 import {
   accumulateSightings,
@@ -65,7 +68,10 @@ function inMemorySessionStorage(): SessionStorageLike {
   };
 }
 
-function parseServerMessage(raw: unknown): ServerMessage | null {
+/** Parses a frame into its WIRE form -- snapshot-carrying variants still hold an encoded floor
+ * (`full` minus unknown cells, or a `patch`), which only a `FloorWireDecoder` can turn back into a
+ * whole `ServerRunSnapshot`. */
+function parseServerMessage(raw: unknown): WireServerMessage | null {
   try {
     const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (
@@ -73,7 +79,7 @@ function parseServerMessage(raw: unknown): ServerMessage | null {
       typeof parsed === 'object' &&
       typeof (parsed as { type?: unknown }).type === 'string'
     ) {
-      return parsed as ServerMessage;
+      return parsed as WireServerMessage;
     }
     return null;
   } catch {
@@ -210,8 +216,18 @@ export class ProfileSession implements RunSession {
   private readonly storage: SessionStorageLike;
   private readonly localStorage: SessionStorageLike;
   private readonly ws: WsClient;
+  /** Rebuilds the whole cell array from the wire's `full`/`patch` encoding. Per-session because its
+   * cache IS this connection's view of the floor; a reconnect brings a full sync, which overwrites
+   * it wholesale, so it needs no explicit reset. */
+  private readonly decoder = new FloorWireDecoder();
   private serverSnapshot: ServerRunSnapshot;
-  private commandSequence = 0;
+  /** Seeded from the server's `nextCommandSequence` (never 0 by default): a page reload builds a
+   * fresh session against a run whose `recentCommands` window still holds the previous session's
+   * ids, and restarting at 0 would re-mint them with different payloads -- rejected as
+   * `command_id_conflict` until the counter climbs clear. Only the server can state the floor
+   * exactly; see that field's doc comment. Within one session it simply keeps climbing, including
+   * across `WsClient`'s automatic reconnects (which reuse this object, counter intact). */
+  private commandSequence: number;
   private log: readonly LogLine[] = [];
   private nextLogId = 0;
   private lastEvents: readonly PublicEvent[];
@@ -244,7 +260,7 @@ export class ProfileSession implements RunSession {
   static adopt(
     input: ProfileSessionInput,
     ws: WsClient,
-    snapshot: ServerRunSnapshot,
+    snapshot: WireRunSnapshot,
   ): ProfileSession {
     return new ProfileSession(input, ws, snapshot);
   }
@@ -252,8 +268,16 @@ export class ProfileSession implements RunSession {
   private constructor(
     input: ProfileSessionInput,
     ws: WsClient,
-    initialSnapshot: ServerRunSnapshot,
+    initialWireSnapshot: WireRunSnapshot,
   ) {
+    // The first snapshot on a connection is always a full sync -- the server's encoder is created
+    // with the socket and has nothing to patch against -- so this cannot legitimately fail. A null
+    // here means the server sent a patch before any full floor, which no `ProfileSession` can
+    // recover from by waiting.
+    const initialSnapshot = this.decoder.decode(initialWireSnapshot);
+    if (initialSnapshot === null) {
+      throw new Error('first /ws/play snapshot was a floor patch, not a full sync');
+    }
     this.pack = input.pack;
     this.storage = input.storage ?? inMemorySessionStorage();
     this.localStorage = input.localStorage ?? inMemorySessionStorage();
@@ -264,6 +288,7 @@ export class ProfileSession implements RunSession {
     if (onboardingLoad.corrupted) this.markOnboardingCorrupted();
 
     this.serverSnapshot = initialSnapshot;
+    this.commandSequence = initialSnapshot.nextCommandSequence;
     this.lastEvents = initialSnapshot.lastEvents;
     // `houseOpen` is CLIENT-side UI state (screen visibility), only ever SEEDED from the server --
     // see `setHouseOpen`'s doc comment for why it can never simply mirror the server field
@@ -528,7 +553,14 @@ export class ProfileSession implements RunSession {
   }
 
   private handleMessage(raw: unknown): void {
-    const message = parseServerMessage(raw);
+    const wire = parseServerMessage(raw);
+    if (wire === null) return;
+    const message = this.decodeMessage(wire);
+    // A patch this session cannot apply: `decodeMessage` has already asked the server for a full
+    // floor, and the reply will arrive as an ordinary `state`. Dropping the message here rather
+    // than rendering a half-applied grid is the point -- but the in-flight flag must NOT be
+    // settled, or a held movement key would fire its queued repeat against a revision this session
+    // has not actually caught up to yet.
     if (message === null) return;
     switch (message.type) {
       case 'hello':
@@ -578,6 +610,24 @@ export class ProfileSession implements RunSession {
         this.notify();
         return;
     }
+  }
+
+  /**
+   * Turns a wire message into an ordinary one by rebuilding the floor's cell array. Returns null
+   * when a patch cannot be applied -- no cached floor, a different floor, or a `baseRevision` this
+   * session does not hold -- and asks the server for a full sync on the way out. That request costs
+   * one round trip and one whole-floor message, so it is a backstop rather than a routine path:
+   * single-command-in-flight plus the server's newest-wins eviction mean the client and the
+   * connection's encoder stay in lockstep in normal play.
+   */
+  private decodeMessage(wire: WireServerMessage): ServerMessage | null {
+    if (!('snapshot' in wire)) return wire;
+    const snapshot = this.decoder.decode(wire.snapshot);
+    if (snapshot === null) {
+      this.send({ type: 'resync' });
+      return null;
+    }
+    return { ...wire, snapshot };
   }
 
   private applyServerState(

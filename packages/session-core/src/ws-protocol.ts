@@ -15,7 +15,7 @@ import type { PlayerIntent } from './intents.js';
  * server's — never silently mismatched. Bump whenever a client/server-message shape changes in a
  * way older clients can't safely ignore.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /**
  * The run-authoritative snapshot the server produces after applying a command. Only redacted,
@@ -37,6 +37,18 @@ export interface ServerRunSnapshot {
    * light-out mechanic (0 illumination on the hero's own tile) the boss can be alive but invisible,
    * and re-deriving from visible actors would wrongly re-offer the Final Chamber choice mid-fight. */
   readonly bossActive: boolean;
+  /** The lowest command-sequence number the client may safely mint from: one past the highest
+   * profile-minted `commandId` still held in the run's `recentCommands` window (0 when the window
+   * holds none).
+   *
+   * Only the SERVER can state this. The reducer retains the last `RECENT_COMMAND_LIMIT` commands
+   * and rejects a known `commandId` that arrives with a different payload as
+   * `command_id_conflict`; a client that restarts its counter at 0 on every page load therefore
+   * walks straight back into ids the run still remembers, and every command in the overlap is
+   * refused until the counter climbs clear of the window. Deriving the floor client-side from
+   * `revision` cannot be made exact -- the counter also advances on rejected/invalid commands,
+   * which never advance `revision` -- so the authoritative window is read here instead. */
+  readonly nextCommandSequence: number;
 }
 
 /** Client → server messages. Every mutating message carries the client-minted `commandId` and the
@@ -74,6 +86,16 @@ export type ClientMessage =
       readonly type: 'accept-death';
       readonly commandId: string;
       readonly expectedRevision: number;
+    }
+  | {
+      /**
+       * Asks the server to re-send the whole floor rather than a patch against a cell array the
+       * client does not have. Sent when a `patch` cannot be applied -- no cached floor, a different
+       * floor, or a `baseRevision` the client does not hold. Carries no `commandId`/
+       * `expectedRevision`: it mutates nothing, so the idempotency envelope every other message
+       * needs would be meaningless here.
+       */
+      readonly type: 'resync';
     }
   | {
       /**
