@@ -10,4 +10,5 @@ export * from './floor-wire.js';
 export * from './auto-pickup.js';
 export * from './travel.js';
 export * from './explore.js';
+export * from './travel-batch.js';
 export * from './unlocks.js';
