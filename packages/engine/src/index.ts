@@ -66,6 +66,7 @@ export * from './scheduler.js';
 export * from './movement.js';
 export * from './actions.js';
 export * from './combat.js';
+export * from './action-dispatch.js';
 export * from './targeting.js';
 export * from './aoe-geometry.js';
 export * from './effects.js';

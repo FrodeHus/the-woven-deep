@@ -75,9 +75,7 @@ export function championCastAction(
       return entry?.kind === 'spell' && SUPPORTED_TARGETING.has(entry.targetingId) ? [entry] : [];
     })
     .filter((spell) => spell.weaveCost <= actor.weave)
-    .sort(
-      (left, right) => right.weaveCost - left.weaveCost || compareCodeUnits(left.id, right.id),
-    );
+    .sort((left, right) => right.weaveCost - left.weaveCost || compareCodeUnits(left.id, right.id));
 
   const perception = targetContext(input.state, actor, input.content);
   for (const group of ['target.actor', 'target.self'] as const) {

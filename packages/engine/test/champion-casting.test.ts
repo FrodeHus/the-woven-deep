@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { CompiledContentPack, SpellContentEntry } from '@woven-deep/content';
 import {
+  applyAction,
   championCastAction,
   chooseBehaviorAction,
   createDemoContentPack,
   createDemoRun,
+  decodeActiveRun,
+  encodeActiveRun,
   type ActiveRun,
   type ActorState,
 } from '../src/index.js';
@@ -23,7 +26,12 @@ const emberBolt: SpellContentEntry = {
   range: 5,
   actionCost: 100,
   weaveCost: 4,
-  effects: [{ effectId: 'effect.damage', parameters: { dice: { count: 1, sides: 4, bonus: 0 } } }],
+  effects: [
+    {
+      effectId: 'effect.damage',
+      parameters: { damageType: 'fire', dice: { count: 1, sides: 4, bonus: 0 } },
+    },
+  ],
 };
 
 /** Costlier than Ember and sorts LATER by id, so cost-ranking and alphabetical order disagree. */
@@ -353,5 +361,54 @@ describe('chooseBehaviorAction routes a haunt cast', () => {
       content: packWith(emberBolt),
     });
     expect(action.type).toBe('move');
+  });
+});
+
+describe('a haunt cast resolves through the shared resolver', () => {
+  it('spends weave, damages the hero, and survives a save round-trip', () => {
+    const content = packWith(emberBolt);
+    const state = runWithChampion({ abilityIds: ['spell.ember'], distance: 3 });
+    const hero = state.actors[0]!;
+    const action = championCastAction({ state, actorId: CHAMPION_ACTOR_ID, content })!;
+    const applied = applyAction({ state, action, content, eventId: 'event.cast' });
+
+    const caster = applied.state.actors.find(
+      (candidate) => candidate.actorId === CHAMPION_ACTOR_ID,
+    )!;
+    expect(caster.weave).toBe(20 - 4);
+    expect(applied.events).toContainEqual(
+      expect.objectContaining({ type: 'spell.cast', actorId: CHAMPION_ACTOR_ID }),
+    );
+    const struck = applied.state.actors.find((candidate) => candidate.actorId === hero.actorId)!;
+    expect(struck.health).toBeLessThan(hero.health);
+
+    // `runWithChampion` builds `actors` as [hero, champion] for easy indexing, but the save
+    // invariant (`validateOrderedIds`, mirroring the `sortByActorId` production placement uses)
+    // requires strictly increasing actorId order. 'actor.population...' sorts before 'hero.demo',
+    // so the encoder needs the same normalization a real placement already applies.
+    const forSave = {
+      ...applied.state,
+      actors: [...applied.state.actors].sort((left, right) =>
+        left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0,
+      ),
+    };
+    const encoded = encodeActiveRun(forSave);
+    expect(encodeActiveRun(decodeActiveRun(encoded, content))).toBe(encoded);
+  });
+
+  it('stops casting once the pool cannot pay', () => {
+    const content = packWith(emberBolt);
+    let state = runWithChampion({ abilityIds: ['spell.ember'], distance: 3, weave: 9 });
+    let casts = 0;
+    for (let turn = 0; turn < 5; turn += 1) {
+      const action = championCastAction({ state, actorId: CHAMPION_ACTOR_ID, content });
+      if (!action) break;
+      casts += 1;
+      state = applyAction({ state, action, content, eventId: `event.cast-${turn}` }).state;
+    }
+    // 9 Weave pays for two casts at 4 and leaves 1 -- not a third.
+    expect(casts).toBe(2);
+    const caster = state.actors.find((candidate) => candidate.actorId === CHAMPION_ACTOR_ID)!;
+    expect(caster.weave).toBe(1);
   });
 });
