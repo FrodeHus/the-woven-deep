@@ -28,6 +28,7 @@
 | File | Responsibility | Change |
 |---|---|---|
 | `packages/engine/src/champion.ts` | Normalizes a standing into a placed haunt and its actor | Modify: derive `maxWeave`/`weave` at actor construction (currently `0`) |
+| `packages/engine/src/behavior-targeting.ts` | Which hostile actor a non-player actor is acting against this turn | **Create** — extracted from `behavior.ts` so the cast decision and the melee/pathing branches can never disagree about the target |
 | `packages/engine/src/champion-casting.ts` | The cast decision: which spell, at whom, is it worth it | **Create** — keeps `behavior.ts` from growing a second large concern |
 | `packages/engine/src/behavior.ts` | Chooses a non-player actor's action each turn | Modify: call `championCastAction` after the adjacent-bump branch |
 | `packages/engine/src/event-projection.ts` | Projects `DomainEvent`s into hero-visible `PublicEvent`s | Modify: perception-gate `spell.cast` |
@@ -36,6 +37,8 @@
 | `packages/engine/test/event-projection.test.ts` | Existing projection suite | Modify: seen/unseen cast cases |
 
 `champion-casting.ts` is a new file rather than more lines in `behavior.ts` because the decision needs spell lookup, affordability, targeting validation, and the self-cast usefulness gate — a distinct responsibility from pathing and target selection, and `behavior.ts` is already 230 lines of dense branching.
+
+`behavior-targeting.ts` exists so both consumers select the same target. It is a third module rather than an export from `behavior.ts` because `behavior.ts` imports `champion-casting.ts` (Task 3) — exporting from `behavior.ts` would make that a cycle, which `npm run depcruise` gates on.
 
 ---
 
@@ -189,6 +192,8 @@ git commit -m "feat: give a placed haunt the weave pool its standing implies"
 ### Task 2: The cast decision
 
 **Files:**
+- Create: `packages/engine/src/behavior-targeting.ts`
+- Modify: `packages/engine/src/behavior.ts:14-16,136-162` (use the extracted helper)
 - Create: `packages/engine/src/champion-casting.ts`
 - Modify: `packages/engine/src/index.ts` (export `championCastAction`)
 - Test: `packages/engine/test/champion-casting.test.ts` (create)
@@ -551,7 +556,81 @@ cd packages/engine && npx vitest run test/champion-casting.test.ts
 
 Expected: FAIL at import — `championCastAction` is not exported.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 3a: Extract the shared target selection**
+
+The cast decision and the melee/pathing branches must never disagree about who the actor is acting against, so the selection moves to one place both call.
+
+Create `packages/engine/src/behavior-targeting.ts`:
+
+```ts
+import { type ActorState } from './actor-model.js';
+import type { ActiveRun, Point } from './model.js';
+import { relationshipBetween } from './reactions.js';
+
+/** Chebyshev (king-move) distance — the grid's own metric, so "adjacent" means all eight
+ * neighbours. */
+export function actorDistance(left: Point, right: Point): number {
+  return Math.max(Math.abs(left.x - right.x), Math.abs(left.y - right.y));
+}
+
+/**
+ * The hostile actor `actor` is acting against this turn: its locked goal target while that
+ * target is still alive, present, aware-of, and hostile; otherwise the nearest such actor, ties
+ * broken by actor id so the choice is stable across identical states.
+ *
+ * Extracted from `chooseBehaviorAction` so the melee branch, the pathing branch, and the cast
+ * decision (`champion-casting.ts`) cannot drift apart — a haunt that cast at one actor while
+ * walking toward another would be a bug no single-file test would catch.
+ */
+export function awareHostileTarget(
+  input: Readonly<{ state: ActiveRun; actor: ActorState }>,
+): ActorState | undefined {
+  const { state, actor } = input;
+  const isEligible = (candidate: ActorState): boolean =>
+    candidate.actorId !== actor.actorId &&
+    candidate.health > 0 &&
+    candidate.floorId === actor.floorId &&
+    actor.awareActorIds.includes(candidate.actorId) &&
+    relationshipBetween(state, actor.actorId, candidate.actorId) === 'hostile';
+  const savedGoal = actor.behaviorState.goal;
+  const goalTarget =
+    savedGoal?.type === 'actor'
+      ? state.actors.find(
+          (candidate) => candidate.actorId === savedGoal.targetActorId && isEligible(candidate),
+        )
+      : undefined;
+  if (goalTarget) return goalTarget;
+  return state.actors
+    .filter(isEligible)
+    .sort(
+      (left, right) =>
+        actorDistance(actor, left) - actorDistance(actor, right) ||
+        (left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0),
+    )[0];
+}
+```
+
+In `packages/engine/src/behavior.ts`, delete the local `distance` function and the
+`awareTargets`/`savedGoal`/`goalTarget`/`target` block (roughly lines 14-16 and 136-162), import
+the helpers, and replace the block with:
+
+```ts
+  const target = awareHostileTarget({ state: input.state, actor });
+```
+
+`savedGoal` is still read further down for the pathing destination, so keep
+`const savedGoal = actor.behaviorState.goal;` where the destination logic needs it. Every remaining
+`distance(` call becomes `actorDistance(`.
+
+- [ ] **Step 3b: Verify the extraction changed no behavior**
+
+```bash
+cd packages/engine && npx vitest run test/behavior.test.ts test/group-behavior.test.ts test/swarm-behavior.test.ts test/boss-behavior.test.ts
+```
+
+Expected: PASS with no edits to those files. If any fails, the extraction changed selection semantics — reconcile against the original block rather than adjusting the test.
+
+- [ ] **Step 3c: Implement the decision**
 
 Create `packages/engine/src/champion-casting.ts`:
 
@@ -559,9 +638,9 @@ Create `packages/engine/src/champion-casting.ts`:
 import type { CompiledContentPack, SpellContentEntry } from '@woven-deep/content';
 import type { CastAction } from './action-types.js';
 import { type ActorState } from './actor-model.js';
+import { actorDistance, awareHostileTarget } from './behavior-targeting.js';
 import { entryById } from './content-index.js';
 import type { ActiveRun, OpaqueId } from './model.js';
-import { relationshipBetween } from './reactions.js';
 import { compareCodeUnits } from './stable-json.js';
 import { targetContext } from './target-context.js';
 import { validateTarget } from './targeting.js';
@@ -570,13 +649,6 @@ import { validateTarget } from './targeting.js';
  * friendly-fire rules that this version deliberately does not have (see the design's non-goals),
  * so a recorded ability of any other kind is simply passed over. */
 const SUPPORTED_TARGETING = new Set(['target.actor', 'target.self']);
-
-function chebyshev(
-  left: Readonly<{ x: number; y: number }>,
-  right: Readonly<{ x: number; y: number }>,
-): number {
-  return Math.max(Math.abs(left.x - right.x), Math.abs(left.y - right.y));
-}
 
 /**
  * Would this self-targeted spell do anything? A haunt has one Weave pool and no way to earn it
@@ -629,21 +701,10 @@ export function championCastAction(
   if (population?.model !== 'champion' && population?.model !== 'echo') return null;
   if (population.abilityIds.length === 0) return null;
 
-  const target = input.state.actors
-    .filter(
-      (candidate) =>
-        candidate.actorId !== actor.actorId &&
-        candidate.health > 0 &&
-        candidate.floorId === actor.floorId &&
-        actor.awareActorIds.includes(candidate.actorId) &&
-        relationshipBetween(input.state, actor.actorId, candidate.actorId) === 'hostile',
-    )
-    .sort(
-      (left, right) =>
-        chebyshev(actor, left) - chebyshev(actor, right) ||
-        compareCodeUnits(left.actorId, right.actorId),
-    )[0];
-  if (!target || chebyshev(actor, target) <= 1) return null;
+  // The SAME selection the melee and pathing branches use, so a haunt can never cast at one
+  // actor while walking toward another.
+  const target = awareHostileTarget({ state: input.state, actor });
+  if (!target || actorDistance(actor, target) <= 1) return null;
 
   const spells = population.abilityIds
     .flatMap((spellId) => {
@@ -1071,4 +1132,4 @@ The body should state what shipped, that it needed no save-schema bump and why, 
 
 **If `validateTarget` rejects a case you expected to pass.** It gates on the *caster's* perception (`targetContext(state, actor, content)`), including illumination. A champion cannot cast at a hero standing in an unlit cell it cannot see. That is intended and matches the hero's own constraint; do not loosen it to make a test pass — fix the test's fixture lighting instead.
 
-**Do not reuse `behavior.ts`'s local `target`.** `championCastAction` re-derives its own. The duplication is deliberate: it keeps the decision a pure function testable without constructing a whole behavior turn, and both selections use the same comparator so they cannot disagree.
+**Target selection is shared, not duplicated.** Task 2 extracts `awareHostileTarget` into `behavior-targeting.ts` and both `behavior.ts` and `champion-casting.ts` call it. Do not re-implement the filter/sort in either caller: a haunt that cast at one actor while pathing toward another would be a bug no single-file test catches.
