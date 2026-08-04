@@ -1,4 +1,4 @@
-schemaVersion: 14
+schemaVersion: 15
 entries:
   # Merchant-catalog goods, not dungeon loot: none of these appear in a scatter, chest, or vault
   # table. Each is `identification.mode: instance` against its category pool, which the

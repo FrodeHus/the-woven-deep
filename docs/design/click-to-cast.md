@@ -31,7 +31,8 @@ Playable, `silhouetteGlyph: "Λ"`, its own `classTags`. A glass-cannon caster:
 - **Casts:** `startingSpellIds: [spell.ember-bolt]`. Its range-6 bolt is the compensating
   strength — it fights at range while martial classes close in.
 - **Weaveward kit** (its dedicated starting kit): a light loadout reinforcing the frailty — a
-  low-armor cloth wrap (new item, armor below leather), a weave-focus trinket (flavor/equip),
+  low-armor cloth wrap (new item, armor below leather), a weave-focus trinket (worn at the
+  neck for `modifiers: { weaveRegen: 1 }` — see issue #157),
   a lit pitch torch (still needs light), travel rations. Plus a second martial-lite kit is NOT
   added; the class ships with the Weaveward kit (and optionally one alt) so a Loomcaller is a
   caster by construction.

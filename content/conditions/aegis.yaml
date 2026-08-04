@@ -1,4 +1,4 @@
-schemaVersion: 14
+schemaVersion: 15
 entries:
   - kind: condition
     id: condition.aegis

@@ -139,6 +139,7 @@ const entries: readonly ContentEntry[] = [
     rarity: 'common',
     heirloomEligible: true,
     actionCost: 100,
+    modifiers: {},
     equipment: { slots: ['off-hand'], handedness: 'one-handed', reservedSlots: [] },
     combat: null,
     light: {

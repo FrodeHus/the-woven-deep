@@ -14,7 +14,7 @@ const compactSignatureSpell =
   '{kind: spell, id: spell.test-signature, name: Test signature, tags: [fire], targetingId: target.actor, range: 6, actionCost: 100, weaveCost: 3, effects: [{effectId: effect.damage, parameters: {damageType: fire, dice: {count: 1, sides: 6, bonus: 0}}, requiresLivingTarget: true}]}';
 
 function contentFile(...entries: readonly string[]): string {
-  return `schemaVersion: 14\nentries: [${entries.join(', ')}]\n`;
+  return `schemaVersion: 15\nentries: [${entries.join(', ')}]\n`;
 }
 
 async function fixture(files: Record<string, string>): Promise<string> {

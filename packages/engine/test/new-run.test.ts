@@ -473,6 +473,20 @@ describe('createNewRun records input', () => {
     // `potions`) are untouched, and no `items`, `populations`, `floors`, or other stream moved.
     // Expected content-authoring drift from growing an identification pool, not an engine
     // regression.
+    // Re-pinned again for issue #157 (dead and near-dead items ship as rewards) and content schema
+    // v15: every file's `schemaVersion` moves 14 -> 15, items gain the optional `modifiers` block,
+    // `item.weave-focus` trades its stopgap `combat.defense` for `modifiers: { weaveRegen: 1 }`,
+    // `item.champion-fallback-relic` gains an equipment block plus `modifiers: { search: 1 }`, and
+    // `loot-table.echo-spoils` gains two choices. None of that is reachable from `createNewRun`:
+    // the loomcaller kit places weave-focus by content ID (the instance records no stat), a
+    // definition's stat block is read only through `equipmentModifiers` at derive time, and
+    // echo-spoils is rolled on an Echo kill, never at creation -- `rolls` stays 2 there, so no
+    // stream shifts either way. Unlike the #145 re-pin directly above, this one moves NO stream:
+    // none of the touched items is `shuffled`, so `identification-pool.potions` is the same size it
+    // was and the `effects` cursor lands where #145 left it. Verified twice -- against the pre-#157
+    // tree before this branch merged main, and again against merged main afterwards -- by diffing
+    // the decoded run objects field-by-field: `contentHash` is the ONLY key that differs each time.
+    // Expected content-authoring drift, not an engine regression.
     // Re-pinned again for issue #149 (gold sinks): `content/items/deep-catalog.yaml` adds four
     // instance-identified items (deepsteel blade, warded hauberk, bulwark shield, warded lantern).
     // `allocateIdentificationMap` draws one `effects` roll per instance-identified item at run
@@ -487,9 +501,11 @@ describe('createNewRun records input', () => {
     // three-key delta was re-verified against an origin/main build in a scratch worktree, so this
     // digest carries both pool growths and nothing else.) Moved once more by clamping
     // `curse.cold-tether`/`curse.embermarked`'s out-of-range trigger durations, which touches
-    // `contentHash` only -- no curse trigger is rolled during run creation.
+    // `contentHash` only -- no curse trigger is rolled during run creation. Re-derived once more
+    // after merging #157/content v15; the same three-key delta (`contentHash`, `identification`,
+    // `rng.effects`) was re-verified against an origin/main build carrying v15.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'face87d54069a84dc0575005b1f273111fadab48b6c33ac494897e77df99c501',
+      '6160e19511ab7835428a96c51c6e08f346c4a4febaf7af47d6ba905fa786dd8e',
     );
   });
 
