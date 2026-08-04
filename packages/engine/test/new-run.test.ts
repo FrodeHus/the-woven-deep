@@ -461,8 +461,19 @@ describe('createNewRun records input', () => {
     // retuned across every band. None of those fields are read by `createNewRun` -- monsters spawn
     // on first DESCENT, not at creation, and the town seeds only NPC populations -- so the only
     // field that can differ is the embedded `contentHash`, exactly like the #154 re-pin above.
+    // Re-pinned again for issue #149 (gold sinks): `content/items/deep-catalog.yaml` adds four
+    // instance-identified items (deepsteel blade, warded hauberk, bulwark shield, warded lantern).
+    // `allocateIdentificationMap` draws one `effects` roll per instance-identified item at run
+    // creation, so four new pool members add four rolls and shift that stream from turn zero.
+    // Verified by dumping the decoded run field-by-field against the prior pin: exactly three keys
+    // differ -- `contentHash`, `identification` (gaining precisely those four appearance entries
+    // and losing none), and `rng.effects`. Every other key, including `items`, `populations`, and
+    // every other RNG stream (notably `merchant-stock`), is byte-identical; the new town/lampwright
+    // loot-table choices are all depth-banded at 8 or deeper, so `projectLootGraph` prunes them at
+    // the town's depth and the stock weights are unchanged at creation. Expected content-authoring
+    // drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '5b67e9ad287d91c1aa3c3f8afcaa9d80567a7124bd6572dc51e82c1d636c000a',
+      '27c324a3bd29573706d18d0f3b9cf3a5a408ad2098568b0a000217f1e8fee4d5',
     );
   });
 
