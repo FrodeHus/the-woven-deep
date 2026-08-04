@@ -1,8 +1,8 @@
 # Consistency review honorable mentions
 
 Issue #158. Six smaller findings from the 2026-07-31 internal consistency review, each one
-verified against the code before deciding whether it needed a change. Two of the six turned out
-to be wrong as written; one was accepted as intentional. Three produce changes.
+verified against the code before deciding whether it needed a change. Two of the six turned out to
+be wrong as written and two were already settled by design; only two produce changes.
 
 ## What the verification found
 
@@ -56,16 +56,25 @@ They stay. `price` is a required, positive field on every item, and the singleto
 sentinel would put the guard in two places and make the second one silent. The reason is
 documented instead.
 
-### 6. Curios dealer sells the potions identification is about — partly true, changing
+### 6. Curios dealer sells the potions identification is about — answered already, no change
+
+Two separate worries live in this bullet, and both are already settled.
 
 Merchant stock is projected through `projectItem`, so an unidentified potion on the counter shows
-its shuffled appearance, not its true name. Buying does not reveal what it is; the mystery
-survives the purchase. That part of the concern is already handled.
+its shuffled appearance, not its true name. Buying does not reveal what it is, so the 12g purchase
+does not delete the mystery at the point of sale.
 
-The real leak is the stock list. `loot-table.town-curios` offers exactly two potions —
-`crimson-potion` and `ashen-potion` — and both are healing. With four risky potions now in the
-same shuffled pool, the dealer's counter is a safe-list oracle: anything bought there is known to
-be harmless before it is drunk, which is the one thing identification is supposed to withhold.
+The stock list — `loot-table.town-curios` offering only the two healing potions — looks like a
+safe-list oracle, but it is a deliberate rule, not an oversight. Rule 5 of the potion-risk design
+(`2026-08-04-potion-risk-design.md`) reads: "The Curios dealer vouches for their stock. The new
+potions are found in the Deep, never sold in town. A shopper can therefore prove two of the six
+appearances safe by buying them — real, bounded information that costs gold and covers a third of
+the pool. The other four appearances stay a bet." `potion-risk.test.ts` enforces it against the
+three town tables.
+
+So the shop is meant to be the gold-for-certainty path, and the four risky appearances are meant to
+stay a gamble. Nothing changes here; deviating would mean amending an approved spec to solve a
+problem that spec had already reasoned about.
 
 ## The changes
 
@@ -86,11 +95,11 @@ Eating resets the ladder to zero along with the starving state — the same mome
 `nextStarvationAt` is cleared. A hero who keeps finding food never sees the steep end.
 
 Tuned to `starvationInterval: 250`, `starvationDamage: 1`, `starvationDamageIncrement: 1`,
-`starvationDamageMaximum: 6`. Ticks deal 1, 2, 3, 4, 5, 6, 6, … so a 30-health hero has taken 21
-damage after six ticks (1,500 turns past starving) and dies on the eighth (2,000 turns past).
-Ignoring food entirely kills at roughly turn 7,000 — half a full run — rather than never.
+`starvationDamageMaximum: 6`. Ticks deal 1, 2, 3, 4, 5, 6, 6, … so the default 20-health hero has taken 21
+damage after six ticks and dies there, 1,500 turns past starving. Ignoring food entirely kills at
+roughly turn 6,500 — under half an honest twenty-floor run — rather than never.
 
-This is a content schema change (three balance fields, one of them new-valued) and a save schema
+This is a content schema change (two new balance fields) and a save schema
 change (the tick counter has to survive a reload, or a save/resume would silently reset the
 ladder).
 
@@ -103,20 +112,9 @@ At 50, a 14,000-turn run keeps 220 of 500, a brisk 8,000-turn run keeps 340, and
 grind keeps nothing. Against a good run's other lines — 2,000 from depth, 250 per boss, 400–1,500
 for the ending — that is a spread worth playing for without letting the clock dominate the board.
 
-### C. The curios counter is a gamble again
-
-`loot-table.town-curios` gains `item.bitter-potion` at weight 2, in the base band with no
-`minDepth`, alongside `crimson-potion` at weight 3. Bitter is the common poison-and-sickened
-draught, so the dealer's potion shelf is roughly two-thirds helpful and one-third not, from the
-first visit. Since stock renders appearance-only, the player cannot tell which flask is which
-before paying — which is the point.
-
-The `merchant-service.identify` service the curios faction already offers at neutral and trusted
-remains the way to buy certainty, and now it has something to be certain about.
-
 ## Schema impact
 
-**Content schema v15 → v16.** Three fields on the balance entry:
+**Content schema v16 → v17.** Two new fields on the balance entry:
 
 - `starvationDamageIncrement` — non-negative safe integer, added per successive starvation tick.
 - `starvationDamageMaximum` — positive safe integer, the per-tick cap. Refined to be greater than
@@ -124,24 +122,24 @@ remains the way to buy certainty, and now it has something to be certain about.
 - `starvationDamage` keeps its meaning as the first tick's damage.
 
 Setting `starvationDamageIncrement: 0` reproduces the old flat behavior exactly, so the fields are
-a strict generalization. Migration notes go in `docs/server-admin/content-configuration.md`.
+a strict generalization. (Authored against v16 while #153 held that number; renumbered to v17 when
+that PR merged first.) Migration notes go in `docs/server-admin/content-configuration.md`.
 
-**Save schema v17 → v18.** `SurvivalState` gains `starvationTicks: number` — a non-negative safe
-integer counting consecutive starvation ticks since the hero last stopped starving. The v17 schema
-is preserved as `legacyActiveRunV17Schema` and one ordered migration defaults the field to 0,
+**Save schema v18 → v19.** `SurvivalState` gains `starvationTicks: number` — a non-negative safe
+integer counting consecutive starvation ticks since the hero last stopped starving. The v18 schema
+is preserved as `legacyActiveRunV18Schema` and one ordered migration defaults the field to 0,
 which is correct for any save: a restored run that is still starving simply restarts its ladder,
-which is a mercy, not a corruption.
+which is a mercy, not a corruption. (Authored as v18 and renumbered to v19 after #232 took v18.)
 
 ## Determinism and hashes
 
 None of these changes draw randomness. The starvation ladder is arithmetic over existing state,
 the score line is arithmetic over existing metrics, and the stat modifier is a table lookup.
 
-The curios stock change *does* move the merchant RNG stream: adding a weighted choice changes what
-`loot-table.town-curios` draws for the same state. The merchant demo hash will drift, and any demo
-that walks far enough to starve or that scores a run will drift from the balance changes. Each
-drift gets its transcript delta inspected and explained in the commit before the hash is re-pinned —
-never a blind re-pin.
+No loot table changes, so no merchant draw moves. What does drift is every hash that covers the
+compiled pack (`contentHash`) or the save envelope (`schemaVersion`), plus any demo that walks far
+enough to starve or that scores a run. Each drift gets its transcript delta inspected and explained
+in the commit before the hash is re-pinned — never a blind re-pin.
 
 ## Testing
 
@@ -155,13 +153,12 @@ RED-first for each behavior:
   migrates with `starvationTicks: 0`.
 - Hungry modifier: a hero at the hungry stage derives `search` one lower than at sated.
 - Score: the turn-efficiency line against representative turn counts, including the zero floor.
-- Curios stock: the compiled table offers a risky potion in the base band.
 
 The engine's browser-boundary and content-validation gates run unchanged.
 
 ## Out of scope
 
-The three findings recorded above as "no change" (ration stack weight, `ashen-warden` budgeting,
-artifact ring prices) are closed by this document, not by code. Anything that would rebalance
+The four findings recorded above as "no change" (ration stack weight, `ashen-warden` budgeting,
+artifact ring prices, curios potion stock) are closed by this document, not by code. Anything that would rebalance
 hunger *pacing* — reserve size, ration restore amount, thresholds — is deliberately untouched:
 the review asked whether hunger has teeth, not whether it arrives at the right time.

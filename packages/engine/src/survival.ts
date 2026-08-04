@@ -127,6 +127,7 @@ export function restoreHunger(
       hungerReserve: reserve,
       hungerStage: stage,
       nextStarvationAt: stage === 'starving' ? input.survival.nextStarvationAt : null,
+      starvationTicks: stage === 'starving' ? input.survival.starvationTicks : 0,
     },
     events: [
       { type: 'hunger.restored', eventId: input.eventId, actorId: input.actorId, amount, reserve },
@@ -246,6 +247,9 @@ export function advanceSurvival(
   }
 
   let nextStarvationAt = input.state.survival.nextStarvationAt;
+  // The ladder is per-starvation-spell, not per-run: stepping back off starving -- by eating, or
+  // by any other restoration -- returns the next tick to `starvationDamage`.
+  let starvationTicks = stage === 'starving' ? input.state.survival.starvationTicks : 0;
   if (stage !== 'starving') nextStarvationAt = null;
   else if (previousStage !== 'starving' || nextStarvationAt === null) {
     const timeToStarving = Math.max(0, previousReserve - balance.hungerThresholds.starving);
@@ -259,7 +263,17 @@ export function advanceSurvival(
     nextStarvationAt <= input.state.worldTime &&
     hero.health > 0
   ) {
-    const health = Math.max(0, hero.health - balance.starvationDamage);
+    // Each successive tick bites harder, so a hero who ignores food entirely dies inside a run
+    // rather than outliving the descent. `starvationDamageIncrement: 0` reproduces a flat tick.
+    starvationTicks = safeInteger('starvation ticks', starvationTicks + 1);
+    const damage = Math.min(
+      safeInteger(
+        'starvation damage',
+        balance.starvationDamage + (starvationTicks - 1) * balance.starvationDamageIncrement,
+      ),
+      balance.starvationDamageMaximum,
+    );
+    const health = Math.max(0, hero.health - damage);
     events.push({
       type: 'actor.damaged',
       eventId: input.eventId,
@@ -371,6 +385,7 @@ export function advanceSurvival(
     hungerReserve: reserve,
     hungerStage: stage,
     nextStarvationAt,
+    starvationTicks,
     emittedHungerWarnings: [...emittedStages],
     emittedFuelWarnings: fuel.emittedWarnings,
   };

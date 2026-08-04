@@ -399,6 +399,7 @@ export function createNewRun(
       hungerReserve: balance.hungerMaximum,
       hungerStage: 'sated',
       nextStarvationAt: null,
+      starvationTicks: 0,
       emittedHungerWarnings: [],
       emittedFuelWarnings: [],
     },

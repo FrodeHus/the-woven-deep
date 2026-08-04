@@ -202,7 +202,7 @@ describe('bundled content', () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
-    expect(pack.schemaVersion).toBe(16);
+    expect(pack.schemaVersion).toBe(17);
     const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement',
@@ -222,7 +222,7 @@ describe('bundled content', () => {
         discoveryCoefficient: 25,
         completionBonus: { died: 0, refused: 400, 'became-heart': 800, 'broke-cycle': 1500 },
         turnEfficiencyBudget: 500,
-        turnEfficiencyDecayInterval: 200,
+        turnEfficiencyDecayInterval: 50,
       },
       pointBuy: {
         budget: 30,

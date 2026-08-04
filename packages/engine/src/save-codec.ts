@@ -19,6 +19,7 @@ import {
   legacyActiveRunV15Schema,
   legacyActiveRunV16Schema,
   legacyActiveRunV17Schema,
+  legacyActiveRunV18Schema,
   emptyLegacyRunMetricsV9,
   validateActiveRun,
 } from './save-schema.js';
@@ -260,11 +261,22 @@ function migrateV17ToV18(input: unknown): unknown {
 }
 
 /**
+ * The starvation ladder needs to know how many consecutive ticks a hero has taken. No save written
+ * before it has that count, and zero is both the honest default and the forgiving one: a resumed
+ * run that is still starving restarts its ladder at the first tick's damage rather than resuming
+ * mid-climb.
+ */
+function migrateV18ToV19(input: unknown): unknown {
+  const v18 = legacyActiveRunV18Schema.parse(input);
+  return { ...v18, schemaVersion: 19, survival: { ...v18.survival, starvationTicks: 0 } };
+}
+
+/**
  * Every supported legacy save version, oldest first, and the ordered v(N)->v(N+1) transforms that
  * carry one forward. `ORDERED_MIGRATIONS[i]` migrates `LEGACY_SCHEMA_VERSIONS[i]` to the next
  * version, so a save enters the chain at its own version and runs every step above it.
  */
-const LEGACY_SCHEMA_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17] as const;
+const LEGACY_SCHEMA_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
 type LegacySchemaVersion = (typeof LEGACY_SCHEMA_VERSIONS)[number];
 
 const ORDERED_MIGRATIONS: readonly ((input: unknown) => unknown)[] = [
@@ -282,6 +294,7 @@ const ORDERED_MIGRATIONS: readonly ((input: unknown) => unknown)[] = [
   migrateV15ToV16,
   migrateV16ToV17,
   migrateV17ToV18,
+  migrateV18ToV19,
 ];
 
 function isLegacySchemaVersion(value: unknown): value is LegacySchemaVersion {

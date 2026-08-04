@@ -38,6 +38,8 @@ export const balanceEntry = z
     }),
     starvationInterval: safePositive,
     starvationDamage: safePositive,
+    starvationDamageIncrement: safeNonNegative,
+    starvationDamageMaximum: safePositive,
     recoveryInterval: safePositive,
     recoveryAmount: safeNonNegative,
     weaveRegenAmount: safeNonNegative,
@@ -146,6 +148,13 @@ export const balanceEntry = z
         code: 'custom',
         path: ['hungerThresholds'],
         message: 'hunger thresholds must satisfy starving <= weak <= hungry < hungerMaximum',
+      });
+    }
+    if (entry.starvationDamageMaximum < entry.starvationDamage) {
+      context.addIssue({
+        code: 'custom',
+        path: ['starvationDamageMaximum'],
+        message: 'starvationDamageMaximum must be at least starvationDamage',
       });
     }
     const costs = entry.pointBuy.costs;
