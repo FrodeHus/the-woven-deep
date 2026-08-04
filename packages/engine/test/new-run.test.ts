@@ -461,8 +461,20 @@ describe('createNewRun records input', () => {
     // retuned across every band. None of those fields are read by `createNewRun` -- monsters spawn
     // on first DESCENT, not at creation, and the town seeds only NPC populations -- so the only
     // field that can differ is the embedded `contentHash`, exactly like the #154 re-pin above.
+    // Re-pinned again for issue #145 (potion risk): four new `shuffled` potions joined
+    // `identification-pool.potions`. Unlike every content re-pin above, this one DOES move an RNG
+    // stream by design -- `allocateIdentificationMap` runs during run creation, and a larger pool
+    // means a longer name shuffle plus one extra visual roll per new item, so the shared `effects`
+    // cursor advances further and every pool sorted after `potions` (rings, shields, weapons) draws
+    // different names. Verified by diffing the decoded run objects field-by-field against the prior
+    // pin: only `contentHash`, `identification.appearanceByContentId`, and `rng.effects` differ --
+    // the appearance delta is exactly the four added entries plus re-rolled names in the potions
+    // pool and the three pools that follow it, while `armor`/`light-sources` (sorted before
+    // `potions`) are untouched, and no `items`, `populations`, `floors`, or other stream moved.
+    // Expected content-authoring drift from growing an identification pool, not an engine
+    // regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '5b67e9ad287d91c1aa3c3f8afcaa9d80567a7124bd6572dc51e82c1d636c000a',
+      'd528cc24ebd084971e5de26ef68561b2b232f62763b862fdec9b11cc1d00158b',
     );
   });
 

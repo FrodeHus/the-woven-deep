@@ -1,0 +1,26 @@
+schemaVersion: 14
+entries:
+  - kind: item
+    id: item.bitter-potion
+    name: Bitter draught
+    glyph: "!"
+    color: "#7c9a3e"
+    description: A cloudy green draught that goes down like spoiled water and keeps working long after the last swallow.
+    lore: "Nobody brews this. It gathers in bottles left too long in the Deep, and the Deep is not careful about what it leaves behind."
+    tags: [poison, identification, potion]
+    minDepth: 1
+    maxDepth: 20
+    category: potion
+    stackLimit: 4
+    price: 10
+    rarity: common
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    artifact: null
+    identification: { mode: shuffled, poolId: identification-pool.potions }
+    effects:
+      - { effectId: effect.damage, parameters: { damageType: poison, dice: { count: 1, sides: 4, bonus: 0 } }, requiresLivingTarget: true }
+      - { effectId: effect.condition.apply, parameters: { conditionId: condition.sickened }, requiresLivingTarget: true }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }
