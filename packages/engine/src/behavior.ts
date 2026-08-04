@@ -1,6 +1,7 @@
 import type { CompiledContentPack } from '@woven-deep/content';
 import { actionCostFor, balanceEntry, type GameAction } from './actions.js';
 import { actorById, type ActorState } from './actor-model.js';
+import { actorDistance, awareHostileTarget } from './behavior-targeting.js';
 import { entryById } from './content-index.js';
 import { featureTiles } from './features.js';
 import { MERCHANT_BEHAVIOR_ID, merchantBehaviorAction } from './merchant-behavior.js';
@@ -8,12 +9,7 @@ import { findPath, selectPathStep } from './pathfinding.js';
 import { movementBlockReason } from './terrain.js';
 import type { ActiveRun, OpaqueId, Point } from './model.js';
 import type { ActorGoal } from './population-model.js';
-import { relationshipBetween } from './reactions.js';
 import { swarmSpawnAction } from './swarm-behavior.js';
-
-function distance(left: Point, right: Point): number {
-  return Math.max(Math.abs(left.x - right.x), Math.abs(left.y - right.y));
-}
 
 export function selectPatrolGoal(
   input: Readonly<{
@@ -133,34 +129,9 @@ export function chooseBehaviorAction(
     }
     return { type: 'wait', actorId: actor.actorId, cost: actionCostFor(rules, 'action.wait') };
   }
-  const awareTargets = input.state.actors
-    .filter(
-      (candidate) =>
-        candidate.actorId !== actor.actorId &&
-        candidate.health > 0 &&
-        candidate.floorId === actor.floorId &&
-        actor.awareActorIds.includes(candidate.actorId) &&
-        relationshipBetween(input.state, actor.actorId, candidate.actorId) === 'hostile',
-    )
-    .sort(
-      (left, right) =>
-        distance(actor, left) - distance(actor, right) ||
-        (left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0),
-    );
   const savedGoal = actor.behaviorState.goal;
-  const goalTarget =
-    savedGoal?.type === 'actor'
-      ? input.state.actors.find(
-          (candidate) =>
-            candidate.actorId === savedGoal.targetActorId &&
-            candidate.health > 0 &&
-            candidate.floorId === actor.floorId &&
-            actor.awareActorIds.includes(candidate.actorId) &&
-            relationshipBetween(input.state, actor.actorId, candidate.actorId) === 'hostile',
-        )
-      : undefined;
-  const target = goalTarget ?? awareTargets[0];
-  if (target && distance(actor, target) === 1) {
+  const target = awareHostileTarget({ state: input.state, actor });
+  if (target && actorDistance(actor, target) === 1) {
     return {
       type: 'bump-attack',
       actorId: actor.actorId,

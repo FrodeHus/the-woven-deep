@@ -25,6 +25,7 @@ export * from './merchant-model.js';
 export * from './merchant-stock.js';
 export * from './merchant-lifecycle.js';
 export * from './merchant-behavior.js';
+export { championCastAction } from './champion-casting.js';
 export * from './commerce.js';
 export * from './trade.js';
 export * from './dialogue.js';
