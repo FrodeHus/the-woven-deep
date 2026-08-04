@@ -1,4 +1,7 @@
+import { availableParallelism } from 'node:os';
 import { defineConfig } from 'vitest/config';
+
+const cpuCount = availableParallelism();
 
 export default defineConfig({
   test: {
@@ -7,17 +10,15 @@ export default defineConfig({
     // well above the 5s default; these limits keep them from false-failing.
     testTimeout: 60_000,
     hookTimeout: 60_000,
-    // A single long CPU-bound test starves Vitest's worker-RPC heartbeat when several forks
-    // contend for a shared 2-core runner, surfacing as "Timeout calling onTaskUpdate". One
-    // fork keeps a single reporter channel that always services the heartbeat.
-    //
     // The `*cli.test.ts` suites (packages/engine/package.json's "test" script runs them as a
     // second, separate `vitest run` invocation) each spawn a subprocess that recompiles
-    // content and replays a full demo — a CPU-bound tail that, packed into the same single
-    // fork as the rest of the 133-file suite, still starves the heartbeat on a 2-core CI
-    // runner even with singleFork. Splitting them into their own vitest process gives that
-    // tail a fresh fork and heartbeat channel. Keep singleFork in both processes.
+    // content and replays a full demo. Keeping that CPU-bound tail in its own vitest process
+    // stops it from monopolising the forks the rest of the suite needs.
+    //
+    // Forks stay capped below the core count: a long synchronous CPU-bound test starves
+    // Vitest's worker-RPC heartbeat when every core is saturated, surfacing as "Timeout
+    // calling onTaskUpdate". Leaving a core free keeps the reporter channel serviced.
     pool: 'forks',
-    poolOptions: { forks: { singleFork: true } },
+    poolOptions: { forks: { maxForks: Math.max(1, cpuCount - 1), minForks: 1 } },
   },
 });
