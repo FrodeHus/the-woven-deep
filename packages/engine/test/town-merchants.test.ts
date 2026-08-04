@@ -544,7 +544,10 @@ describe('service pricing pressure', () => {
         hero: { ...base.hero, currency: 10_000 },
         restockedMilestones: [...milestones],
       });
-      const projected = projectGameplayState({ state: openTrade(state, merchant.actorId), content: pack });
+      const projected = projectGameplayState({
+        state: openTrade(state, merchant.actorId),
+        content: pack,
+      });
       return projected.trade!.services.find((service) => service.serviceId === SERVICE_ID)!
         .unitPrice;
     };
