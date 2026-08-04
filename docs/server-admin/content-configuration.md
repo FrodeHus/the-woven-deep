@@ -123,7 +123,7 @@ A pack contains exactly one `balance` entry. `startingCurrency` is a non-negativ
 | `hungerThresholds` | object | Yes | Remaining-reserve boundaries satisfying `starving <= weak <= hungry < hungerMaximum`. A stage begins when reserve reaches or falls below its boundary. |
 | `starvationInterval` | positive safe integer | Yes | Time between starvation damage events. |
 | `starvationDamage` | positive safe integer | Yes | Damage per starvation event. |
-| `recoveryInterval` | positive safe integer | Yes | World-time interval between natural recovery attempts. |
+| `recoveryInterval` | positive safe integer | Yes | World-time interval between natural recovery attempts. A hero at baseline speed (`readinessThreshold`) spends one world-time unit per action, so this doubles as a turn count: `50` means one recovery tick per 50 turns of walking. |
 | `recoveryAmount` | non-negative safe integer | Yes | Base health restored at each recovery interval before hunger scaling. Zero disables natural recovery. |
 | `weaveRegenAmount` | non-negative safe integer | Yes | Weave restored at each recovery interval, clamped to the hero's derived `maxWeave`. Zero disables passive Weave regeneration. |
 | `restMaximumDuration` | positive safe integer | Yes | Hard upper bound, in world-time units, for a single rest command. Player requests may choose a shorter duration but cannot exceed this value. |
@@ -237,9 +237,9 @@ entries:
     hungerThresholds: { hungry: 1500, weak: 500, starving: 0 }
     starvationInterval: 500
     starvationDamage: 1
-    recoveryInterval: 500
-    recoveryAmount: 10
-    weaveRegenAmount: 2
+    recoveryInterval: 50
+    recoveryAmount: 2
+    weaveRegenAmount: 1
     restMaximumDuration: 5000
     recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }
     hungerStageModifiers:

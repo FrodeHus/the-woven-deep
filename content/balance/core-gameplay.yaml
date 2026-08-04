@@ -17,9 +17,9 @@ entries:
     hungerThresholds: { hungry: 1500, weak: 500, starving: 0 }
     starvationInterval: 500
     starvationDamage: 1
-    recoveryInterval: 500
-    recoveryAmount: 10
-    weaveRegenAmount: 2
+    recoveryInterval: 50
+    recoveryAmount: 2
+    weaveRegenAmount: 1
     restMaximumDuration: 5000
     recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }
     hungerStageModifiers:

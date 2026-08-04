@@ -536,8 +536,17 @@ describe('createNewRun records input', () => {
     // `collectedFragmentIds` removed and `schemaVersion` forced back to 17 reproduces the
     // preceding v16-content digest (`1b405347...`) exactly, so the delta is those two keys and
     // nothing else -- no RNG stream, no placement, no content hash moved.
+    // Re-pinned again for the out-of-danger recovery retune: `recoveryInterval` 500 -> 50,
+    // `recoveryAmount` 10 -> 2, `weaveRegenAmount` 2 -> 1. None of the three is reachable from
+    // `createNewRun` -- recovery accrues in `advanceSurvival` once the clock moves, and
+    // `weaveRegenAmount` only feeds the derived `weaveRegen` stat, which no actor or hero record
+    // stores. Verified by compiling the pack twice (this tree, and a scratch copy with the three
+    // preceding values restored), creating a run from each, and diffing the decoded objects
+    // key-by-key: `contentHash` is the ONLY key that differs -- every RNG stream, `items`,
+    // `identification`, `populations`, and `floors` are byte-identical. Expected content-authoring
+    // drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'a66f456609ee6ea088585276515d5fc3654350aaa3bf6563d6eda4da36621f91',
+      '759b141e9599fe7a13514e15b7015e42c85642f3d68c574934567cc907f0723c',
     );
   });
 
