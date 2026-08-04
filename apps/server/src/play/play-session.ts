@@ -29,8 +29,11 @@ import {
   dispatchCommand,
   dispatchIntent,
   evaluateUnlocks,
+  runTravelBatch,
   type PlayerIntent,
   type ServerRunSnapshot,
+  type TravelBatchRequest,
+  type TravelBatchResult,
 } from '@woven-deep/session-core';
 import type { ActiveRunRepository } from '../db/active-run-repository.js';
 import type { ServerRunRecordRepository } from '../db/hall-repository.js';
@@ -98,6 +101,42 @@ export const CONSEQUENTIAL_EVENT_TYPES: ReadonlySet<string> = new Set<string>([
 /** The `ServerRunSnapshot` shape now lives in `@woven-deep/session-core` (shared with
  * `apps/web`) -- re-exported here so existing local importers keep working unchanged. */
 export type { ServerRunSnapshot };
+
+/** Matches a command id minted by `ProfileSession.nextCommandId` (`command.profile-` + a
+ * zero-padded counter), capturing the counter. Deliberately anchored and digits-only so nothing
+ * else in the retained window -- the `command.profile-start-N` ids of the chargen handshake, or a
+ * guest-minted `command.guest-...` id in a blob that somehow crossed over -- can be read as one. */
+const PROFILE_COMMAND_ID_PATTERN = /^command\.profile-(\d+)$/;
+
+/**
+ * One past the highest profile-minted command sequence still held in `recentCommands` -- the floor
+ * a reconnecting client must start its counter at so no freshly-minted id collides with one the
+ * reducer still remembers (see `ServerRunSnapshot.nextCommandSequence` for the full rationale).
+ * Returns 0 for a run whose window holds no profile-minted ids at all (a brand-new run, or one
+ * whose window has rolled over entirely to other id shapes).
+ */
+export function nextCommandSequenceFor(run: ActiveRun): number {
+  let highest = -1;
+  for (const entry of run.recentCommands) {
+    const match = PROFILE_COMMAND_ID_PATTERN.exec(entry.command.commandId);
+    if (match === null) continue;
+    const sequence = Number(match[1]);
+    if (Number.isSafeInteger(sequence) && sequence > highest) highest = sequence;
+  }
+  return highest + 1;
+}
+
+/** What one batched travel walk produced: a snapshot per applied step, why it ended, and the
+ * offered-item record grown by it. `reason: null` means only the batch cap was reached, so the
+ * walk is still viable and the client should ask for the next batch. */
+export interface TravelApplication {
+  readonly snapshots: readonly ServerRunSnapshot[];
+  /** Steps the walk actually APPLIED. Not `snapshots.length`: a walk with nothing to do still
+   * carries one snapshot so the client has something to settle against, having applied nothing. */
+  readonly stepsTaken: number;
+  readonly reason: TravelBatchResult['reason'];
+  readonly offeredItemIds: readonly string[];
+}
 
 export type ApplyOutcome =
   | { readonly kind: 'state'; readonly snapshot: ServerRunSnapshot }
@@ -315,6 +354,78 @@ export class ServerPlaySession {
     }
     // outcome.kind === 'command'
     return this.applyResolution(outcome.resolution, input.intent.type === 'move');
+  }
+
+  /**
+   * Walks a batched travel intent, applying up to `TRAVEL_BATCH_CAP` steps.
+   *
+   * Every step goes through {@link applyIntent}, so floor transitions, Wanderer checkpoints, the
+   * persistence cadence and finalize-on-conclusion all behave exactly as they do for a single
+   * dispatched move. The only thing batching removes is the round trip between steps.
+   *
+   * Returns one snapshot per applied step — including the snapshot of a step that ENDED the batch —
+   * so the client can render each turn in order rather than watching every other actor jump forward
+   * at once.
+   */
+  applyTravel(
+    input: Readonly<{
+      commandId: string;
+      expectedRevision: number;
+      request: TravelBatchRequest;
+    }>,
+  ): TravelApplication {
+    if (this.isFinalized()) {
+      return { snapshots: [this.snapshot()], stepsTaken: 0, reason: 'blocked', offeredItemIds: [] };
+    }
+
+    const snapshots: ServerRunSnapshot[] = [];
+    // Set when a step came back as anything other than a plain `state`. A rejection is a genuine
+    // "the way is blocked"; a decision-required is not an error at all -- the modal the snapshot
+    // opens explains itself, and the client suppresses travel while one is up -- so it ends the
+    // walk silently rather than logging a stop that would read as a fault.
+    let interrupted: 'rejected' | 'decision-required' | null = null;
+
+    const result = runTravelBatch({
+      run: this.run,
+      pack: this.pack,
+      request: input.request,
+      apply: (intent, index) => {
+        const outcome = this.applyIntent({
+          // Per-step ids derived from the batch's own, so the reducer's existing `recentCommands`
+          // dedup works unchanged and a replayed batch is idempotent step-for-step. The separator
+          // must stay within the save schema's id pattern (`[a-z0-9._:-]`) -- a `/` is rejected on
+          // persist. `nextCommandSequenceFor`'s pattern is anchored and digits-only, so these
+          // suffixed ids are ignored by it and the command-sequence seeding is unaffected.
+          commandId: `${input.commandId}:${index}`,
+          // Only the FIRST step is checked against what the client observed; the rest are
+          // sequential by construction and must follow the run this batch is building.
+          expectedRevision: index === 0 ? input.expectedRevision : this.run.revision,
+          intent,
+        });
+        snapshots.push(outcome.snapshot);
+        if (outcome.kind !== 'state') {
+          interrupted = outcome.kind;
+          return null;
+        }
+        return { run: this.run, events: this.lastEvents };
+      },
+    });
+
+    // `snapshots` is empty when the walk had nothing to do at all (an already-explored floor, an
+    // empty plan). The client still needs a snapshot to settle against.
+    if (snapshots.length === 0) snapshots.push(this.snapshot());
+
+    return {
+      snapshots,
+      stepsTaken: result.steps.length,
+      reason:
+        interrupted === 'decision-required'
+          ? 'blocked'
+          : interrupted
+            ? 'action-invalid'
+            : result.reason,
+      offeredItemIds: result.offeredItemIds,
+    };
   }
 
   /** Applies a raw engine command (the decision / final-chamber paths that bypass `buildIntent`). */
@@ -589,6 +700,7 @@ export class ServerPlaySession {
       houseOpen: this.houseOpen,
       heroClassTags: this.run.hero.classTags,
       bossActive: isHeartBossActive(this.run),
+      nextCommandSequence: nextCommandSequenceFor(this.run),
     };
   }
 }

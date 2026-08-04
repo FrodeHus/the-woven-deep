@@ -10,11 +10,16 @@ import {
   type RunMode,
   type RunRecordRepository,
 } from '@woven-deep/engine';
-import type {
-  ClientMessage,
-  PlayerIntent,
-  ServerMessage,
-  ServerRunSnapshot,
+import {
+  FloorWireDecoder,
+  type ClientMessage,
+  type StopReason,
+  type TravelBatchRequest,
+  type PlayerIntent,
+  type ServerMessage,
+  type ServerRunSnapshot,
+  type WireRunSnapshot,
+  type WireServerMessage,
 } from '@woven-deep/session-core';
 import {
   accumulateSightings,
@@ -65,7 +70,10 @@ function inMemorySessionStorage(): SessionStorageLike {
   };
 }
 
-function parseServerMessage(raw: unknown): ServerMessage | null {
+/** Parses a frame into its WIRE form -- snapshot-carrying variants still hold an encoded floor
+ * (`full` minus unknown cells, or a `patch`), which only a `FloorWireDecoder` can turn back into a
+ * whole `ServerRunSnapshot`. */
+function parseServerMessage(raw: unknown): WireServerMessage | null {
   try {
     const parsed: unknown = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if (
@@ -73,7 +81,7 @@ function parseServerMessage(raw: unknown): ServerMessage | null {
       typeof parsed === 'object' &&
       typeof (parsed as { type?: unknown }).type === 'string'
     ) {
-      return parsed as ServerMessage;
+      return parsed as WireServerMessage;
     }
     return null;
   } catch {
@@ -123,6 +131,14 @@ function computePendingFinalChamberChoice(
   return { canBreakCycle };
 }
 
+/** How a batched auto-walk finished, once every step it applied has been rendered. `reason` is
+ * always terminal here -- `ProfileSession` swallows the `null` (cap-reached) case by asking for the
+ * next batch itself, so callers only ever see a walk that is genuinely over. */
+export interface TravelWalkEnd {
+  readonly reason: StopReason | 'arrived' | 'blocked';
+  readonly offeredItemIds: readonly string[];
+}
+
 /** What `ProfileSession.connect` resolves to: an immediately-playable session (the profile had a
  * run, stored or live), or a held connection awaiting the chargen wizard's choices. */
 export type ProfileConnectOutcome =
@@ -149,7 +165,14 @@ export class PendingProfileStart {
         if (settled) return;
         const message = parseServerMessage(raw);
         if (message === null) return;
-        if (message.type === 'hello' || message.type === 'superseded' || message.type === 'no-run')
+        // `travel-ended` cannot precede a run existing, but it carries no snapshot, so it is
+        // filtered here alongside the other snapshot-less frames rather than crashing the handshake.
+        if (
+          message.type === 'hello' ||
+          message.type === 'superseded' ||
+          message.type === 'no-run' ||
+          message.type === 'travel-ended'
+        )
           return;
         if (message.type === 'error') {
           settled = true;
@@ -210,8 +233,18 @@ export class ProfileSession implements RunSession {
   private readonly storage: SessionStorageLike;
   private readonly localStorage: SessionStorageLike;
   private readonly ws: WsClient;
+  /** Rebuilds the whole cell array from the wire's `full`/`patch` encoding. Per-session because its
+   * cache IS this connection's view of the floor; a reconnect brings a full sync, which overwrites
+   * it wholesale, so it needs no explicit reset. */
+  private readonly decoder = new FloorWireDecoder();
   private serverSnapshot: ServerRunSnapshot;
-  private commandSequence = 0;
+  /** Seeded from the server's `nextCommandSequence` (never 0 by default): a page reload builds a
+   * fresh session against a run whose `recentCommands` window still holds the previous session's
+   * ids, and restarting at 0 would re-mint them with different payloads -- rejected as
+   * `command_id_conflict` until the counter climbs clear. Only the server can state the floor
+   * exactly; see that field's doc comment. Within one session it simply keeps climbing, including
+   * across `WsClient`'s automatic reconnects (which reuse this object, counter intact). */
+  private commandSequence: number;
   private log: readonly LogLine[] = [];
   private nextLogId = 0;
   private lastEvents: readonly PublicEvent[];
@@ -233,6 +266,27 @@ export class ProfileSession implements RunSession {
    * that is STILL concluded means it found no usable checkpoint. Without this the profile's
    * refusal would be silent, where the guest says so in the log. */
   private riseAwaitingAnswer = false;
+  /**
+   * The batched auto-walk in flight, if any.
+   *
+   * The server applies up to `TRAVEL_BATCH_CAP` steps per round trip and replies with one ordinary
+   * `state` per step. Those frames arrive together, so they are QUEUED and applied one per
+   * `stepMs` rather than all at once -- otherwise a 16-step batch would render as a teleport
+   * instead of a walk (the playfield's tween is retargeted by each new projection; see
+   * `useAutoTravel`'s own pacing rationale, which this replaces for profile sessions).
+   */
+  private travel: {
+    request: TravelBatchRequest;
+    readonly stepMs: number;
+    readonly onEnded: (end: TravelWalkEnd) => void;
+    cancelled: boolean;
+    readonly queue: ServerRunSnapshot[];
+    timer: ReturnType<typeof setTimeout> | null;
+    ended: {
+      reason: StopReason | 'arrived' | 'blocked' | null;
+      offeredItemIds: readonly string[];
+    } | null;
+  } | null = null;
   private snapshot: SessionSnapshot;
   private readonly listeners = new Set<() => void>();
   private sightingsCorruptionNotified = false;
@@ -244,7 +298,7 @@ export class ProfileSession implements RunSession {
   static adopt(
     input: ProfileSessionInput,
     ws: WsClient,
-    snapshot: ServerRunSnapshot,
+    snapshot: WireRunSnapshot,
   ): ProfileSession {
     return new ProfileSession(input, ws, snapshot);
   }
@@ -252,8 +306,16 @@ export class ProfileSession implements RunSession {
   private constructor(
     input: ProfileSessionInput,
     ws: WsClient,
-    initialSnapshot: ServerRunSnapshot,
+    initialWireSnapshot: WireRunSnapshot,
   ) {
+    // The first snapshot on a connection is always a full sync -- the server's encoder is created
+    // with the socket and has nothing to patch against -- so this cannot legitimately fail. A null
+    // here means the server sent a patch before any full floor, which no `ProfileSession` can
+    // recover from by waiting.
+    const initialSnapshot = this.decoder.decode(initialWireSnapshot);
+    if (initialSnapshot === null) {
+      throw new Error('first /ws/play snapshot was a floor patch, not a full sync');
+    }
     this.pack = input.pack;
     this.storage = input.storage ?? inMemorySessionStorage();
     this.localStorage = input.localStorage ?? inMemorySessionStorage();
@@ -264,6 +326,7 @@ export class ProfileSession implements RunSession {
     if (onboardingLoad.corrupted) this.markOnboardingCorrupted();
 
     this.serverSnapshot = initialSnapshot;
+    this.commandSequence = initialSnapshot.nextCommandSequence;
     this.lastEvents = initialSnapshot.lastEvents;
     // `houseOpen` is CLIENT-side UI state (screen visibility), only ever SEEDED from the server --
     // see `setHouseOpen`'s doc comment for why it can never simply mirror the server field
@@ -297,7 +360,12 @@ export class ProfileSession implements RunSession {
         if (settled) return;
         const message = parseServerMessage(raw);
         if (message === null) return;
-        if (message.type === 'hello' || message.type === 'superseded') return;
+        if (
+          message.type === 'hello' ||
+          message.type === 'superseded' ||
+          message.type === 'travel-ended'
+        )
+          return;
         if (message.type === 'error') {
           settled = true;
           unsubscribe();
@@ -341,6 +409,96 @@ export class ProfileSession implements RunSession {
 
   private send(message: ClientMessage): void {
     this.ws.send(message);
+  }
+
+  /**
+   * Starts a batched auto-walk: the server walks up to `TRAVEL_BATCH_CAP` steps per round trip
+   * instead of this client dispatching one `move` each. An auto-explore leg was measured at up to
+   * 3,100 steps and a cross-floor click at over 100, so this is the difference between a walk that
+   * costs one round trip per turn and one that costs a round trip per sixteen.
+   *
+   * Batches chain automatically: a walk that ended only because the cap was reached asks for the
+   * next batch without involving the caller, so `onEnded` fires exactly once, when the walk is
+   * genuinely over and every applied step has been rendered.
+   */
+  travelBatch(
+    request: TravelBatchRequest,
+    options: Readonly<{ stepMs: number }>,
+    onEnded: (end: TravelWalkEnd) => void,
+  ): void {
+    this.cancelTravel();
+    this.notice = null;
+    this.travel = {
+      request,
+      stepMs: options.stepMs,
+      onEnded,
+      cancelled: false,
+      queue: [],
+      timer: null,
+      ended: null,
+    };
+    this.sendTravelBatch();
+  }
+
+  /**
+   * Stops asking for further batches. Steps the server has ALREADY applied still arrive and are
+   * still rendered -- they really happened, and hiding them would desync the view from the run.
+   * This is the interruptibility the batch trades away, bounded by `TRAVEL_BATCH_CAP`.
+   */
+  cancelTravel(): void {
+    if (this.travel === null) return;
+    this.travel.cancelled = true;
+  }
+
+  private sendTravelBatch(): void {
+    const travel = this.travel;
+    if (travel === null) return;
+    this.send({
+      type: 'travel',
+      commandId: this.nextCommandId(),
+      expectedRevision: this.serverSnapshot.revision,
+      mode: travel.request.mode,
+      steps: travel.request.steps,
+      onArrive: travel.request.onArrive,
+      autoPickup: travel.request.autoPickup,
+      offeredItemIds: travel.request.offeredItemIds,
+    });
+  }
+
+  /** Applies at most one queued travel frame, then re-schedules itself until both the queue is
+   * empty and the batch has closed. */
+  private drainTravel(): void {
+    const travel = this.travel;
+    if (travel === null || travel.timer !== null) return;
+
+    const next = travel.queue.shift();
+    if (next !== undefined) {
+      this.applyServerState(next, { foldEvents: true });
+      travel.timer = setTimeout(() => {
+        if (this.travel !== null) this.travel.timer = null;
+        this.drainTravel();
+      }, travel.stepMs);
+      return;
+    }
+    if (travel.ended === null) return;
+
+    const { reason, offeredItemIds } = travel.ended;
+    travel.ended = null;
+    // Only the cap was reached, so the walk is still viable: continue it with whatever the server
+    // has learned about declined items. A cancelled walk stops here instead.
+    if (reason === null && !travel.cancelled) {
+      travel.request = { ...travel.request, offeredItemIds };
+      this.sendTravelBatch();
+      return;
+    }
+    this.travel = null;
+    this.commandInFlight = false;
+    if (!travel.cancelled && reason !== null) travel.onEnded({ reason, offeredItemIds });
+  }
+
+  private clearTravel(): void {
+    if (this.travel?.timer != null) clearTimeout(this.travel.timer);
+    this.travel = null;
   }
 
   /**
@@ -528,7 +686,14 @@ export class ProfileSession implements RunSession {
   }
 
   private handleMessage(raw: unknown): void {
-    const message = parseServerMessage(raw);
+    const wire = parseServerMessage(raw);
+    if (wire === null) return;
+    const message = this.decodeMessage(wire);
+    // A patch this session cannot apply: `decodeMessage` has already asked the server for a full
+    // floor, and the reply will arrive as an ordinary `state`. Dropping the message here rather
+    // than rendering a half-applied grid is the point -- but the in-flight flag must NOT be
+    // settled, or a held movement key would fire its queued repeat against a revision this session
+    // has not actually caught up to yet.
     if (message === null) return;
     switch (message.type) {
       case 'hello':
@@ -538,8 +703,21 @@ export class ProfileSession implements RunSession {
         // definition has a run); a stray one mid-session is ignored.
         return;
       case 'state':
+        // Frames belonging to a batched walk are paced rather than applied on arrival, so the
+        // walk animates. `settleInFlight` is deliberately skipped: a batch is not a dispatched
+        // command, and settling here would fire a queued keyboard intent mid-walk.
+        if (this.travel !== null) {
+          this.travel.queue.push(message.snapshot);
+          this.drainTravel();
+          return;
+        }
         this.applyServerState(message.snapshot, { foldEvents: true });
         this.settleInFlight();
+        return;
+      case 'travel-ended':
+        if (this.travel === null) return;
+        this.travel.ended = { reason: message.reason, offeredItemIds: message.offeredItemIds };
+        this.drainTravel();
         return;
       case 'decision-required':
         this.applyServerState(message.snapshot, { foldEvents: false });
@@ -562,6 +740,7 @@ export class ProfileSession implements RunSession {
         this.settleInFlight();
         return;
       case 'error':
+        this.clearTravel();
         this.notice = { kind: 'protocol-error', code: message.code, message: message.message };
         this.commandInFlight = false;
         this.queuedIntent = null;
@@ -570,6 +749,7 @@ export class ProfileSession implements RunSession {
         this.notify();
         return;
       case 'superseded':
+        this.clearTravel();
         this.notice = { kind: 'superseded' };
         this.commandInFlight = false;
         this.queuedIntent = null;
@@ -578,6 +758,24 @@ export class ProfileSession implements RunSession {
         this.notify();
         return;
     }
+  }
+
+  /**
+   * Turns a wire message into an ordinary one by rebuilding the floor's cell array. Returns null
+   * when a patch cannot be applied -- no cached floor, a different floor, or a `baseRevision` this
+   * session does not hold -- and asks the server for a full sync on the way out. That request costs
+   * one round trip and one whole-floor message, so it is a backstop rather than a routine path:
+   * single-command-in-flight plus the server's newest-wins eviction mean the client and the
+   * connection's encoder stay in lockstep in normal play.
+   */
+  private decodeMessage(wire: WireServerMessage): ServerMessage | null {
+    if (!('snapshot' in wire)) return wire;
+    const snapshot = this.decoder.decode(wire.snapshot);
+    if (snapshot === null) {
+      this.send({ type: 'resync' });
+      return null;
+    }
+    return { ...wire, snapshot };
   }
 
   private applyServerState(

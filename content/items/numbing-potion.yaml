@@ -1,0 +1,26 @@
+schemaVersion: 15
+entries:
+  - kind: item
+    id: item.numbing-potion
+    name: Numbing tonic
+    glyph: "!"
+    color: "#6fb3c9"
+    description: Cold enough to ache through the glass. It closes wounds fast and leaves the hands too clumsy to be trusted for a while.
+    lore: "The lampwrights' compromise with pain: it does not argue with a wound, it simply stops the body from noticing one."
+    tags: [healing, identification, potion]
+    minDepth: 1
+    maxDepth: 20
+    category: potion
+    stackLimit: 4
+    price: 12
+    rarity: uncommon
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    artifact: null
+    identification: { mode: shuffled, poolId: identification-pool.potions }
+    effects:
+      - { effectId: effect.heal, parameters: { dice: { count: 2, sides: 4, bonus: 2 } }, requiresLivingTarget: true }
+      - { effectId: effect.condition.apply, parameters: { conditionId: condition.chilled }, requiresLivingTarget: true }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

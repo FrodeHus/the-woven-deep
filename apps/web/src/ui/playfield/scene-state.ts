@@ -225,8 +225,11 @@ export function nextSceneState(
   // The hero's own `actor.died` is deliberately never projected (the conclusion overlay owns that
   // moment), so the hero's death burst is keyed off the conclusion transition instead: it fires on
   // the one snapshot where the death conclusion first appears, never off `actor.died`.
+  // A scene with no `prev` is the first one this renderer has drawn, so there is no transition to
+  // play: a save that was already concluded by death when it was loaded gets its conclusion
+  // overlay, not a burst re-enacting a death from an earlier session.
   const heroDied = concludedByDeath(snapshot);
-  const burstsNow = heroDied && prev?.concludedByDeath !== true;
+  const burstsNow = heroDied && prev !== null && prev.concludedByDeath !== true;
   const effects: readonly TransientEffect[] = burstsNow
     ? [
         ...eventEffects,

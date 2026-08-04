@@ -1,4 +1,4 @@
-schemaVersion: 14
+schemaVersion: 15
 entries:
   - kind: loot-table
     id: loot-table.chest-deep
@@ -11,7 +11,12 @@ entries:
       - { contentId: item.frost-nova-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.rime-ward-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.static-field-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.fireball-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.frost-nova-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.etched-ring, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.numbing-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.searing-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.clouded-potion, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.weave-focus, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.iron-key, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.sundering-scroll, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }

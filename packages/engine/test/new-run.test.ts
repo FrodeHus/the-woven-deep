@@ -461,8 +461,68 @@ describe('createNewRun records input', () => {
     // retuned across every band. None of those fields are read by `createNewRun` -- monsters spawn
     // on first DESCENT, not at creation, and the town seeds only NPC populations -- so the only
     // field that can differ is the embedded `contentHash`, exactly like the #154 re-pin above.
+    // Re-pinned again for issue #145 (potion risk): four new `shuffled` potions joined
+    // `identification-pool.potions`. Unlike every content re-pin above, this one DOES move an RNG
+    // stream by design -- `allocateIdentificationMap` runs during run creation, and a larger pool
+    // means a longer name shuffle plus one extra visual roll per new item, so the shared `effects`
+    // cursor advances further and every pool sorted after `potions` (rings, shields, weapons) draws
+    // different names. Verified by diffing the decoded run objects field-by-field against the prior
+    // pin: only `contentHash`, `identification.appearanceByContentId`, and `rng.effects` differ --
+    // the appearance delta is exactly the four added entries plus re-rolled names in the potions
+    // pool and the three pools that follow it, while `armor`/`light-sources` (sorted before
+    // `potions`) are untouched, and no `items`, `populations`, `floors`, or other stream moved.
+    // Expected content-authoring drift from growing an identification pool, not an engine
+    // regression.
+    // Re-pinned again for issue #157 (dead and near-dead items ship as rewards) and content schema
+    // v15: every file's `schemaVersion` moves 14 -> 15, items gain the optional `modifiers` block,
+    // `item.weave-focus` trades its stopgap `combat.defense` for `modifiers: { weaveRegen: 1 }`,
+    // `item.champion-fallback-relic` gains an equipment block plus `modifiers: { search: 1 }`, and
+    // `loot-table.echo-spoils` gains two choices. None of that is reachable from `createNewRun`:
+    // the loomcaller kit places weave-focus by content ID (the instance records no stat), a
+    // definition's stat block is read only through `equipmentModifiers` at derive time, and
+    // echo-spoils is rolled on an Echo kill, never at creation -- `rolls` stays 2 there, so no
+    // stream shifts either way. Unlike the #145 re-pin directly above, this one moves NO stream:
+    // none of the touched items is `shuffled`, so `identification-pool.potions` is the same size it
+    // was and the `effects` cursor lands where #145 left it. Verified twice -- against the pre-#157
+    // tree before this branch merged main, and again against merged main afterwards -- by diffing
+    // the decoded run objects field-by-field: `contentHash` is the ONLY key that differs each time.
+    // Expected content-authoring drift, not an engine regression.
+    // Re-pinned again for the loot-coverage/torch-curve change: seven previously unreachable spell
+    // tomes joined the three chest tables, `loot-table.town-spellvendor-stock` gained
+    // `item.chain-spark-tome` (w2, unbanded) and `item.fireball-tome` (w1, minDepth 8), and the
+    // pitch-torch weights moved in floor-scatter-shallow (3 -> 7) and floor-scatter-mid (new, w2).
+    // Unlike the #154 light-pressure re-pin above -- which touched only tables unreachable from
+    // creation -- this one DOES reach `createNewRun`, because the town is materialized at creation
+    // and `materializeMerchant` rolls the spellvendor stock there. It still moves no stream: the
+    // table's `rolls` stays 3, so the draw count is unchanged and `rng` is byte-identical; what
+    // moved is which choice each unchanged draw lands on, because two added choices shifted the
+    // table's cumulative weight boundaries. Verified by diffing the decoded run objects
+    // field-by-field against the prior pin: only `contentHash` and `items` differ, and the entire
+    // `items` delta is two of the vendor's three stock slots swapping contents
+    // (stock.000001 ember-scroll <-> stock.000003 frost-shard-tome) -- same 17 items, same stock
+    // size, nothing added or removed. Neither new tome appears in town stock at creation:
+    // fireball-tome is correctly ineligible at depth 1 by its minDepth-8 guard, and chain-spark-tome
+    // was simply not selected by these draws. Expected content-authoring drift from widening a
+    // merchant table, not an engine regression.
+    // Re-pinned again for issue #149 (gold sinks): `content/items/deep-catalog.yaml` adds four
+    // instance-identified items (deepsteel blade, warded hauberk, bulwark shield, warded lantern).
+    // `allocateIdentificationMap` draws one `effects` roll per instance-identified item at run
+    // creation, so four new pool members add four rolls and shift that stream from turn zero.
+    // Verified by dumping the decoded run field-by-field against the prior pin: exactly three keys
+    // differ -- `contentHash`, `identification` (gaining precisely those four appearance entries
+    // and losing none), and `rng.effects`. Every other key, including `items`, `populations`, and
+    // every other RNG stream (notably `merchant-stock`), is byte-identical; the new town/lampwright
+    // loot-table choices are all depth-banded at 8 or deeper, so `projectLootGraph` prunes them at
+    // the town's depth and the stock weights are unchanged at creation. Expected content-authoring
+    // drift, not an engine regression. (Re-derived after merging #145's potion pins: the same
+    // three-key delta was re-verified against an origin/main build in a scratch worktree, so this
+    // digest carries both pool growths and nothing else.) Moved once more by clamping
+    // `curse.cold-tether`/`curse.embermarked`'s out-of-range trigger durations, which touches
+    // `contentHash` only -- no curse trigger is rolled during run creation. Re-derived once more
+    // after merging #157/content v15; the same three-key delta (`contentHash`, `identification`,
+    // `rng.effects`) was re-verified against an origin/main build carrying v15.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '5b67e9ad287d91c1aa3c3f8afcaa9d80567a7124bd6572dc51e82c1d636c000a',
+      'c1b8df1b9337145852b73a797a884594259cb0936d34b92122a296c0a438236d',
     );
   });
 

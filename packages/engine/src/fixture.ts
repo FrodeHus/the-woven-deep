@@ -218,6 +218,7 @@ export function createDemoContentPack(): CompiledContentPack {
         minDepth: 1,
         maxDepth: 20,
         actionCost: 100,
+        modifiers: {},
         equipment: null,
         combat: null,
         light: null,

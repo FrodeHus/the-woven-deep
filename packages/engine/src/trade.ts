@@ -19,6 +19,7 @@ import {
   quoteMerchantService,
   reputationTier,
   scaledServiceBasePrice,
+  serviceDepthMultiplier,
 } from './commerce.js';
 import { drawEnchantment, enchantable } from './enchanting.js';
 import { identifyItemCompletely } from './identification.js';
@@ -458,7 +459,7 @@ function planService(
     let price: number;
     try {
       price = quoteMerchantService({
-        basePrice: service.basePrice,
+        basePrice: scaledServiceBasePrice(service.basePrice, serviceDepthMultiplier(state)),
         factionBps: session.tier.purchasePriceBps,
       });
     } catch {
@@ -477,7 +478,12 @@ function planService(
     // eligibility rule is re-run directly here too: the target list is a convenience for callers,
     // never a trust boundary planService relies on.
     if (!item || !enchantable(content, item)) return { ok: false, reason: 'trade.target-invalid' };
-    const scaledBase = scaledServiceBasePrice(service.basePrice, item.enchantment === null ? 1 : 2);
+    // The re-enchant doubling and the milestone step compose: re-forging an already-enchanted
+    // item late in a run is the catalog's most expensive single act, by design.
+    const scaledBase = scaledServiceBasePrice(
+      service.basePrice,
+      (item.enchantment === null ? 1 : 2) * serviceDepthMultiplier(state),
+    );
     let price: number;
     try {
       price = quoteMerchantService({
@@ -496,7 +502,7 @@ function planService(
   let price: number;
   try {
     price = quoteMerchantService({
-      basePrice: service.basePrice,
+      basePrice: scaledServiceBasePrice(service.basePrice, serviceDepthMultiplier(state)),
       factionBps: session.tier.purchasePriceBps,
     });
   } catch {

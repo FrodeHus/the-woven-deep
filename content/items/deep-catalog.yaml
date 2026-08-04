@@ -1,0 +1,112 @@
+schemaVersion: 15
+entries:
+  # Merchant-catalog goods, not dungeon loot: none of these appear in a scatter, chest, or vault
+  # table. Each is `identification.mode: instance` against its category pool, which the
+  # curse-eligible invariant requires of every non-artifact weapon/armor/shield/light -- a
+  # `mode: known` piece could carry a curse that identification can never reveal. Buying one
+  # unappraised is the intended tension with the Curios Dealer's identify service.
+  # `rarity: rare` feeds `balance.enchanting.rarityMagnitudeBps`, so paying the armorer to
+  # enchant one of these is worth more than enchanting the starting gear.
+  - kind: item
+    id: item.deepsteel-blade
+    name: Deepsteel blade
+    glyph: "/"
+    color: "#7f97a8"
+    description: Forged from ore that only comes up from below, this blade holds an edge the surface forges cannot explain. It is heavier than it looks and steadier than it has any right to be.
+    lore: "The smiths who work deepsteel will not say where the ore is cut, only that it is cut by people who do not come back up. Every blade is priced accordingly."
+    tags: [melee, offense, weapon]
+    minDepth: 1
+    maxDepth: 20
+    category: weapon
+    stackLimit: 1
+    price: 110
+    rarity: rare
+    actionCost: 100
+    equipment: { slots: [main-hand], handedness: one-handed, reservedSlots: [] }
+    combat:
+      accuracy: 1
+      defense: 0
+      armor: 0
+      damage: { count: 1, sides: 8, bonus: 1 }
+      range: 1
+      ammunitionTag: null
+    light: null
+    artifact: null
+    identification: { mode: instance, poolId: identification-pool.weapons }
+    effects: []
+
+  - kind: item
+    id: item.warded-hauberk
+    name: Warded hauberk
+    glyph: "["
+    color: "#8d93a6"
+    description: Ring mail with a ward worked into every fourth link, so faint you only notice it when something that should have opened you does not.
+    lore: "The warding is not decoration and was never meant to be seen. The armourer who set it charged for the links and gave the wards away, which tells you what they thought the wards were worth."
+    tags: [armor, defense, arcane]
+    minDepth: 1
+    maxDepth: 20
+    category: armor
+    stackLimit: 1
+    price: 165
+    rarity: rare
+    actionCost: 100
+    equipment: { slots: [body], handedness: none, reservedSlots: [] }
+    combat: { accuracy: 0, defense: 1, armor: 3, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    artifact: null
+    identification: { mode: instance, poolId: identification-pool.armor }
+    effects: []
+
+  - kind: item
+    id: item.bulwark-shield
+    name: Bulwark shield
+    glyph: "]"
+    color: "#6f7a82"
+    description: A slab of banded iron tall enough to kneel behind. It stops a great deal and slows everything you try to do around it.
+    lore: "Issued to those told to hold a corridor rather than advance down it. Most of them held."
+    tags: [defense, shield]
+    minDepth: 1
+    maxDepth: 20
+    category: shield
+    stackLimit: 1
+    price: 140
+    rarity: rare
+    actionCost: 100
+    equipment: { slots: [off-hand], handedness: one-handed, reservedSlots: [] }
+    combat: { accuracy: -1, defense: 3, armor: 0, damage: null, range: 0, ammunitionTag: null }
+    light: null
+    artifact: null
+    identification: { mode: instance, poolId: identification-pool.shields }
+    effects: []
+
+  - kind: item
+    id: item.warded-lantern
+    name: Warded lantern
+    glyph: "¤"
+    color: "#f0d79a"
+    description: A lantern in a cage of etched iron. It burns the same oil as any other and burns it far longer, and the dark keeps a wider distance from it.
+    lore: "The etching on the cage is the same warding worked into a hauberk, applied to a flame instead of a body. The Deep leans on light exactly the way it leans on people."
+    tags: [lamp-oil, light, utility, arcane]
+    minDepth: 1
+    maxDepth: 20
+    category: light
+    stackLimit: 1
+    price: 95
+    rarity: rare
+    actionCost: 100
+    equipment:
+      slots: [off-hand]
+      handedness: one-handed
+      reservedSlots: []
+    combat: null
+    light:
+      color: [255, 214, 138]
+      radius: 9
+      strength: 220
+      fuelCapacity: 4200
+      fuelPerTime: 1
+      warningThresholds: [600, 300, 100]
+      fuelTags: [lamp-oil]
+    artifact: null
+    identification: { mode: instance, poolId: identification-pool.light-sources }
+    effects: []

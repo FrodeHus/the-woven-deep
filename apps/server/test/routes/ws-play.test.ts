@@ -1,3 +1,4 @@
+import { request as httpRequest } from 'node:http';
 import { resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -23,6 +24,7 @@ import type { AuthConfig } from '../../src/config.js';
 import { ServerPlaySession } from '../../src/play/play-session.js';
 import { handleMessage } from '../../src/routes/ws-play.js';
 import type { ServerMessage } from '../../src/ws-protocol.js';
+import type { WireFloorCells, WireRunSnapshot } from '@woven-deep/session-core';
 
 const PUBLIC_URL = 'http://localhost:3000';
 const SEED = [7, 14, 21, 28] as unknown as Uint32State;
@@ -343,6 +345,14 @@ describe('handleMessage (pure message routing)', () => {
   });
 });
 
+/** The wire encoding of a snapshot-carrying reply's cell array (`full` or `patch`). Reached through
+ * a cast because the route's messages are typed as `ServerMessage` at their construction site --
+ * the wire form is what `send` produces on the way out. */
+function cellsOf(message: ServerMessage): WireFloorCells {
+  if (!('snapshot' in message)) throw new Error(`message ${message.type} carries no snapshot`);
+  return (message.snapshot as unknown as WireRunSnapshot).projection.floor.cells;
+}
+
 describe('/ws/play connection', () => {
   let app: FastifyInstance;
   let database: Database.Database;
@@ -388,6 +398,52 @@ describe('/ws/play connection', () => {
     ).rejects.toThrow(/403/);
   });
 
+  it('negotiates permessage-deflate on the upgrade', async () => {
+    // Asserted against a REAL listening socket and a hand-written upgrade, not `injectWS`: the
+    // inject harness does not offer the extension, so it can neither confirm nor deny that the
+    // server accepts it. A dungeon command reply is dominated by near-identical cell objects and
+    // compresses ~15x (see `PER_MESSAGE_DEFLATE` in app.ts) -- if a refactor silently drops the
+    // option, registered play quietly gets an order of magnitude more expensive over the wire with
+    // nothing else failing, so the negotiation itself is pinned here.
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const address = app.server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-deflate@example.com');
+
+    const headers = await new Promise<Record<string, string | string[] | undefined>>(
+      (resolveHeaders, reject) => {
+        const request = httpRequest({
+          host: '127.0.0.1',
+          port,
+          path: '/ws/play',
+          headers: {
+            connection: 'Upgrade',
+            upgrade: 'websocket',
+            'sec-websocket-version': '13',
+            'sec-websocket-key': Buffer.from('0123456789abcdef').toString('base64'),
+            'sec-websocket-extensions': 'permessage-deflate; client_max_window_bits',
+            cookie: cookieHeader(sessionCookies),
+            origin: PUBLIC_URL,
+          },
+        });
+        request.on('upgrade', (response, socket) => {
+          socket.destroy();
+          resolveHeaders(response.headers);
+        });
+        request.on('response', (response) =>
+          reject(new Error(`no upgrade: ${response.statusCode}`)),
+        );
+        request.on('error', reject);
+        request.end();
+      },
+    );
+
+    expect(headers['sec-websocket-extensions']).toContain('permessage-deflate');
+    // Both bounded-memory flags from PER_MESSAGE_DEFLATE must survive into the negotiated result.
+    expect(headers['sec-websocket-extensions']).toContain('server_no_context_takeover');
+    expect(headers['sec-websocket-extensions']).toContain('client_no_context_takeover');
+  });
+
   it('authenticated connect receives hello then the initial state, and a command advances the revision', async () => {
     await app.ready();
     const sessionCookies = await verifyAndGetCookies(app, database, 'ws-player@example.com');
@@ -417,6 +473,131 @@ describe('/ws/play connection', () => {
       expect(afterCommand.type).toBe('state');
       if (afterCommand.type === 'state') {
         expect(afterCommand.snapshot.revision).toBeGreaterThan(revisionBefore);
+      }
+    } finally {
+      ws.terminate();
+    }
+  });
+
+  it('walks a batched travel intent and replies with one state per step then travel-ended', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-travel@example.com');
+
+    const ws = await app.injectWS('/ws/play', {
+      headers: { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL },
+    });
+    try {
+      const nextMessage = messageQueue(ws);
+      await nextMessage(); // hello
+      const initial = await startRunOverWs(ws, nextMessage);
+      const revisionBefore = initial.type === 'state' ? initial.snapshot.revision : -1;
+
+      ws.send(
+        JSON.stringify({
+          type: 'travel',
+          commandId: 'command.profile-0000000001',
+          expectedRevision: revisionBefore,
+          mode: 'explore',
+          steps: [],
+          onArrive: null,
+          autoPickup: { allowConsumables: true },
+          offeredItemIds: [],
+        }),
+      );
+
+      // Drain until the batch closes: every frame before `travel-ended` is an ordinary `state`, so
+      // the client needs no new rendering path for a batched walk.
+      const states: ServerMessage[] = [];
+      let ended: ServerMessage | null = null;
+      for (let frame = 0; frame < 64 && ended === null; frame += 1) {
+        const message = await nextMessage();
+        if (message.type === 'travel-ended') ended = message;
+        else states.push(message);
+      }
+
+      expect(ended).not.toBeNull();
+      expect(states.every((message) => message.type === 'state')).toBe(true);
+      expect(states.length).toBeGreaterThan(0);
+      if (ended?.type !== 'travel-ended') throw new Error('expected travel-ended');
+      expect(ended.stepsTaken).toBe(states.length);
+      // Many turns advanced on ONE round trip -- the entire point of the batch.
+      const last = states.at(-1)!;
+      if (last.type !== 'state') throw new Error('expected a state frame');
+      expect(last.snapshot.revision).toBeGreaterThan(revisionBefore);
+    } finally {
+      ws.terminate();
+    }
+  });
+
+  it('refuses a malformed travel plan without touching the run', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-travel-bad@example.com');
+
+    const ws = await app.injectWS('/ws/play', {
+      headers: { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL },
+    });
+    try {
+      const nextMessage = messageQueue(ws);
+      await nextMessage(); // hello
+      const initial = await startRunOverWs(ws, nextMessage);
+      const revisionBefore = initial.type === 'state' ? initial.snapshot.revision : -1;
+
+      ws.send(
+        JSON.stringify({
+          type: 'travel',
+          commandId: 'command.profile-0000000002',
+          expectedRevision: revisionBefore,
+          mode: 'stairs', // not a batched mode
+          steps: [],
+          onArrive: null,
+          autoPickup: null,
+          offeredItemIds: [],
+        }),
+      );
+      const error = await nextMessage();
+      expect(error.type).toBe('error');
+      expect(ws.readyState).toBe(ws.OPEN);
+    } finally {
+      ws.terminate();
+    }
+  });
+
+  it('sends the floor whole once, then as patches, and whole again on resync', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-patching@example.com');
+
+    const ws = await app.injectWS('/ws/play', {
+      headers: { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL },
+    });
+    try {
+      const nextMessage = messageQueue(ws);
+      await nextMessage(); // hello
+      const initialState = await startRunOverWs(ws, nextMessage);
+      const revisionBefore = initialState.type === 'state' ? initialState.snapshot.revision : -1;
+      // The first snapshot on a connection has nothing to patch against.
+      expect(cellsOf(initialState).kind).toBe('full');
+
+      ws.send(
+        JSON.stringify({
+          type: 'command',
+          commandId: 'cmd-patch-1',
+          expectedRevision: revisionBefore,
+          intent: { type: 'wait' },
+        }),
+      );
+      const afterCommand = await nextMessage();
+      const patch = cellsOf(afterCommand);
+      expect(patch.kind).toBe('patch');
+      // Keyed on what the client actually holds -- not simply "one less than this revision".
+      if (patch.kind === 'patch') expect(patch.baseRevision).toBe(revisionBefore);
+
+      ws.send(JSON.stringify({ type: 'resync' }));
+      const resynced = await nextMessage();
+      expect(resynced.type).toBe('state');
+      expect(cellsOf(resynced).kind).toBe('full');
+      // A resync re-sends the CURRENT run; it must not rewind anything.
+      if (resynced.type === 'state' && afterCommand.type === 'state') {
+        expect(resynced.snapshot.revision).toBe(afterCommand.snapshot.revision);
       }
     } finally {
       ws.terminate();

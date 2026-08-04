@@ -1,10 +1,15 @@
-schemaVersion: 14
+schemaVersion: 15
 entries:
   - kind: loot-table
     id: loot-table.echo-spoils
     name: Echo spoils
     tags: [echo, ordinary-loot]
     rolls: 2
+    # An Echo is a fought encounter, so its spoils must pay in something the hero can spend or
+    # use. The remnant stays -- it is the drop this table is named for -- but as the flavour
+    # tail rather than the bulk, since it is a curio to sell and never a capability.
     choices:
-      - { contentId: item.echo-remnant, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
-      - { contentId: item.crimson-potion, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.gold-coins, lootTableId: null, weight: 4, minimumQuantity: 25, maximumQuantity: 60 }
+      - { contentId: item.crimson-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.ashen-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.echo-remnant, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 2 }

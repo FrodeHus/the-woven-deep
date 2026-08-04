@@ -1,4 +1,4 @@
-schemaVersion: 14
+schemaVersion: 15
 entries:
   - kind: item
     id: item.iron-key
@@ -12,7 +12,7 @@ entries:
     maxDepth: 20
     category: misc
     stackLimit: 1
-    price: 1
+    price: 20
     rarity: common
     actionCost: 100
     equipment: null

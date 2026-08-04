@@ -20,6 +20,8 @@ import {
   quoteMerchantSale,
   quoteMerchantService,
   reputationTier,
+  scaledServiceBasePrice,
+  serviceDepthMultiplier,
 } from './commerce.js';
 import { conditionDefinition } from './conditions.js';
 import { projectFeature } from './features.js';
@@ -423,6 +425,11 @@ export interface ObservableTradeProjection {
   readonly services: readonly Readonly<{
     serviceId: MerchantServiceId;
     unitPrice: number;
+    /** Enchant service only: the exact quote for RE-enchanting an already-enchanted target. The
+     * doubling applies to the authored base price BEFORE the faction quote (`planService`), so a
+     * client doubling `unitPrice` itself can be off by a rounding step -- the projection carries
+     * the true figure for the target picker. */
+    reEnchantUnitPrice?: number;
     remainingUses: number;
     targetItemIds: readonly OpaqueId[];
   }>[];
@@ -684,10 +691,23 @@ function projectActiveTrade(
     .sort((left, right) => compareCodeUnits(left.serviceId, right.serviceId))
     .map((service) => ({
       serviceId: service.serviceId,
+      // Both quotes carry the milestone step `planService` will charge; a projection that showed
+      // the authored price would advertise a number the hero can never actually pay.
       unitPrice: quoteMerchantService({
-        basePrice: service.basePrice,
+        basePrice: scaledServiceBasePrice(service.basePrice, serviceDepthMultiplier(state)),
         factionBps: tier.purchasePriceBps,
       }),
+      ...(service.serviceId === 'merchant-service.enchant'
+        ? {
+            reEnchantUnitPrice: quoteMerchantService({
+              basePrice: scaledServiceBasePrice(
+                service.basePrice,
+                2 * serviceDepthMultiplier(state),
+              ),
+              factionBps: tier.purchasePriceBps,
+            }),
+          }
+        : {}),
       remainingUses: service.remainingUses,
       targetItemIds: serviceTargetItemIds({ state, content, serviceId: service.serviceId }),
     }));

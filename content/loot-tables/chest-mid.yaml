@@ -1,4 +1,4 @@
-schemaVersion: 14
+schemaVersion: 15
 entries:
   - kind: loot-table
     id: loot-table.chest-mid
@@ -9,7 +9,13 @@ entries:
       - { contentId: item.gold-coins, lootTableId: null, weight: 5, minimumQuantity: 20, maximumQuantity: 50 }
       - { contentId: item.brass-lantern, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.ashen-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.numbing-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 2 }
+      - { contentId: item.bitter-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.clouded-potion, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.frost-shard-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.cinder-breath-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.mend-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.enervate-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.arc-lance-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.cinder-breath-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.iron-key, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }

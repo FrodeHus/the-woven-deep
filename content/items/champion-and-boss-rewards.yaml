@@ -1,4 +1,4 @@
-schemaVersion: 14
+schemaVersion: 15
 entries:
   - kind: item
     id: item.warden-ember
@@ -38,10 +38,15 @@ entries:
     maxDepth: 20
     category: misc
     stackLimit: 1
-    price: 1
+    price: 20
     rarity: common
     actionCost: 100
-    equipment: null
+    # The token is a consolation prize, not a nothing: it is what an heir receives when the
+    # record carries no heirloom, and an heir who receives literally nothing has been handed a
+    # broken promise. A champion's habit of looking twice is the smallest identity the lore
+    # supports, so the keepsake passes that habit on rather than only a sell price.
+    modifiers: { search: 1 }
+    equipment: { slots: [neck], handedness: none, reservedSlots: [] }
     combat: null
     light: null
     artifact: null

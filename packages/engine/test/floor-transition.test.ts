@@ -587,19 +587,28 @@ describe('on-floor-enter curse triggers', () => {
   });
 
   it('advances rng.effects across a transition even when the floor-enter roll fails', () => {
-    // curse.cold-tether rolls at chanceBps 3000 (30%): with this seed and this many floor
-    // transitions already burned by earlier tests in this file (a fresh run per `it`, so this is
-    // deterministic), the first roll on a fresh descent misses. The assertion below on
-    // `descended.events` pins that this run is in fact exercising the failed-roll branch --
-    // `applyCurseTriggers` still advances `rng.effects` on a miss (curse-triggers.ts's documented
-    // roll-spent-either-way contract), and `applyFloorEntryTriggers`'s zero-events early return
-    // must keep that advanced state rather than discarding it back to the pre-roll input.
+    // `applyCurseTriggers` spends its `effects` roll whether or not the curse fires
+    // (curse-triggers.ts's roll-spent-either-way contract), and `applyFloorEntryTriggers`'s
+    // zero-events early return must keep that advanced state rather than discarding it back to the
+    // pre-roll input. The miss is forced by compiling curse.cold-tether at `chanceBps: 0` rather
+    // than relying on a seed to roll one: `rollDie` returns 1..10000 and the trigger fires on
+    // `value <= chanceBps`, so zero never fires but still consumes the draw. A seed-dependent miss
+    // would silently stop covering this branch the moment any unrelated content edit shifts the
+    // `effects` stream.
+    const missPack: CompiledContentPack = {
+      ...pack,
+      entries: pack.entries.map((entry) =>
+        entry.kind === 'curse' && entry.id === 'curse.cold-tether' && entry.trigger
+          ? { ...entry, trigger: { ...entry.trigger, chanceBps: 0 } }
+          : entry,
+      ),
+    };
     const run = withEquippedCurse(
-      createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO }),
+      createNewRun({ pack: missPack, seed: SEED, hero: DEFAULT_GUEST_HERO }),
       'curse.cold-tether',
     );
     const before = teleportHeroTo(run, run.floors[0]!.stairDown!);
-    const descended = descendToNextFloor(before, { content: pack });
+    const descended = descendToNextFloor(before, { content: missPack });
     expect(descended.events).not.toContainEqual(
       expect.objectContaining({ type: 'condition.applied' }),
     );

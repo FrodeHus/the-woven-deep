@@ -2014,6 +2014,61 @@ describe('recorded signature abilities reach the placed haunt', () => {
   });
 });
 
+describe('a narrowed ability selection keeps the costliest spells', () => {
+  /** `run-finalize` picks a hero's signature spells by weave cost and only THEN sorts them by id,
+   * because the save schema validates the stored list as strictly increasing. Anything that
+   * narrows that list again has to re-rank first: a plain prefix slice of an id-sorted list keeps
+   * whatever sorts first alphabetically, which is not what "the champion's best spells" means.
+   * `spell.gale` (cost 5) is the costlier of the two here and sorts SECOND by id, so an
+   * alphabetical prefix and a cost ranking disagree on every case below. */
+  function packWithLimits(
+    limits: Readonly<{ abilityLimit?: number; echoAbilityLimit?: number }>,
+  ): CompiledContentPack {
+    const narrowed = { ...template, ...limits };
+    return {
+      ...pack(),
+      entries: pack().entries.map((entry) =>
+        entry.kind === 'fallen-champion-template' ? narrowed : entry,
+      ),
+    };
+  }
+
+  it('keeps the costliest spell when the template re-caps a champion below its recorded list', () => {
+    // A standing recorded under a two-ability template, loaded by a build whose template now
+    // allows one. The champion keeps Gale (cost 5), not Ember (cost 4, alphabetically first).
+    const run = withArena(
+      initialized([standing(1, { signatureAbilityIds: ['spell.ember', 'spell.gale'] })]),
+      4,
+    );
+    const placed = placeFallenHeroEncounters({
+      run,
+      floor: run.floors[0]!,
+      content: packWithLimits({ abilityLimit: 1 }),
+    });
+    const population = placed.populations.find((candidate) => candidate.model === 'champion')!;
+    expect(population.abilityIds).toEqual(['spell.gale']);
+  });
+
+  it('leaves the echo the costliest of its champion spells', () => {
+    const standings = [
+      standing(1),
+      standing(2, { signatureAbilityIds: ['spell.ember', 'spell.gale'] }),
+    ];
+    const selected = initialized(standings);
+    const forced = {
+      ...selected,
+      fallenHeroDecisions: selected.fallenHeroDecisions.map((decision) =>
+        decision.rank === 2 ? { ...decision, retained: true, gateRoll: 1 } : decision,
+      ),
+    };
+    const run = withArena(forced, 4);
+    const placed = placeFallenHeroEncounters({ run, floor: run.floors[0]!, content: pack() });
+    const echo = placed.populations.find((candidate) => candidate.model === 'echo')!;
+    // Strictly weaker than the champion's two, and the one it keeps is the costlier.
+    expect(echo.abilityIds).toEqual(['spell.gale']);
+  });
+});
+
 describe('a multi-ability haunt stays savable', () => {
   it('rejects a standing whose abilities are not in canonical id order', () => {
     // `save-schema/run-record.ts` validates BOTH `standing.signatureAbilityIds` and a placed

@@ -15,6 +15,8 @@ import {
   type PublicEvent,
   type Uint32State,
 } from '@woven-deep/engine';
+import { FloorWireEncoder, type WireServerMessage } from '@woven-deep/session-core';
+import type { TravelWalkEnd } from '../src/session/profile-session.js';
 import {
   ProfileSession,
   type ServerMessage,
@@ -39,7 +41,10 @@ function freshRun(seed: Uint32State = SEED): ActiveRun {
 function snapshotOf(
   run: ActiveRun,
   overrides: Partial<
-    Pick<ServerRunSnapshot, 'lastEvents' | 'pendingDecision' | 'houseOpen' | 'bossActive'>
+    Pick<
+      ServerRunSnapshot,
+      'lastEvents' | 'pendingDecision' | 'houseOpen' | 'bossActive' | 'nextCommandSequence'
+    >
   > = {},
 ): ServerRunSnapshot {
   return {
@@ -54,6 +59,7 @@ function snapshotOf(
     houseOpen: overrides.houseOpen ?? false,
     heroClassTags: [...run.hero.classTags],
     bossActive: overrides.bossActive ?? isHeartBossActive(run),
+    nextCommandSequence: overrides.nextCommandSequence ?? 0,
   };
 }
 
@@ -62,6 +68,7 @@ function snapshotOf(
 class FakeSocket implements WebSocketLike {
   readyState = 1;
   readonly rawSent: string[] = [];
+  private readonly encoder = new FloorWireEncoder();
   onopen: (() => void) | null = null;
   onclose: (() => void) | null = null;
   onerror: ((event: unknown) => void) | null = null;
@@ -76,8 +83,22 @@ class FakeSocket implements WebSocketLike {
     this.onclose?.();
   }
 
+  /** Encodes through a per-socket `FloorWireEncoder`, exactly as the real route's `send` does --
+   * one encoder per connection, so the first snapshot on this socket is a full sync and later ones
+   * are patches against it. Tests therefore drive the REAL wire encoding without having to build
+   * wire snapshots by hand, and a decoder bug shows up as an ordinary assertion failure. */
   emit(message: ServerMessage): void {
-    this.onmessage?.({ data: JSON.stringify(message) });
+    const wire: WireServerMessage =
+      'snapshot' in message
+        ? { ...message, snapshot: this.encoder.encode(message.snapshot) }
+        : (message as WireServerMessage);
+    this.onmessage?.({ data: JSON.stringify(wire) });
+  }
+
+  /** Emits a frame verbatim, bypassing the encoder -- for tests that need to forge a specific wire
+   * shape (an unapplicable patch, say) rather than a well-formed server reply. */
+  emitRaw(wire: unknown): void {
+    this.onmessage?.({ data: JSON.stringify(wire) });
   }
 
   get sentMessages(): readonly unknown[] {
@@ -237,6 +258,236 @@ describe('ProfileSession', () => {
     expect(snapshot.projection.metrics).toEqual(
       projectGameplayState({ state: advancedRun, content: pack }).metrics,
     );
+  });
+
+  it('asks for a resync when a floor patch does not apply, and ignores the unusable frame', async () => {
+    const { socket, connectPromise } = harness();
+    const run = freshRun();
+    socket().emit(HELLO);
+    socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+    const session = await connectPromise;
+    const before = session.getSnapshot();
+
+    const base = snapshotOf(run);
+    socket().emitRaw({
+      type: 'state',
+      snapshot: {
+        ...base,
+        revision: base.revision + 5,
+        projection: {
+          ...base.projection,
+          floor: {
+            ...base.projection.floor,
+            // A base revision this session has never held -- exactly what a dropped or reordered
+            // frame would look like.
+            cells: { kind: 'patch', baseRevision: 9999, changedCells: [] },
+          },
+        },
+      },
+    });
+
+    expect(socket().sentMessages.at(-1)).toEqual({ type: 'resync' });
+    // The unusable frame changed nothing: rendering a half-applied grid is the failure this path
+    // exists to prevent.
+    expect(session.getSnapshot().projection.floor.cells).toEqual(before.projection.floor.cells);
+    // The next command must still go out against the revision the session actually holds, not the
+    // one the unusable frame carried.
+    session.dispatch({ type: 'wait' });
+    expect(socket().sentMessages.at(-1)).toMatchObject({
+      type: 'command',
+      expectedRevision: run.revision,
+    });
+  });
+
+  it('recovers from an unusable patch when the server answers the resync with a full floor', async () => {
+    const { socket, connectPromise } = harness();
+    const run = freshRun();
+    socket().emit(HELLO);
+    socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+    const session = await connectPromise;
+
+    const base = snapshotOf(run);
+    socket().emitRaw({
+      type: 'state',
+      snapshot: {
+        ...base,
+        projection: {
+          ...base.projection,
+          floor: {
+            ...base.projection.floor,
+            cells: { kind: 'patch', baseRevision: 9999, changedCells: [] },
+          },
+        },
+      },
+    });
+    expect(socket().sentMessages.at(-1)).toEqual({ type: 'resync' });
+
+    // The real server clears its encoder on `resync`, so the answer is a fresh full sync. Emitted
+    // through a NEW socket-side encoder here to reproduce exactly that.
+    const answering = new FloorWireEncoder();
+    socket().emitRaw({ type: 'state', snapshot: answering.encode(base) });
+    expect(session.getSnapshot().projection.floor.cells).toEqual(base.projection.floor.cells);
+  });
+
+  it('seeds its command-id counter from the server, so a reload never reuses a retained id', async () => {
+    // A page reload builds a FRESH ProfileSession against a run the server has been driving for a
+    // while: its `recentCommands` window still holds every id the previous session minted. Starting
+    // the counter back at 0 would re-mint those ids with different payloads, which the reducer
+    // rejects as `command_id_conflict` -- the "That action was already handled" freeze. The server
+    // states the floor; the client starts above the whole retained window.
+    const { socket, connectPromise } = harness();
+    const run = freshRun();
+    socket().emit(HELLO);
+    socket().emit({ type: 'state', snapshot: snapshotOf(run, { nextCommandSequence: 500 }) });
+    const session = await connectPromise;
+
+    session.dispatch({ type: 'wait' });
+
+    expect(socket().sentMessages.at(-1)).toMatchObject({
+      type: 'command',
+      commandId: 'command.profile-0000000500',
+    });
+  });
+
+  it('keeps climbing from the seeded counter across subsequent commands', async () => {
+    const { socket, connectPromise } = harness();
+    const run = freshRun();
+    socket().emit(HELLO);
+    socket().emit({ type: 'state', snapshot: snapshotOf(run, { nextCommandSequence: 129 }) });
+    const session = await connectPromise;
+
+    session.dispatch({ type: 'wait' });
+    socket().emit({ type: 'state', snapshot: snapshotOf(run, { nextCommandSequence: 129 }) });
+    session.dispatch({ type: 'wait' });
+
+    const commandIds = socket()
+      .sentMessages.filter(
+        (message): message is { type: string; commandId: string } =>
+          (message as { type?: string }).type === 'command',
+      )
+      .map((message) => message.commandId);
+    expect(commandIds).toEqual(['command.profile-0000000129', 'command.profile-0000000130']);
+  });
+
+  describe('batched travel', () => {
+    async function travelling(): Promise<{
+      session: ProfileSession;
+      socket: () => FakeSocket;
+      run: ActiveRun;
+      ended: TravelWalkEnd[];
+    }> {
+      const harnessed = harness();
+      const run = freshRun();
+      harnessed.socket().emit(HELLO);
+      harnessed.socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await harnessed.connectPromise;
+      const ended: TravelWalkEnd[] = [];
+      session.travelBatch(
+        { mode: 'explore', steps: [], onArrive: null, autoPickup: null, offeredItemIds: [] },
+        { stepMs: 10 },
+        (end) => ended.push(end),
+      );
+      return { session, socket: harnessed.socket, run, ended };
+    }
+
+    it('sends one travel message rather than a command per step', async () => {
+      const { socket } = await travelling();
+      expect(socket().sentMessages.at(-1)).toMatchObject({
+        type: 'travel',
+        mode: 'explore',
+        expectedRevision: 0,
+      });
+    });
+
+    it('paces the applied steps instead of snapping through them', async () => {
+      vi.useFakeTimers();
+      try {
+        const { session, socket, run } = await travelling();
+        let applied = 0;
+        session.subscribe(() => {
+          applied += 1;
+        });
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 1 } });
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 2 } });
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 3 } });
+        socket().emit({
+          type: 'travel-ended',
+          reason: 'arrived',
+          stepsTaken: 3,
+          offeredItemIds: [],
+        });
+
+        // All three frames arrived in one burst, but only ONE has been applied so far: a 16-step
+        // batch must read as a walk, not a teleport.
+        expect(applied).toBe(1);
+        vi.advanceTimersByTime(10);
+        expect(applied).toBe(2);
+        vi.advanceTimersByTime(10);
+        expect(applied).toBe(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('asks for the next batch when the walk was only capped', async () => {
+      vi.useFakeTimers();
+      try {
+        const { socket, run } = await travelling();
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 1 } });
+        // reason null means "capped, still viable" -- the walk must continue without the caller.
+        socket().emit({
+          type: 'travel-ended',
+          reason: null,
+          stepsTaken: 1,
+          offeredItemIds: ['item.seen'],
+        });
+        vi.advanceTimersByTime(50);
+        const sent = socket().sentMessages.filter(
+          (message) => (message as { type?: string }).type === 'travel',
+        );
+        expect(sent).toHaveLength(2);
+        // The declined-item record the server grew comes back on the follow-up batch.
+        expect(sent.at(-1)).toMatchObject({ offeredItemIds: ['item.seen'] });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('reports the walk once it genuinely ends', async () => {
+      vi.useFakeTimers();
+      try {
+        const { socket, run, ended } = await travelling();
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 1 } });
+        socket().emit({
+          type: 'travel-ended',
+          reason: 'hostile-appeared',
+          stepsTaken: 1,
+          offeredItemIds: [],
+        });
+        vi.advanceTimersByTime(50);
+        expect(ended).toEqual([{ reason: 'hostile-appeared', offeredItemIds: [] }]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('stops chaining once cancelled, without reporting a stop the player caused', async () => {
+      vi.useFakeTimers();
+      try {
+        const { session, socket, run, ended } = await travelling();
+        session.cancelTravel();
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 1 } });
+        socket().emit({ type: 'travel-ended', reason: null, stepsTaken: 1, offeredItemIds: [] });
+        vi.advanceTimersByTime(50);
+        const sent = socket().sentMessages.filter(
+          (message) => (message as { type?: string }).type === 'travel',
+        );
+        expect(sent).toHaveLength(1);
+        expect(ended).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('in-flight gating (held-key navigation)', () => {

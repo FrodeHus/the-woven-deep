@@ -22,6 +22,7 @@ import {
 } from '@woven-deep/engine';
 import { App, PORTRAIT_KEY } from '../src/App.js';
 import { GUEST_ACCOUNT, type AccountState } from '../src/session/account.js';
+import { FloorWireEncoder, type WireServerMessage } from '@woven-deep/session-core';
 import type { ServerMessage, ServerRunSnapshot } from '../src/session/profile-session.js';
 import {
   createSessionRunRecordRepository,
@@ -194,6 +195,7 @@ function poisonGuestHall(storage: SessionStorageLike): void {
 class FakeSocket implements WebSocketLike {
   readyState = 1;
   readonly rawSent: string[] = [];
+  private readonly encoder = new FloorWireEncoder();
   onopen: (() => void) | null = null;
   onclose: (() => void) | null = null;
   onerror: ((event: unknown) => void) | null = null;
@@ -208,8 +210,13 @@ class FakeSocket implements WebSocketLike {
     this.onclose?.();
   }
 
+  /** Encodes through a per-socket `FloorWireEncoder`, as the real route's `send` does. */
   emit(message: ServerMessage): void {
-    this.onmessage?.({ data: JSON.stringify(message) });
+    const wire: WireServerMessage =
+      'snapshot' in message
+        ? { ...message, snapshot: this.encoder.encode(message.snapshot) }
+        : (message as WireServerMessage);
+    this.onmessage?.({ data: JSON.stringify(wire) });
   }
 }
 
@@ -234,6 +241,7 @@ function serverSnapshotOf(run: ActiveRun): ServerRunSnapshot {
     houseOpen: false,
     heroClassTags: [...run.hero.classTags],
     bossActive: isHeartBossActive(run),
+    nextCommandSequence: 0,
   };
 }
 

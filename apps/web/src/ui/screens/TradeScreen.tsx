@@ -11,7 +11,13 @@ import type { CompiledContentPack, MerchantServiceId } from '@woven-deep/content
 import { itemById, spellEntries } from '@woven-deep/session-core';
 import type { SessionSnapshot } from '../../session/guest-session.js';
 import type { PlayerIntent } from '../../session/intents.js';
-import { heroOf, ownedItemOf, tradeOf, type TradeView } from '../../session/projection-view.js';
+import {
+  heroOf,
+  ownedItemOf,
+  tradeOf,
+  type ItemEnchantmentView,
+  type TradeView,
+} from '../../session/projection-view.js';
 import { aoeBadge } from '../../session/spell-detail.js';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/dialog.js';
 import { LedgerCenter, LedgerList, type LedgerRow } from '../components/LedgerList.js';
@@ -24,6 +30,7 @@ interface ProjectedItemRef {
   readonly itemId: OpaqueId;
   readonly name: string;
   readonly glyph?: string;
+  readonly enchantment?: ItemEnchantmentView;
 }
 
 function trade(snapshot: SessionSnapshot): TradeView | undefined {
@@ -71,6 +78,26 @@ function spellBadge(
   if (typeof learnSpellId === 'string') return `learns ${spell.name}`;
   const shape = aoeBadge(spell.aoe);
   return shape ? `casts ${spell.name} (${shape})` : `casts ${spell.name}`;
+}
+
+/** The figure a picker target carries, for the one service whose price varies per target: enchant
+ * charges double for an already-enchanted item. The doubling applies to the authored base price
+ * BEFORE the faction quote, so the projection carries the exact re-enchant figure
+ * (`reEnchantUnitPrice`) rather than leaving the client to double `unitPrice` and land a rounding
+ * step off. Only a target whose `enchantment` the hero can actually see is quoted double -- an
+ * unidentified item omits `enchantment` from its projection entirely, and inferring the doubling
+ * from a price would leak what identification is meant to withhold. That blind spot is exactly what
+ * the service row's standing "re-enchanting costs double" line still covers. Every other service
+ * (identify, remove-curse) prices flat, and repeating its one figure on each target is noise. */
+function targetPrice(
+  service: TradeView['services'][number],
+  ref: ProjectedItemRef,
+): string | undefined {
+  if (service.serviceId !== 'merchant-service.enchant') return undefined;
+  const reEnchant = service.reEnchantUnitPrice;
+  return ref.enchantment !== undefined && reEnchant !== undefined
+    ? `${reEnchant}g`
+    : `${service.unitPrice}g`;
 }
 
 type FocusedList = 'buy' | 'sell' | 'services';
@@ -459,6 +486,7 @@ export function TradeScreen({
               >
                 {pickerService.targetItemIds.map((itemId, index) => {
                   const ref = ownedItemRef(snapshot, itemId);
+                  const price = targetPrice(pickerService, ref);
                   const selected = index === pickerIndex;
                   return (
                     <button
@@ -480,6 +508,7 @@ export function TradeScreen({
                       )}
                     >
                       {ref.glyph ? `${ref.glyph} ${ref.name}` : ref.name}
+                      {price !== undefined && <span className="ml-2 text-cool">{price}</span>}
                     </button>
                   );
                 })}

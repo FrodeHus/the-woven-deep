@@ -3,9 +3,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { CompiledContentPack } from '@woven-deep/content';
 import { compileContentDirectory } from '@woven-deep/content/compiler';
 import type { GameplayProjection } from '@woven-deep/engine';
-import { itemEntries } from '../src/session/pack-queries.js';
-import { createAutoPickupPolicy, groundItemUnderHero } from '../src/session/auto-pickup.js';
-import type { GroundItemView } from '../src/session/projection-view.js';
+import { itemEntries } from '../src/pack-queries.js';
+import { createAutoPickupPolicy, groundItemUnderHero } from '../src/auto-pickup.js';
+import type { GroundItemView } from '../src/projection-view.js';
 
 let pack: CompiledContentPack;
 

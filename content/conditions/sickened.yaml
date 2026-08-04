@@ -1,0 +1,13 @@
+schemaVersion: 15
+entries:
+  - kind: condition
+    id: condition.sickened
+    name: Sickened
+    tags: [poison, debuff]
+    description: Something foul is working its way through the gut, bleeding strength out with every turn.
+    color: '#7c9a3e'
+    duration: { mode: timed, default: 4, maximum: 8 }
+    stacking: { mode: refresh, maximumStacks: 1 }
+    modifiersPerStack: { meleeAccuracy: -1, rangedAccuracy: -1 }
+    tickEffects:
+      - { effectId: effect.damage, parameters: { damageType: poison, dice: { count: 1, sides: 2, bonus: 0 } }, requiresLivingTarget: true }

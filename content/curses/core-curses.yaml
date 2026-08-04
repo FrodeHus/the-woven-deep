@@ -1,4 +1,4 @@
-schemaVersion: 14
+schemaVersion: 15
 entries:
   - kind: curse
     id: curse.hungering-edge
@@ -32,7 +32,7 @@ entries:
       chanceBps: 3000
       effect:
         effectId: effect.condition.apply
-        parameters: { conditionId: condition.chilled, duration: 300 }
+        parameters: { conditionId: condition.chilled, duration: 6 }
 
   - kind: curse
     id: curse.hollow-step
@@ -70,4 +70,4 @@ entries:
       chanceBps: 3000
       effect:
         effectId: effect.condition.apply
-        parameters: { conditionId: condition.burning, duration: 200 }
+        parameters: { conditionId: condition.burning, duration: 6 }

@@ -1,17 +1,21 @@
-schemaVersion: 14
+schemaVersion: 15
 entries:
   - kind: loot-table
     id: loot-table.town-arms
     name: Town Armorer stock
     tags: [town, arms]
     rolls: 3
-    # Base band (no minDepth/maxDepth) is always available. Depth bands widen the pool at two
-    # of the four restock milestones - the bundled weapon/armor pool is thin (five items total),
-    # so the hunting bow unlocks at depth 5 and leather armor at depth 10, rather than forcing
-    # a distinct item onto every milestone.
+    # Base band (no minDepth/maxDepth) is always available. Depth bands widen the pool as the run
+    # deepens: the hunting bow at depth 5, leather armor at depth 10, and the deep catalog - the
+    # only gear in the pack that outclasses starting equipment - from depth 10 (blade) and depth
+    # 15 (hauberk, bulwark). Band edges sit on restock milestones because a permanent merchant's
+    # pool only ever widens when `applyMerchantRestocks` fires.
     choices:
       - { contentId: item.iron-sword, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.wooden-shield, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.wooden-arrows, lootTableId: null, weight: 4, minimumQuantity: 4, maximumQuantity: 12 }
       - { contentId: item.hunting-bow, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1, minDepth: 5 }
       - { contentId: item.leather-armor, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1, minDepth: 10 }
+      - { contentId: item.deepsteel-blade, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1, minDepth: 10 }
+      - { contentId: item.warded-hauberk, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1, minDepth: 15 }
+      - { contentId: item.bulwark-shield, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1, minDepth: 15 }

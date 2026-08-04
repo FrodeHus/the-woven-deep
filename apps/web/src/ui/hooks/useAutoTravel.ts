@@ -113,6 +113,44 @@ export function useAutoTravel({
     return offeredItemsRef.current.ids;
   }, []);
 
+  /**
+   * Runs a walk as SERVER-SIDE batches when the session offers them (profile play), where each
+   * step would otherwise cost a round trip. Returns false for a session that has no batching --
+   * the guest, whose engine is in-process -- so the caller falls through to local stepping.
+   *
+   * Both paths plan and stop with the same `@woven-deep/session-core` code, so the walks agree
+   * step for step; only who applies them differs.
+   */
+  const startBatchedWalk = useCallback(
+    (plan: TravelPlan, mode: TravelMode): boolean => {
+      if (session.travelBatch === undefined || mode === 'stairs') return false;
+      const offered = offeredItemIds(projection.floor.floorId);
+      session.travelBatch(
+        {
+          mode,
+          steps: plan.steps,
+          onArrive: plan.onArrive,
+          // Click-travel sweeps nothing up; explore uses the player's own setting.
+          autoPickup: mode === 'explore' ? { allowConsumables: autoPickupConsumables } : null,
+          offeredItemIds: [...offered],
+        },
+        { stepMs: mode === 'explore' ? EXPLORE_STEP_MS : STEP_MS },
+        (end) => {
+          for (const id of end.offeredItemIds) offered.add(id);
+          if (mode === 'travel') return;
+          if (end.reason === 'arrived') {
+            if (mode === 'explore') session.noteSystemLine('You have explored this floor.');
+            return;
+          }
+          if (end.reason === 'blocked') return;
+          session.noteSystemLine(STOP_MESSAGES[end.reason]);
+        },
+      );
+      return true;
+    },
+    [session, projection.floor.floorId, offeredItemIds, autoPickupConsumables],
+  );
+
   const clearPendingStep = useCallback(() => {
     if (pendingStepRef.current !== null) {
       clearTimeout(pendingStepRef.current);
@@ -129,9 +167,10 @@ export function useAutoTravel({
     disabledRef.current = disabled;
     if (disabled) {
       travelRef.current = null;
+      session.cancelTravel?.();
       clearPendingStep();
     }
-  }, [disabled, clearPendingStep]);
+  }, [disabled, clearPendingStep, session]);
 
   // Any real keypress cancels an in-progress walk. The key still reaches `usePlayKeyDispatcher`'s
   // own listener and does its normal thing (e.g. a manual move, or starting a fresh explore) --
@@ -151,11 +190,12 @@ export function useAutoTravel({
     const cancel = (event: KeyboardEvent): void => {
       if (event.defaultPrevented) return;
       travelRef.current = null;
+      session.cancelTravel?.();
       clearPendingStep();
     };
     window.addEventListener('keydown', cancel);
     return () => window.removeEventListener('keydown', cancel);
-  }, [clearPendingStep]);
+  }, [clearPendingStep, session]);
 
   // Drop any pending step timer when the component unmounts.
   useEffect(() => clearPendingStep, [clearPendingStep]);
@@ -208,6 +248,7 @@ export function useAutoTravel({
 
   /** Begins a classic-stop-set walk (explore or stairs) and fires its first step synchronously. */
   const startClassicWalk = (plan: TravelPlan, mode: TravelMode): void => {
+    if (startBatchedWalk(plan, mode)) return;
     const autoPickup = createAutoPickupPolicy({ pack, allowConsumables: autoPickupConsumables });
     const travel = beginTravel(projection, plan, {
       mode,
@@ -224,6 +265,7 @@ export function useAutoTravel({
 
   const travelTo = (cell: Point): void => {
     clearPendingStep();
+    session.cancelTravel?.();
     if (disabled) {
       travelRef.current = null;
       return;
@@ -233,6 +275,7 @@ export function useAutoTravel({
       travelRef.current = null;
       return;
     }
+    if (startBatchedWalk(plan, 'travel')) return;
     // Kick off the first step immediately against the current projection -- no added click
     // latency; every subsequent step is driven by the effect above, paced to `STEP_MS`, as each
     // resulting projection publishes.
@@ -244,6 +287,7 @@ export function useAutoTravel({
 
   const startExplore = (): void => {
     clearPendingStep();
+    session.cancelTravel?.();
     travelRef.current = null;
     if (disabled) return;
     // A dead light outside town would make this a near-blind cell-by-cell crawl -- refuse to start
@@ -263,6 +307,7 @@ export function useAutoTravel({
 
   const travelToStairs = (direction: StairDirection): void => {
     clearPendingStep();
+    session.cancelTravel?.();
     travelRef.current = null;
     if (disabled) return;
     if (stairUnderHero(projection, direction)) {
