@@ -194,9 +194,11 @@ export function materializeMerchant(
  * `merchant-stock` stream. Used at balance restock milestones (see `floor-transition.ts`'s
  * descend path): removes every existing `merchant-stock`-located item owned by this population
  * and replaces them with a freshly rolled set, projected against the run's current dungeon
- * high-water mark (so the pool widens exactly as a fresh materialization's would). Reputation,
- * services, lifecycle, and identity (population/actor/faction ids) are all preserved untouched --
- * only `stockItemIds` (and the backing `items`) change. A departed or dead population is a no-op:
+ * high-water mark (so the pool widens exactly as a fresh materialization's would). It also re-arms
+ * each service offer's `remainingUses` from the authored band. Reputation, lifecycle, service
+ * identity/price/tiers, and identity (population/actor/faction ids) are all preserved untouched --
+ * only `stockItemIds` (with the backing `items`) and service use counts change. A departed or
+ * dead population is a no-op:
  * milestone restocks may still fire after such a (theoretically possible, never authored) state.
  */
 export function restockMerchant(
@@ -263,6 +265,25 @@ export function restockMerchant(
     location: { type: 'merchant-stock', populationId: input.populationId },
   });
   state = stock.state;
+  // Services re-arm on the same beat the stock does: each offer's remaining uses are re-rolled
+  // from its authored [minimumUses, maximumUses] band, in the population's own service order and
+  // after the stock roll, so the `merchant-stock` stream stays deterministic. Identity, authored
+  // `basePrice` (which `content-bound-validation` pins against the pack), and `tierIds` are left
+  // exactly as they were -- only the use count moves. Without this a service is a one-off, and a
+  // one-off cannot be a gold sink.
+  const services = population.services.map((service) => {
+    const authored = definition.services.find(
+      (candidate) => candidate.serviceId === service.serviceId,
+    );
+    if (!authored) {
+      throw new Error(
+        `internal invariant: merchant service ${service.serviceId} is not authored on ${population.encounterId}`,
+      );
+    }
+    const useRoll = rollDie(state, authored.maximumUses - authored.minimumUses + 1);
+    state = useRoll.state;
+    return { ...service, remainingUses: authored.minimumUses + useRoll.value - 1 };
+  });
   const stockItemIds = stock.items.map((item) => item.itemId).sort();
   const items = [
     ...run.items.filter(
@@ -274,7 +295,7 @@ export function restockMerchant(
     ),
     ...stock.items,
   ].sort((left, right) => (left.itemId < right.itemId ? -1 : left.itemId > right.itemId ? 1 : 0));
-  const nextPopulation: MerchantPopulation = { ...population, stockItemIds };
+  const nextPopulation: MerchantPopulation = { ...population, stockItemIds, services };
   const nextState: ActiveRun = {
     ...run,
     rng: { ...run.rng, 'merchant-stock': state },
