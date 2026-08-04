@@ -2,12 +2,14 @@ import type {
   FinalChamberChoiceCommand,
   GameplayProjection,
   HeroChoices,
+  Point,
   PublicDecision,
   PublicEvent,
   RunConclusionProjection,
   RunMode,
 } from '@woven-deep/engine';
 import type { PlayerIntent } from './intents.js';
+import type { StopReason } from './travel.js';
 
 /**
  * The `/ws/play` message envelope version. Sent in every `hello`, alongside the content hash and
@@ -89,6 +91,33 @@ export type ClientMessage =
     }
   | {
       /**
+       * Walks an auto-travel plan server-side for up to `TRAVEL_BATCH_CAP` steps, instead of the
+       * client dispatching one `move` per round trip.
+       *
+       * An auto-explore leg was measured at up to 3,100 steps, and click-travel across a floor is
+       * easily 100 -- each a round trip today. The server applies them with the SAME stop rules and
+       * frontier planner the client uses (they live in `travel.ts`/`explore.ts` here in
+       * session-core precisely so both sides run one copy), then replies with one ordinary `state`
+       * per applied step followed by a single `travel-ended`.
+       *
+       * Nothing about authority changes: every step is the same per-command path a single
+       * dispatched intent takes.
+       */
+      readonly type: 'travel';
+      readonly commandId: string;
+      readonly expectedRevision: number;
+      /** Stairs-travel is deliberately absent -- its path is short and already known. */
+      readonly mode: 'travel' | 'explore';
+      /** The planned path for `travel`; ignored for `explore`, which re-plans every step. */
+      readonly steps: readonly Point[];
+      readonly onArrive: 'pickup' | null;
+      /** The whole of `AutoPickupPolicy`'s client state; the server rebuilds the same policy. */
+      readonly autoPickup: Readonly<{ allowConsumables: boolean }> | null;
+      /** Items the player already declined, so the walk does not re-halt on each of them. */
+      readonly offeredItemIds: readonly string[];
+    }
+  | {
+      /**
        * Asks the server to re-send the whole floor rather than a patch against a cell array the
        * client does not have. Sent when a `patch` cannot be applied -- no cached floor, a different
        * floor, or a `baseRevision` the client does not hold. Carries no `commandId`/
@@ -132,6 +161,22 @@ export type ServerMessage =
       readonly type: 'decision-required';
       readonly decision: ServerRunSnapshot['pendingDecision'];
       readonly snapshot: ServerRunSnapshot;
+    }
+  | {
+      /**
+       * Closes a batched `travel`: the applied steps have already been sent as ordinary `state`
+       * messages (so the client renders and animates them exactly as it would single steps), and
+       * this says how the walk ended.
+       *
+       * `reason` is `null` when only the batch cap was reached, which means the walk is still
+       * viable and the client should ask for the next batch. A `StopReason` or `'arrived'` ends it
+       * and is reported to the player; `'blocked'` ends it silently, as it does today.
+       */
+      readonly type: 'travel-ended';
+      readonly reason: StopReason | 'arrived' | 'blocked' | null;
+      readonly stepsTaken: number;
+      /** `offeredItemIds` grown by this batch, for the client's per-floor record. */
+      readonly offeredItemIds: readonly string[];
     }
   | { readonly type: 'error'; readonly code: string; readonly message: string }
   | { readonly type: 'superseded' }

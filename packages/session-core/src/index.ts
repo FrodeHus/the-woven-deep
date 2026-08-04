@@ -7,4 +7,8 @@ export * from './command-builder.js';
 export * from './dispatch.js';
 export * from './ws-protocol.js';
 export * from './floor-wire.js';
+export * from './auto-pickup.js';
+export * from './travel.js';
+export * from './explore.js';
+export * from './travel-batch.js';
 export * from './unlocks.js';

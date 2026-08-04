@@ -16,6 +16,7 @@ import {
   type Uint32State,
 } from '@woven-deep/engine';
 import { FloorWireEncoder, type WireServerMessage } from '@woven-deep/session-core';
+import type { TravelWalkEnd } from '../src/session/profile-session.js';
 import {
   ProfileSession,
   type ServerMessage,
@@ -366,6 +367,127 @@ describe('ProfileSession', () => {
       )
       .map((message) => message.commandId);
     expect(commandIds).toEqual(['command.profile-0000000129', 'command.profile-0000000130']);
+  });
+
+  describe('batched travel', () => {
+    async function travelling(): Promise<{
+      session: ProfileSession;
+      socket: () => FakeSocket;
+      run: ActiveRun;
+      ended: TravelWalkEnd[];
+    }> {
+      const harnessed = harness();
+      const run = freshRun();
+      harnessed.socket().emit(HELLO);
+      harnessed.socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+      const session = await harnessed.connectPromise;
+      const ended: TravelWalkEnd[] = [];
+      session.travelBatch(
+        { mode: 'explore', steps: [], onArrive: null, autoPickup: null, offeredItemIds: [] },
+        { stepMs: 10 },
+        (end) => ended.push(end),
+      );
+      return { session, socket: harnessed.socket, run, ended };
+    }
+
+    it('sends one travel message rather than a command per step', async () => {
+      const { socket } = await travelling();
+      expect(socket().sentMessages.at(-1)).toMatchObject({
+        type: 'travel',
+        mode: 'explore',
+        expectedRevision: 0,
+      });
+    });
+
+    it('paces the applied steps instead of snapping through them', async () => {
+      vi.useFakeTimers();
+      try {
+        const { session, socket, run } = await travelling();
+        let applied = 0;
+        session.subscribe(() => {
+          applied += 1;
+        });
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 1 } });
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 2 } });
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 3 } });
+        socket().emit({
+          type: 'travel-ended',
+          reason: 'arrived',
+          stepsTaken: 3,
+          offeredItemIds: [],
+        });
+
+        // All three frames arrived in one burst, but only ONE has been applied so far: a 16-step
+        // batch must read as a walk, not a teleport.
+        expect(applied).toBe(1);
+        vi.advanceTimersByTime(10);
+        expect(applied).toBe(2);
+        vi.advanceTimersByTime(10);
+        expect(applied).toBe(3);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('asks for the next batch when the walk was only capped', async () => {
+      vi.useFakeTimers();
+      try {
+        const { socket, run } = await travelling();
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 1 } });
+        // reason null means "capped, still viable" -- the walk must continue without the caller.
+        socket().emit({
+          type: 'travel-ended',
+          reason: null,
+          stepsTaken: 1,
+          offeredItemIds: ['item.seen'],
+        });
+        vi.advanceTimersByTime(50);
+        const sent = socket().sentMessages.filter(
+          (message) => (message as { type?: string }).type === 'travel',
+        );
+        expect(sent).toHaveLength(2);
+        // The declined-item record the server grew comes back on the follow-up batch.
+        expect(sent.at(-1)).toMatchObject({ offeredItemIds: ['item.seen'] });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('reports the walk once it genuinely ends', async () => {
+      vi.useFakeTimers();
+      try {
+        const { socket, run, ended } = await travelling();
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 1 } });
+        socket().emit({
+          type: 'travel-ended',
+          reason: 'hostile-appeared',
+          stepsTaken: 1,
+          offeredItemIds: [],
+        });
+        vi.advanceTimersByTime(50);
+        expect(ended).toEqual([{ reason: 'hostile-appeared', offeredItemIds: [] }]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('stops chaining once cancelled, without reporting a stop the player caused', async () => {
+      vi.useFakeTimers();
+      try {
+        const { session, socket, run, ended } = await travelling();
+        session.cancelTravel();
+        socket().emit({ type: 'state', snapshot: { ...snapshotOf(run), revision: 1 } });
+        socket().emit({ type: 'travel-ended', reason: null, stepsTaken: 1, offeredItemIds: [] });
+        vi.advanceTimersByTime(50);
+        const sent = socket().sentMessages.filter(
+          (message) => (message as { type?: string }).type === 'travel',
+        );
+        expect(sent).toHaveLength(1);
+        expect(ended).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe('in-flight gating (held-key navigation)', () => {
