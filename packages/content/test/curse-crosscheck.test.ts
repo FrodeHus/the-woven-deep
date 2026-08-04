@@ -21,7 +21,7 @@ async function fixture(balance: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'woven-content-curse-crosscheck-'));
   await writeFile(
     join(root, 'pack.yaml'),
-    `schemaVersion: 14\nentries: [${compactMonster}, ${compactItem}, ${compactVault}, ${balance}]\n`,
+    `schemaVersion: 15\nentries: [${compactMonster}, ${compactItem}, ${compactVault}, ${balance}]\n`,
   );
   return root;
 }

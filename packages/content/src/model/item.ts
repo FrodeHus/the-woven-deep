@@ -1,5 +1,6 @@
 import type {
   ContentId,
+  DerivedStatName,
   DiceDefinition,
   EffectDefinition,
   EquipmentSlot,
@@ -73,6 +74,13 @@ export interface ItemContentEntry extends PresentedContentEntry {
   readonly maxDepth: number;
   readonly actionCost: number;
   readonly spellId?: ContentId;
+  /**
+   * Derived-stat bonuses printed on the definition itself, granted while the item is equipped.
+   * Strictly positive: an item's own drawbacks belong to `artifact.drawbackModifiers`, and a
+   * rolled drawback belongs to a curse. This is how a trinket expresses an identity the `combat`
+   * block cannot carry — `weaveRegen`, `search`, `spellPower` — without being promoted to canon.
+   */
+  readonly modifiers: Readonly<Partial<Record<DerivedStatName, number>>>;
   readonly equipment: EquipmentDefinition | null;
   readonly combat: CombatItemDefinition | null;
   readonly light: LightItemDefinition | null;

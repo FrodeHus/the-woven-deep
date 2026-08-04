@@ -461,8 +461,19 @@ describe('createNewRun records input', () => {
     // retuned across every band. None of those fields are read by `createNewRun` -- monsters spawn
     // on first DESCENT, not at creation, and the town seeds only NPC populations -- so the only
     // field that can differ is the embedded `contentHash`, exactly like the #154 re-pin above.
+    // Re-pinned again for issue #157 (dead and near-dead items ship as rewards) and content schema
+    // v15: every file's `schemaVersion` moves 14 -> 15, items gain the optional `modifiers` block,
+    // `item.weave-focus` trades its stopgap `combat.defense` for `modifiers: { weaveRegen: 1 }`,
+    // `item.champion-fallback-relic` gains an equipment block plus `modifiers: { search: 1 }`, and
+    // `loot-table.echo-spoils` gains two choices. None of that is reachable from `createNewRun`:
+    // the loomcaller kit places weave-focus by content ID (the instance records no stat), a
+    // definition's stat block is read only through `equipmentModifiers` at derive time, and
+    // echo-spoils is rolled on an Echo kill, never at creation -- `rolls` stays 2 there, so no
+    // stream shifts either way. Verified by rebuilding the pre-#157 tree in a scratch worktree and
+    // diffing the decoded run objects field-by-field: `contentHash` is the ONLY key that differs.
+    // Expected content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '5b67e9ad287d91c1aa3c3f8afcaa9d80567a7124bd6572dc51e82c1d636c000a',
+      '8bfe30dfa7781edc9eefe71064eb2c997d85d042b75ec60f28ff3f32e2eb0db1',
     );
   });
 

@@ -260,6 +260,93 @@ describe('equipment planning and item lights', () => {
     expect(nonArtifactSources).toEqual([]);
   });
 
+  it('applies an item definition’s intrinsic modifiers while equipped', () => {
+    const focus = definition('item.focus.intrinsic', {
+      category: 'misc',
+      equipment: { slots: ['neck'], handedness: 'none', reservedSlots: [] },
+      modifiers: { weaveRegen: 1, maxWeave: 2 },
+    });
+    const focusItem = item('item.focus.intrinsic.1', focus.id, {
+      type: 'equipped',
+      actorId: 'hero.demo',
+      slot: 'neck',
+    });
+    const base = createDemoRun();
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, neck: focusItem.itemId },
+    };
+    const run = { ...base, actors: [hero], items: [focusItem] };
+    const content = pack(focus);
+    const sources = equipmentModifiers({ run, content, actorId: 'hero.demo' });
+    expect(sources[0]!.modifiers).toEqual({ weaveRegen: 1, maxWeave: 2 });
+    // Intrinsic modifiers are printed on the definition exactly like `combat`, so they ride
+    // `base` and stay visible before identification.
+    expect(sources[0]!.publicModifiers).toEqual({ weaveRegen: 1, maxWeave: 2 });
+
+    const formulas = createDemoContentPack().entries.find(
+      (entry) => entry.kind === 'balance',
+    )!.formulas;
+    const before = deriveActorStats({
+      attributes: hero.attributes,
+      formulas,
+      weaveRegenAmount: 2,
+      equipmentModifiers: [],
+      conditionModifiers: [],
+    });
+    const equipped = deriveActorStats({
+      attributes: hero.attributes,
+      formulas,
+      weaveRegenAmount: 2,
+      equipmentModifiers: sources.map((source) => source.modifiers),
+      conditionModifiers: [],
+    });
+    expect(equipped.weaveRegen - before.weaveRegen).toBe(1);
+    expect(equipped.maxWeave - before.maxWeave).toBe(2);
+
+    const carriedRun = {
+      ...run,
+      actors: [{ ...hero, equipment: { ...hero.equipment, neck: null } }],
+      items: [{ ...focusItem, location: { type: 'backpack' as const, actorId: 'hero.demo' } }],
+    };
+    expect(equipmentModifiers({ run: carriedRun, content, actorId: 'hero.demo' })).toEqual([]);
+  });
+
+  it('sums intrinsic modifiers with the combat block and a rolled enchantment', () => {
+    const focus = definition('item.focus.enchanted', {
+      category: 'misc',
+      equipment: { slots: ['neck'], handedness: 'none', reservedSlots: [] },
+      combat: {
+        accuracy: 0,
+        defense: 1,
+        armor: 0,
+        damage: null,
+        range: 0,
+        ammunitionTag: null,
+      },
+      modifiers: { defense: 1, weaveRegen: 1 },
+    });
+    const focusItem = {
+      ...item('item.focus.enchanted.1', focus.id, {
+        type: 'equipped',
+        actorId: 'hero.demo',
+        slot: 'neck',
+      }),
+      enchantment: { enchantmentId: 'enchantment.test', modifiers: { weaveRegen: 1 } },
+    };
+    const base = createDemoRun();
+    const hero = {
+      ...base.actors[0]!,
+      equipment: { ...base.actors[0]!.equipment, neck: focusItem.itemId },
+    };
+    const sources = equipmentModifiers({
+      run: { ...base, actors: [hero], items: [focusItem] },
+      content: pack(focus),
+      actorId: 'hero.demo',
+    });
+    expect(sources[0]!.modifiers).toEqual({ defense: 2, weaveRegen: 2 });
+  });
+
   const leadenWeight: CurseContentEntry = {
     kind: 'curse',
     id: 'curse.leaden-weight',
