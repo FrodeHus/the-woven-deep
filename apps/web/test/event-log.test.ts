@@ -3,6 +3,7 @@ import {
   CONTENT_SCHEMA_VERSION,
   type CompiledContentPack,
   type MonsterContentEntry,
+  type SpellContentEntry,
 } from '@woven-deep/content';
 import type { HauntView, PublicEvent } from '@woven-deep/engine';
 import { LOG_CAPACITY, foldEventsIntoLog, type LogContext } from '../src/session/event-log.js';
@@ -38,10 +39,28 @@ const boneGnawer: MonsterContentEntry = {
   dropChance: 1,
 };
 
+const emberBolt: SpellContentEntry = {
+  kind: 'spell',
+  id: 'spell.ember',
+  name: 'Ember',
+  tags: [],
+  targetingId: 'target.actor',
+  range: 5,
+  actionCost: 100,
+  weaveCost: 4,
+  effects: [
+    {
+      effectId: 'effect.damage',
+      parameters: { damageType: 'fire', dice },
+      requiresLivingTarget: true,
+    },
+  ],
+};
+
 const pack: CompiledContentPack = {
   schemaVersion: CONTENT_SCHEMA_VERSION,
   hash: 'demo',
-  entries: [boneGnawer],
+  entries: [boneGnawer, emberBolt],
   generationReport: { foundationalCategories: [] },
 };
 
@@ -315,6 +334,47 @@ describe('foldEventsIntoLog', () => {
       haunts: [],
       pack,
     });
+    expect(log).toEqual([]);
+  });
+
+  it('logs a seen haunt cast naming both the caster and the spell', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [{ type: 'spell.cast', eventId: 'e1', actorId: 'actor.haunt.001', spellId: 'spell.ember' }],
+      0,
+      {
+        haunts: [
+          hauntView({
+            hallRecordId: 'record.a',
+            role: 'champion',
+            heroName: 'Kaelen',
+            actorId: 'actor.haunt.001',
+          }),
+        ],
+        pack,
+      },
+    );
+    expect(log).toMatchObject([
+      { text: "Kaelen, the Deep's Champion casts Ember.", tone: 'combat' },
+    ]);
+  });
+
+  it('logs the hero casting its own spell -- a seen cast whose actor is not a known haunt', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [{ type: 'spell.cast', eventId: 'e1', actorId: 'hero.demo', spellId: 'spell.ember' }],
+      0,
+      { haunts: [], pack },
+    );
+    expect(log).toMatchObject([{ text: 'You cast Ember.', tone: 'combat' }]);
+  });
+
+  it('stays silent for a cast when no context is supplied', () => {
+    const { log } = foldEventsIntoLog(
+      [],
+      [{ type: 'spell.cast', eventId: 'e1', actorId: 'hero.demo', spellId: 'spell.ember' }],
+      0,
+    );
     expect(log).toEqual([]);
   });
 
