@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CompiledContentPack, SpellContentEntry } from '@woven-deep/content';
 import {
   championCastAction,
+  chooseBehaviorAction,
   createDemoContentPack,
   createDemoRun,
   type ActiveRun,
@@ -320,5 +321,37 @@ describe('championCastAction', () => {
     const content = packWith(emberBolt);
     championCastAction({ state, actorId: CHAMPION_ACTOR_ID, content });
     expect(state.rng).toEqual(createDemoRun().rng);
+  });
+});
+
+describe('chooseBehaviorAction routes a haunt cast', () => {
+  it('returns the cast for a haunt with a legal spell at range', () => {
+    const state = runWithChampion({ abilityIds: ['spell.ember'], distance: 3 });
+    const action = chooseBehaviorAction({
+      state,
+      actorId: CHAMPION_ACTOR_ID,
+      content: packWith(emberBolt),
+    });
+    expect(action).toMatchObject({ type: 'cast', spellId: 'spell.ember' });
+  });
+
+  it('still bumps when adjacent', () => {
+    const state = runWithChampion({ abilityIds: ['spell.ember'], distance: 1 });
+    const action = chooseBehaviorAction({
+      state,
+      actorId: CHAMPION_ACTOR_ID,
+      content: packWith(emberBolt),
+    });
+    expect(action.type).toBe('bump-attack');
+  });
+
+  it('walks toward the hero when it cannot pay', () => {
+    const state = runWithChampion({ abilityIds: ['spell.ember'], distance: 3, weave: 0 });
+    const action = chooseBehaviorAction({
+      state,
+      actorId: CHAMPION_ACTOR_ID,
+      content: packWith(emberBolt),
+    });
+    expect(action.type).toBe('move');
   });
 });

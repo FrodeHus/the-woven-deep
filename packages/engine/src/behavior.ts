@@ -2,6 +2,7 @@ import type { CompiledContentPack } from '@woven-deep/content';
 import { actionCostFor, balanceEntry, type GameAction } from './actions.js';
 import { actorById, type ActorState } from './actor-model.js';
 import { actorDistance, awareHostileTarget } from './behavior-targeting.js';
+import { championCastAction } from './champion-casting.js';
 import { entryById } from './content-index.js';
 import { featureTiles } from './features.js';
 import { MERCHANT_BEHAVIOR_ID, merchantBehaviorAction } from './merchant-behavior.js';
@@ -139,6 +140,16 @@ export function chooseBehaviorAction(
       cost: actionCostFor(rules, 'action.attack'),
     };
   }
+  // A haunt that recorded spells casts them at range. Placed AFTER the adjacency branch on
+  // purpose: closing the distance is the player's counter-play against a caster, so melee range
+  // always means melee. Returns null for every actor that is not a Champion or Echo with an
+  // affordable, legal spell, which is every other monster in the game.
+  const cast = championCastAction({
+    state: input.state,
+    actorId: actor.actorId,
+    content: input.content,
+  });
+  if (cast) return cast;
   const spawn = swarmSpawnAction(input);
   if (spawn) return spawn;
   const investigation = actor.behaviorState.investigation;
