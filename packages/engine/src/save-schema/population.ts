@@ -21,13 +21,21 @@ export const relationship = z.strictObject({
   rightActorId: identifier,
   relationship: z.enum(['friendly', 'neutral', 'hostile']),
 });
-export const survival = z.strictObject({
+const survivalFields = {
   hungerReserve: safeNonNegative,
   hungerStage: z.enum(['sated', 'hungry', 'weak', 'starving']),
   nextStarvationAt: safeNonNegative.nullable(),
   emittedHungerWarnings: z.array(z.enum(['sated', 'hungry', 'weak', 'starving'])).readonly(),
   emittedFuelWarnings: z.array(identifier).readonly(),
+} as const;
+export const survival = z.strictObject({
+  ...survivalFields,
+  starvationTicks: safeNonNegative,
 });
+// The pre-ladder survival shape every save up to v18 carries: no `starvationTicks`, which the
+// escalating-starvation change appended at v19. Frozen as its own literal so the legacy run
+// schemas below keep validating what a real old save actually held.
+export const legacySurvivalPreStarvationLadder = z.strictObject(survivalFields);
 export const identification = z.strictObject({
   appearanceByContentId: z.record(identifier, identifier).readonly(),
   knownAppearanceIds: z.array(identifier).readonly(),

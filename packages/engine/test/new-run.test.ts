@@ -36,12 +36,12 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v18 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v19 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(18);
+    expect(first.schemaVersion).toBe(19);
     expect(first.mode).toBe('classic');
     expect(first.hero.tempering).toEqual({
       banked: 0,
@@ -536,8 +536,19 @@ describe('createNewRun records input', () => {
     // `collectedFragmentIds` removed and `schemaVersion` forced back to 17 reproduces the
     // preceding v16-content digest (`1b405347...`) exactly, so the delta is those two keys and
     // nothing else -- no RNG stream, no placement, no content hash moved.
+    // Re-pinned again for issue #158 (consistency honorable mentions): save schema v19 adds
+    // `survival.starvationTicks`, and content schema v17 adds the `starvationDamageIncrement` /
+    // `starvationDamageMaximum` balance fields alongside the retuned `starvationInterval`,
+    // `turnEfficiencyDecayInterval`, and the `hungry` stage modifier. Verified by dumping the
+    // decoded run field-by-field against an origin/main build: exactly three keys differ --
+    // `schemaVersion` (18 -> 19), `survival` (gaining `starvationTicks: 0` and nothing else), and
+    // `contentHash`. `items`, `populations`, `identification`, and every RNG stream are
+    // byte-identical: no loot table, merchant service, or identification-pool member changed, so
+    // nothing shifts the draw order at creation, and every retuned knob is read during play rather
+    // than during run creation. Expected schema and content-authoring drift, not an engine
+    // regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'a66f456609ee6ea088585276515d5fc3654350aaa3bf6563d6eda4da36621f91',
+      '8ab2df3e649e8d77284e7e9f32cfd23ee613032a1b67764c308688ec698c75d1',
     );
   });
 

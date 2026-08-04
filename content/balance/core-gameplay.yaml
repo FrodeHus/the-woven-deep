@@ -1,4 +1,4 @@
-schemaVersion: 16
+schemaVersion: 17
 entries:
   - kind: balance
     startingCurrency: 40
@@ -15,8 +15,10 @@ entries:
     attributeMaximum: 30
     hungerMaximum: 5000
     hungerThresholds: { hungry: 1500, weak: 500, starving: 0 }
-    starvationInterval: 500
+    starvationInterval: 250
     starvationDamage: 1
+    starvationDamageIncrement: 1
+    starvationDamageMaximum: 6
     recoveryInterval: 500
     recoveryAmount: 10
     weaveRegenAmount: 2
@@ -24,7 +26,9 @@ entries:
     recoveryByHungerStage: { sated: 100, hungry: 50, weak: 0, starving: 0 }
     hungerStageModifiers:
       sated: {}
-      hungry: {}
+      # Hunger dulls the senses before it dulls the body, so the ladder reads as an escalation:
+      # hungry costs perception, weak costs the melee/defense point, starving costs two.
+      hungry: { search: -1 }
       weak: { meleeAccuracy: -1, meleeDamageBonus: -1, defense: -1 }
       starving: { meleeAccuracy: -2, meleeDamageBonus: -2, defense: -2 }
     formulas:
@@ -67,7 +71,10 @@ entries:
       discoveryCoefficient: 25
       completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }
       turnEfficiencyBudget: 500
-      turnEfficiencyDecayInterval: 200
+      # One point per 50 turns: a brisk twenty-floor run keeps most of the budget, a thorough one
+      # keeps a fraction, and a grind past ~25,000 turns keeps none. At 200 the line only bottomed
+      # out at 100,000 turns, which no run reaches -- it paid out almost in full regardless (#158).
+      turnEfficiencyDecayInterval: 50
     pointBuy:
       budget: 30
       costs:

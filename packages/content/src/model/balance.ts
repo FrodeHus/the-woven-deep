@@ -29,7 +29,12 @@ export interface BalanceContentEntry extends BaseContentEntry {
   readonly hungerMaximum: number;
   readonly hungerThresholds: Readonly<{ hungry: number; weak: number; starving: number }>;
   readonly starvationInterval: number;
+  /** Damage the first starvation tick deals. */
   readonly starvationDamage: number;
+  /** Added to the previous tick's damage on each successive tick. Zero keeps starvation flat. */
+  readonly starvationDamageIncrement: number;
+  /** Ceiling the escalating tick damage never exceeds. Never below `starvationDamage`. */
+  readonly starvationDamageMaximum: number;
   readonly recoveryInterval: number;
   readonly recoveryAmount: number;
   readonly weaveRegenAmount: number;
