@@ -55,22 +55,23 @@ So `travel.ts` and `explore.ts` move to `@woven-deep/session-core` essentially a
   }
 ```
 
-The reply is the ordinary snapshot plus what the walk did:
+The reply is **one ordinary `state` message per applied step**, followed by:
 
 ```ts
 | {
-    readonly type: 'travelled';
-    readonly snapshot: ServerRunSnapshot;
-    /** Steps actually applied — the client advances its cursor by exactly this. */
+    readonly type: 'travel-ended';
+    /** null when only the cap was reached, so the walk is still viable and the client asks for
+     *  the next batch. 'blocked' ends it silently, as a blocked step does today. */
+    readonly reason: StopReason | 'arrived' | 'blocked' | null;
     readonly stepsTaken: number;
-    /** Why it ended, or null when it stopped only because the chunk cap was reached. */
-    readonly reason: StopReason | 'arrived' | null;
     /** Item ids the walk newly offered, folded into the client's per-floor `offered` set. */
     readonly offeredItemIds: readonly string[];
   }
 ```
 
-`lastEvents` on the snapshot carries every event from every step, in order, so the log reads exactly as it does today.
+Reusing `state` rather than inventing a batch envelope means no new snapshot machinery: the client already renders those frames, each carries its own `lastEvents` so the log reads exactly as it does today, and the floor patches from PR #216 chain naturally because the connection's encoder sees the steps in order.
+
+Per-step command ids are the batch's id suffixed `:i`. The separator must stay inside the save schema's id pattern (`[a-z0-9._:-]`) — a `/` is rejected on persist, and during implementation that surfaced only as a dead connection rather than a clear error.
 
 ## Component 2 — The chunk cap (the real trade)
 
