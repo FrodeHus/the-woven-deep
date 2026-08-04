@@ -1159,6 +1159,15 @@ Never silently attach an active run to a different content hash. Keep old conten
 3. Verify the previous expected hash and smoke test.
 4. Admit play only after verification succeeds.
 
+A run that was in flight when the hash changed cannot be opened again: the server refuses it and the
+player sees `content-mismatch` on every reconnect. That run's stored row is otherwise only cleared
+when a run concludes, so the player would stay stranded there. The error screen therefore offers
+"Discard this run", which calls `DELETE /api/profile/active-run` (authenticated, origin- and
+CSRF-checked) and lets them start a new one. The endpoint refuses with `409 run_resumable` when the
+stored run still matches the running pack, so it can never throw away a run that is merely paused --
+which also means restoring the previous content directory, per the rollback steps above, makes the
+run resumable again and is always the option to prefer over discarding it.
+
 ## Complete examples
 
 Each content-kind section above contains a complete copyable `schemaVersion: 16` document. The bundled `content/` directory is also an executable reference and is validated in every repository test run. Copy the complete directory before customizing it; do not mount a partial overlay.

@@ -95,6 +95,23 @@ export async function deleteAccount(
   if (!response.ok) throw new Error('Failed to delete the account.');
 }
 
+/** Discards the profile's stored run when the server can no longer open it -- the recovery for a
+ * `content-mismatch` handshake, where the pack the run was built against no longer exists and
+ * every reconnect fails identically. The server refuses (409) if the run is in fact still
+ * resumable, so this can never throw away a healthy run; that refusal surfaces as a thrown error
+ * rather than a silent no-op, since the screen offering this has nothing else to fall back on. */
+export async function discardStrandedRun(
+  csrfToken: string,
+  fetcher: typeof fetch = fetch,
+): Promise<void> {
+  const response = await fetcher('/api/profile/active-run', {
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: { 'x-csrf-token': csrfToken },
+  });
+  if (!response.ok) throw new Error('Failed to discard the stranded run.');
+}
+
 export async function fetchProfileSettings(
   fetcher: typeof fetch = fetch,
 ): Promise<{ settingsJson: string | null; settingsVersion: number }> {
