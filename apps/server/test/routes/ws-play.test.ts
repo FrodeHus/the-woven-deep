@@ -479,6 +479,89 @@ describe('/ws/play connection', () => {
     }
   });
 
+  it('walks a batched travel intent and replies with one state per step then travel-ended', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-travel@example.com');
+
+    const ws = await app.injectWS('/ws/play', {
+      headers: { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL },
+    });
+    try {
+      const nextMessage = messageQueue(ws);
+      await nextMessage(); // hello
+      const initial = await startRunOverWs(ws, nextMessage);
+      const revisionBefore = initial.type === 'state' ? initial.snapshot.revision : -1;
+
+      ws.send(
+        JSON.stringify({
+          type: 'travel',
+          commandId: 'command.profile-0000000001',
+          expectedRevision: revisionBefore,
+          mode: 'explore',
+          steps: [],
+          onArrive: null,
+          autoPickup: { allowConsumables: true },
+          offeredItemIds: [],
+        }),
+      );
+
+      // Drain until the batch closes: every frame before `travel-ended` is an ordinary `state`, so
+      // the client needs no new rendering path for a batched walk.
+      const states: ServerMessage[] = [];
+      let ended: ServerMessage | null = null;
+      for (let frame = 0; frame < 64 && ended === null; frame += 1) {
+        const message = await nextMessage();
+        if (message.type === 'travel-ended') ended = message;
+        else states.push(message);
+      }
+
+      expect(ended).not.toBeNull();
+      expect(states.every((message) => message.type === 'state')).toBe(true);
+      expect(states.length).toBeGreaterThan(0);
+      if (ended?.type !== 'travel-ended') throw new Error('expected travel-ended');
+      expect(ended.stepsTaken).toBe(states.length);
+      // Many turns advanced on ONE round trip -- the entire point of the batch.
+      const last = states.at(-1)!;
+      if (last.type !== 'state') throw new Error('expected a state frame');
+      expect(last.snapshot.revision).toBeGreaterThan(revisionBefore);
+    } finally {
+      ws.terminate();
+    }
+  });
+
+  it('refuses a malformed travel plan without touching the run', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-travel-bad@example.com');
+
+    const ws = await app.injectWS('/ws/play', {
+      headers: { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL },
+    });
+    try {
+      const nextMessage = messageQueue(ws);
+      await nextMessage(); // hello
+      const initial = await startRunOverWs(ws, nextMessage);
+      const revisionBefore = initial.type === 'state' ? initial.snapshot.revision : -1;
+
+      ws.send(
+        JSON.stringify({
+          type: 'travel',
+          commandId: 'command.profile-0000000002',
+          expectedRevision: revisionBefore,
+          mode: 'stairs', // not a batched mode
+          steps: [],
+          onArrive: null,
+          autoPickup: null,
+          offeredItemIds: [],
+        }),
+      );
+      const error = await nextMessage();
+      expect(error.type).toBe('error');
+      expect(ws.readyState).toBe(ws.OPEN);
+    } finally {
+      ws.terminate();
+    }
+  });
+
   it('sends the floor whole once, then as patches, and whole again on resync', async () => {
     await app.ready();
     const sessionCookies = await verifyAndGetCookies(app, database, 'ws-patching@example.com');
