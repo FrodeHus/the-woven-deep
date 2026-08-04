@@ -16,3 +16,5 @@ entries:
       - { contentId: item.lockpick, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 3 }
       - { contentId: item.pitch-torch, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.lamp-oil, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.chain-spark-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.weave-shield-tome, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
