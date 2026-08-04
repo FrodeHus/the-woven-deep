@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameplayProjection, Point } from '@woven-deep/engine';
-import { computeExplorePath } from '../src/session/explore.js';
+import { computeExplorePath } from '../src/explore.js';
 
 const WIDTH = 12;
 const HEIGHT = 8;

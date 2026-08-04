@@ -1337,6 +1337,16 @@ export function placeFloorPopulations(input: PlacePopulationInput): FloorPopulat
   // pass makes: placed actors reserve cells against the fragment spawn's `openFloorCells` and
   // against `placeFloorLoot`'s candidate pool. Only the vault item slots, whose positions come
   // from the floor's own slots, are outcome-independent in position as well as in count.
+  // The vault door/chest slots owe the same unconditional guarantee as the item slots below, and
+  // `placePopulation` only fills them on a `placed` result -- so a floor where every attempt failed
+  // would otherwise get its vault items and none of its vault furniture. `fillFeatureSlots` skips
+  // positions `run.features` already holds, so on a floor that did place something this is a no-op
+  // and the features keep the pre-loot ordering the attempts gave them (monsters never land on a
+  // cell a chest or door already claimed).
+  const tailFeatures = fillFeatureSlots({ ...input, run });
+  if (tailFeatures.length > 0) {
+    run = { ...run, features: sortByFeatureId([...run.features, ...tailFeatures]) };
+  }
   const itemSlots = fillItemSlots({ ...input, run }, run.rng['loot-placement']);
   run = {
     ...run,

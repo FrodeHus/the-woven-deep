@@ -151,6 +151,33 @@ function handleRunMessage(
     return [outcomeToMessage(session.acceptDeath())];
   }
 
+  if (message.type === 'travel') {
+    const applied = session.applyTravel({
+      commandId: message.commandId,
+      expectedRevision: message.expectedRevision,
+      request: {
+        mode: message.mode,
+        steps: message.steps,
+        onArrive: message.onArrive,
+        autoPickup: message.autoPickup,
+        offeredItemIds: message.offeredItemIds,
+      },
+    });
+    // One ordinary `state` per applied step, so the client renders and animates each turn exactly
+    // as it does a single dispatched move -- no new snapshot machinery, and the floor patches
+    // chain naturally because the connection's encoder sees them in order. `travel-ended` closes
+    // the batch and says whether the walk is finished or merely capped.
+    return [
+      ...applied.snapshots.map((snapshot): ServerMessage => ({ type: 'state', snapshot })),
+      {
+        type: 'travel-ended',
+        reason: applied.reason,
+        stepsTaken: applied.stepsTaken,
+        offeredItemIds: applied.offeredItemIds,
+      },
+    ];
+  }
+
   // The client could not apply a patch and needs the floor whole. Nothing is applied to the run --
   // the current snapshot is simply re-sent, and the route has already cleared the encoder's cache
   // (see `isResyncRequest`) so it encodes as a full sync.

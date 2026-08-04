@@ -228,8 +228,12 @@ describe('nextSceneState', () => {
   });
 
   it('bursts at the hero cell on the snapshot the death conclusion first appears', () => {
-    const snap = snapshot({ heroX: 5, heroY: 6, completionType: 'died' });
-    const state = nextSceneState(null, snap, 0);
+    const living = nextSceneState(null, snapshot({ heroX: 5, heroY: 6 }), 0);
+    const state = nextSceneState(
+      living,
+      snapshot({ heroX: 5, heroY: 6, completionType: 'died' }),
+      STEP_MS,
+    );
     expect(state.effects).toContainEqual(
       expect.objectContaining({ kind: 'death-burst', x: 5, y: 6 }),
     );
@@ -237,9 +241,18 @@ describe('nextSceneState', () => {
 
   it('does not repeat the hero death burst on later concluded snapshots', () => {
     const snap = snapshot({ heroX: 5, heroY: 6, completionType: 'died' });
-    const first = nextSceneState(null, snap, 0);
-    const second = nextSceneState(first, snap, STEP_MS);
+    const living = nextSceneState(null, snapshot({ heroX: 5, heroY: 6 }), 0);
+    const first = nextSceneState(living, snap, STEP_MS);
+    const second = nextSceneState(first, snap, STEP_MS * 2);
     expect(second.effects.some((effect) => effect.kind === 'death-burst')).toBe(false);
+  });
+
+  it('does not burst on the first scene of an already-concluded save loaded cold', () => {
+    // No `prev` means nothing was rendered before this scene: the death happened in an earlier
+    // session, so there is no transition to play -- the conclusion overlay carries that moment.
+    const snap = snapshot({ heroX: 5, heroY: 6, completionType: 'died' });
+    const state = nextSceneState(null, snap, 0);
+    expect(state.effects.some((effect) => effect.kind === 'death-burst')).toBe(false);
   });
 
   it('does not burst for a non-death conclusion', () => {

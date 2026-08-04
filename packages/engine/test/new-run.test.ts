@@ -461,6 +461,18 @@ describe('createNewRun records input', () => {
     // retuned across every band. None of those fields are read by `createNewRun` -- monsters spawn
     // on first DESCENT, not at creation, and the town seeds only NPC populations -- so the only
     // field that can differ is the embedded `contentHash`, exactly like the #154 re-pin above.
+    // Re-pinned again for issue #145 (potion risk): four new `shuffled` potions joined
+    // `identification-pool.potions`. Unlike every content re-pin above, this one DOES move an RNG
+    // stream by design -- `allocateIdentificationMap` runs during run creation, and a larger pool
+    // means a longer name shuffle plus one extra visual roll per new item, so the shared `effects`
+    // cursor advances further and every pool sorted after `potions` (rings, shields, weapons) draws
+    // different names. Verified by diffing the decoded run objects field-by-field against the prior
+    // pin: only `contentHash`, `identification.appearanceByContentId`, and `rng.effects` differ --
+    // the appearance delta is exactly the four added entries plus re-rolled names in the potions
+    // pool and the three pools that follow it, while `armor`/`light-sources` (sorted before
+    // `potions`) are untouched, and no `items`, `populations`, `floors`, or other stream moved.
+    // Expected content-authoring drift from growing an identification pool, not an engine
+    // regression.
     // Re-pinned again for issue #149 (gold sinks): `content/items/deep-catalog.yaml` adds four
     // instance-identified items (deepsteel blade, warded hauberk, bulwark shield, warded lantern).
     // `allocateIdentificationMap` draws one `effects` roll per instance-identified item at run
@@ -471,9 +483,13 @@ describe('createNewRun records input', () => {
     // every other RNG stream (notably `merchant-stock`), is byte-identical; the new town/lampwright
     // loot-table choices are all depth-banded at 8 or deeper, so `projectLootGraph` prunes them at
     // the town's depth and the stock weights are unchanged at creation. Expected content-authoring
-    // drift, not an engine regression.
+    // drift, not an engine regression. (Re-derived after merging #145's potion pins: the same
+    // three-key delta was re-verified against an origin/main build in a scratch worktree, so this
+    // digest carries both pool growths and nothing else.) Moved once more by clamping
+    // `curse.cold-tether`/`curse.embermarked`'s out-of-range trigger durations, which touches
+    // `contentHash` only -- no curse trigger is rolled during run creation.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '27c324a3bd29573706d18d0f3b9cf3a5a408ad2098568b0a000217f1e8fee4d5',
+      'face87d54069a84dc0575005b1f273111fadab48b6c33ac494897e77df99c501',
     );
   });
 

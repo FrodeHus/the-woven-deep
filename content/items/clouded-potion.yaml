@@ -1,0 +1,27 @@
+schemaVersion: 14
+entries:
+  - kind: item
+    id: item.clouded-potion
+    name: Clouded draught
+    glyph: "!"
+    color: "#cfd6dc"
+    description: A thick, silty draught that tastes of salt and river-bottom. It puts out a fire, settles a poisoned gut, and sits in the belly like a meal.
+    lore: "Not a cure for anything in particular. It simply washes out whatever the Deep has put in you and leaves you fed, which most days amounts to the same thing."
+    tags: [identification, potion, food]
+    minDepth: 1
+    maxDepth: 20
+    category: potion
+    stackLimit: 4
+    price: 12
+    rarity: rare
+    actionCost: 100
+    equipment: null
+    combat: null
+    light: null
+    artifact: null
+    identification: { mode: shuffled, poolId: identification-pool.potions }
+    effects:
+      - { effectId: effect.condition.remove, parameters: { conditionId: condition.burning }, requiresLivingTarget: true }
+      - { effectId: effect.condition.remove, parameters: { conditionId: condition.sickened }, requiresLivingTarget: true }
+      - { effectId: effect.hunger.restore, parameters: { amount: 2200 }, requiresLivingTarget: true }
+      - { effectId: effect.item.consume, parameters: { quantity: 1 }, requiresLivingTarget: false }

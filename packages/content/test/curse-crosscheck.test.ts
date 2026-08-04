@@ -43,3 +43,38 @@ describe('curse chance / roster cross-check', () => {
     expect(pack.entries.some((entry) => entry.kind === 'balance')).toBe(true);
   });
 });
+
+const compactCondition =
+  '{kind: condition, id: condition.test-chill, name: Test chill, tags: [debuff], description: Cold., color: "#7fbfe0", duration: {mode: timed, default: 3, maximum: 6}, stacking: {mode: refresh, maximumStacks: 1}, modifiersPerStack: {meleeAccuracy: -1}}';
+
+const curseWithDuration = (duration: number): string =>
+  `{kind: curse, id: curse.test-tether, name: Test tether, tags: [curse], revealText: "It pulls.", drawbackModifiers: {maxWeave: -1}, trigger: {on: on-floor-enter, chanceBps: 3000, effect: {effectId: effect.condition.apply, parameters: {conditionId: condition.test-chill, duration: ${duration}}}}}`;
+
+async function curseFixture(duration: number): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), 'woven-content-curse-duration-'));
+  await writeFile(
+    join(root, 'pack.yaml'),
+    `schemaVersion: 14\nentries: [${compactMonster}, ${compactItem}, ${compactVault}, ${compactCondition}, ${curseWithDuration(duration)}, ${balanceWithCurseChance(1000)}]\n`,
+  );
+  return root;
+}
+
+describe('curse trigger effect validation', () => {
+  it('rejects a trigger duration past the condition maximum at compile time', async () => {
+    // Curse trigger effects were the one effect list never run through `effectIssues`, so a curse
+    // could hand a timed condition a duration its own `maximum` forbids. That pack compiled clean
+    // and then threw a RangeError out of `applyCondition` the first time the trigger's chance roll
+    // happened to hit -- a mid-run crash no particular seed is guaranteed to surface.
+    const root = await curseFixture(300);
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(ContentCompileError);
+    await expect(compileContentDirectory({ rootDir: root })).rejects.toThrow(
+      /duration 300 exceeds maximum 6/,
+    );
+  });
+
+  it('accepts a trigger duration within the condition maximum', async () => {
+    const root = await curseFixture(6);
+    const pack = await compileContentDirectory({ rootDir: root });
+    expect(pack.entries.some((entry) => entry.kind === 'curse')).toBe(true);
+  });
+});

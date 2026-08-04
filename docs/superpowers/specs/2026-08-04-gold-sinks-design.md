@@ -117,6 +117,22 @@ a real trade, not a shrug.
 - **New lock or light mechanics.** Lever C and D move prices and stock bands only. In particular no
   lock is made unopenable without a purchased item — the no-hard-gates principle holds.
 
+## Incidental fix: an unvalidated curse crash
+
+Shifting the `effects` stream made `curse.cold-tether`'s floor-enter roll hit where it previously
+missed, which surfaced a latent crash: the curse applied `condition.chilled` with `duration: 300`
+against that condition's authored `maximum: 6`, so `applyCondition` threw a `RangeError` mid-run.
+`curse.embermarked` had the same defect (`condition.burning`, `duration: 200`, maximum 6). Both are
+authored in world-time units against turn-based conditions; both are clamped to 6.
+
+The durations were only half the problem. `effectIssues` — which already contains exactly this
+check — was wired for items, spells, and traps, but **curse trigger effects were never run through
+it**, which is how the values shipped. `validation/curse.ts` closes that gap, so the compiler now
+rejects the original pack with `duration 300 exceeds maximum 6`.
+
+This is outside #149's scope and would be reasonable to split into its own change; it is here
+because the branch cannot go green without it.
+
 ## Determinism notes
 
 - The four new instance-identified items add four `effects` rolls to `allocateIdentificationMap`,
