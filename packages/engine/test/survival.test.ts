@@ -365,6 +365,83 @@ describe('survival clocks', () => {
     expect(result.state.survival.nextStarvationAt).toBe(507);
   });
 
+  it('escalates starvation damage on each successive tick up to the configured maximum', () => {
+    const input = fixture({ elapsed: 0, hunger: 0 });
+    const content = {
+      ...input.content,
+      entries: [
+        balance({
+          starvationInterval: 10,
+          starvationDamage: 1,
+          starvationDamageIncrement: 1,
+          starvationDamageMaximum: 3,
+        }),
+        ...input.content.entries.filter((entry) => entry.kind !== 'balance'),
+      ],
+    };
+    // Five deadlines fall inside this step: 1, 2, 3 damage, then the 3-point cap twice over.
+    const state = {
+      ...input.state,
+      worldTime: 50,
+      survival: {
+        ...input.state.survival,
+        hungerReserve: 0,
+        hungerStage: 'starving' as const,
+        nextStarvationAt: 10,
+        starvationTicks: 0,
+      },
+    };
+    const result = advanceSurvival({ ...input, content, state, elapsed: 0 });
+    expect(input.state.actors[0]!.health - result.state.actors[0]!.health).toBe(1 + 2 + 3 + 3 + 3);
+    expect(result.state.survival.starvationTicks).toBe(5);
+  });
+
+  it('reproduces a flat starvation tick when the increment is zero', () => {
+    const input = fixture({ elapsed: 0, hunger: 0 });
+    const content = {
+      ...input.content,
+      entries: [
+        balance({
+          starvationInterval: 10,
+          starvationDamage: 2,
+          starvationDamageIncrement: 0,
+          starvationDamageMaximum: 9,
+        }),
+        ...input.content.entries.filter((entry) => entry.kind !== 'balance'),
+      ],
+    };
+    const state = {
+      ...input.state,
+      worldTime: 30,
+      survival: {
+        ...input.state.survival,
+        hungerReserve: 0,
+        hungerStage: 'starving' as const,
+        nextStarvationAt: 10,
+        starvationTicks: 0,
+      },
+    };
+    const result = advanceSurvival({ ...input, content, state, elapsed: 0 });
+    expect(input.state.actors[0]!.health - result.state.actors[0]!.health).toBe(6);
+  });
+
+  it('resets the starvation ladder when the hero stops starving', () => {
+    const input = fixture({ elapsed: 0, hunger: 0 });
+    const state = {
+      ...input.state,
+      worldTime: 0,
+      survival: {
+        ...input.state.survival,
+        hungerReserve: 50,
+        hungerStage: 'hungry' as const,
+        nextStarvationAt: null,
+        starvationTicks: 4,
+      },
+    };
+    const result = advanceSurvival({ ...input, state, elapsed: 0 });
+    expect(result.state.survival.starvationTicks).toBe(0);
+  });
+
   it('rejects saved hunger values that disagree with the loaded balance data', () => {
     const input = fixture({ elapsed: 0, hunger: 20 });
     expect(() => validateContentBoundRun(input.state, input.content)).not.toThrow();

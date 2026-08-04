@@ -1096,4 +1096,69 @@ describe('App identity/account — ProfileSession routing', () => {
     expect(JSON.parse(socket.rawSent.at(-1)!)).toMatchObject({ type: 'accept-death' });
     expect(await screen.findByText(/you have fallen/i)).toBeInTheDocument();
   });
+
+  /** A rebuilt content pack strands the stored run: the server refuses to open it and every
+   * reconnect dead-ends on the same `content-mismatch`. Retry alone can never clear that, so the
+   * screen has to offer the one action that can -- discarding the unplayable run. */
+  it('a content-mismatch connect offers to discard the stranded run, which clears it server-side and reconnects', async () => {
+    const user = userEvent.setup();
+    const { createSocket, sockets } = profileSocketFactory();
+    const fetcher = vi.fn((url: string) => {
+      if (typeof url === 'string' && url.includes('/api/profile/active-run')) {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify(pack), { status: 200 }));
+    }) as unknown as typeof fetch;
+
+    render(
+      <App
+        fetcher={fetcher}
+        storage={fakeStorage()}
+        accountOverride={SIGNED_IN_ACCOUNT}
+        createSocket={createSocket}
+      />,
+    );
+
+    await waitFor(() => expect(sockets.length).toBe(1));
+    sockets[0]!.emit({
+      type: 'error',
+      code: 'content-mismatch',
+      message: 'active run content hash aaa does not match server pack bbb',
+    });
+
+    expect(await screen.findByText(/your run could not be reached/i)).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: /discard/i }));
+
+    expect(fetcher).toHaveBeenCalledWith(
+      '/api/profile/active-run',
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+    // Clearing the row is only half the recovery: the client must reconnect on its own so the
+    // player lands on chargen rather than back on the same error screen.
+    await waitFor(() => expect(sockets.length).toBe(2));
+  });
+
+  it('offers only Retry for a protocol error that discarding the run cannot fix', async () => {
+    const { createSocket, sockets } = profileSocketFactory();
+
+    render(
+      <App
+        fetcher={packFetcher()}
+        storage={fakeStorage()}
+        accountOverride={SIGNED_IN_ACCOUNT}
+        createSocket={createSocket}
+      />,
+    );
+
+    await waitFor(() => expect(sockets.length).toBe(1));
+    sockets[0]!.emit({
+      type: 'error',
+      code: 'version-mismatch',
+      message: 'protocol version 1 is not supported',
+    });
+
+    expect(await screen.findByText(/your run could not be reached/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /discard/i })).not.toBeInTheDocument();
+  });
 });

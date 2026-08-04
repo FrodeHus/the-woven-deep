@@ -4,6 +4,7 @@ import { emptyLifetimeState, type LifetimeState } from '@woven-deep/engine';
 import type { AuthBundle } from './auth.js';
 import { ServerRunRecordRepository } from '../db/hall-repository.js';
 import { ProfileRepository } from '../db/profile-repository.js';
+import { ActiveRunRepository } from '../db/active-run-repository.js';
 import {
   requireOrigin,
   requireSession,
@@ -21,6 +22,7 @@ const EMPTY_LIFETIME: LifetimeState = emptyLifetimeState();
 export function registerProfileRoutes(
   app: FastifyInstance,
   auth: AuthBundle,
+  contentHash: string,
   database?: Database.Database,
 ): void {
   const sessionPreHandler = requireSession(auth.session);
@@ -101,6 +103,40 @@ export function registerProfileRoutes(
       }
 
       reply.send({ ok: true });
+    },
+  );
+
+  // Discards a stored run the server can no longer open. When the content pack changes under an
+  // in-flight run, `ServerPlaySession.open` refuses it with `ContentHashMismatchError` and every
+  // reconnect dead-ends on the same error -- the row is otherwise only ever cleared by a run
+  // CONCLUDING, so without this the profile can never play again. Deliberately narrow: a run whose
+  // hash still matches the live pack is resumable and is refused (409), which also means this can
+  // never race a live in-memory `ServerPlaySession` (one can only exist for a matching pack) or be
+  // used to wipe a healthy run. No `confirm` flag, unlike `DELETE /api/profile`: the run this
+  // discards is already unplayable, so there is nothing recoverable to guard.
+  app.delete(
+    '/api/profile/active-run',
+    { preHandler: [originPreHandler, sessionPreHandler, csrfPreHandler] },
+    async (request, reply) => {
+      const profileId = request.profileId;
+      if (profileId === undefined) {
+        return;
+      }
+
+      if (!database) {
+        reply.code(204).send();
+        return;
+      }
+
+      const activeRuns = new ActiveRunRepository(database);
+      const stored = activeRuns.get(profileId);
+      if (stored !== undefined && stored.contentHash === contentHash) {
+        reply.code(409).send({ error: 'run_resumable' });
+        return;
+      }
+
+      activeRuns.clear(profileId);
+      reply.code(204).send();
     },
   );
 

@@ -59,10 +59,11 @@ import {
   population,
   populationV7,
   relationship,
-  survival,
+  legacySurvivalPreStarvationLadder,
 } from './population.js';
-import { runConclusionSchema, runKillsByModel, runMetrics } from './run-record.js';
+import { rngEntries, runConclusionSchema, runKillsByModel, runMetrics } from './run-record.js';
 import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT } from '../versions.js';
+import type { RNG_STREAM_NAMES } from '../versions.js';
 import { RUN_MODES } from '../model.js';
 
 // The pre-curse heirloom snapshot: identical to the live `heirloom` except it carries no `curse`,
@@ -449,7 +450,7 @@ export const legacyActiveRunV7Schema = z.strictObject({
   items: z.array(itemV7).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -495,7 +496,7 @@ export const legacyActiveRunV9Schema = z.strictObject({
   items: z.array(item).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -544,7 +545,7 @@ export const legacyActiveRunV10Schema = z.strictObject({
   items: z.array(item).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -607,6 +608,62 @@ const legacyV17RngEntries = Object.fromEntries(
   LEGACY_V17_RNG_STREAM_NAMES.map((name) => [name, uint32State]),
 ) as Record<(typeof LEGACY_V17_RNG_STREAM_NAMES)[number], typeof uint32State>;
 
+// The pre-ladder save shape a real v18 save carries: identical to the current run schema except its
+// `survival`, which is pinned to the frozen `legacySurvivalPreStarvationLadder` (no
+// `starvationTicks`, which escalating starvation appended at v19). Its `rng` is the live
+// twelve-stream list because v18 added no stream, and it carries the `collectedFragmentIds` that
+// cross-run tablet assembly introduced at v18. Spelled out as a frozen literal (not derived from
+// the live `activeRunSchema`) so a future schema bump can't silently change what a real v18 save is
+// validated against.
+export const legacyActiveRunV18Schema = z.strictObject({
+  schemaVersion: z.literal(18),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  mode: z.enum(RUN_MODES),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(actor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival: legacySurvivalPreStarvationLadder,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  offeredArtifact: identifier.nullable(),
+  artifactsUndiscovered: z.array(identifier).readonly(),
+  collectedFragmentIds: z.array(identifier).readonly(),
+  metrics: runMetrics,
+  conclusion: runConclusionSchema.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
+});
+
 // The pre-lifetime-fragments save shape: identical to the current run schema except it carries no
 // `collectedFragmentIds`, which cross-run tablet assembly introduced at v18.
 export const legacyActiveRunV17Schema = z.strictObject({
@@ -637,7 +694,7 @@ export const legacyActiveRunV17Schema = z.strictObject({
   items: z.array(item).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -685,7 +742,7 @@ export const legacyActiveRunV16Schema = z.strictObject({
   items: z.array(item).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -739,7 +796,7 @@ export const legacyActiveRunV15Schema = z.strictObject({
   items: z.array(item).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -793,7 +850,7 @@ export const legacyActiveRunV14Schema = z.strictObject({
   items: z.array(item).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -844,7 +901,7 @@ export const legacyActiveRunV13Schema = z.strictObject({
   items: z.array(legacyItemV13).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -895,7 +952,7 @@ export const legacyActiveRunV12Schema = z.strictObject({
   items: z.array(item).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -944,7 +1001,7 @@ export const legacyActiveRunV11Schema = z.strictObject({
   items: z.array(item).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -993,7 +1050,7 @@ export const legacyActiveRunV8Schema = z.strictObject({
   items: z.array(item).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -1037,7 +1094,7 @@ export const legacyActiveRunV6Schema = z.strictObject({
   items: z.array(itemV7).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -1081,7 +1138,7 @@ export const legacyActiveRunV5Schema = z.strictObject({
   items: z.array(itemV7).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,
@@ -1111,7 +1168,7 @@ export const legacyActiveRunV4Schema = z.strictObject({
   items: z.array(legacyItem).readonly(),
   features: z.array(feature).readonly(),
   relationships: z.array(relationship).readonly(),
-  survival,
+  survival: legacySurvivalPreStarvationLadder,
   identification,
   activeFloorId: identifier,
   activeFloorEnteredAt: safeNonNegative,

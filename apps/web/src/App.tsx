@@ -9,12 +9,16 @@ import {
   type RunRecordRepository,
   type Uint32State,
 } from '@woven-deep/engine';
-import { deleteAccount, logout, playWsUrl } from './api.js';
+import { deleteAccount, discardStrandedRun, logout, playWsUrl } from './api.js';
 import { GUEST_ACCOUNT, type AccountState } from './session/account.js';
 import { loadSightings } from './session/codex.js';
 import type { LogLine } from './session/event-log.js';
 import { GuestSession, type SessionNotice } from './session/guest-session.js';
-import { ProfileSession, type PendingProfileStart } from './session/profile-session.js';
+import {
+  ProfileSession,
+  ProtocolConnectError,
+  type PendingProfileStart,
+} from './session/profile-session.js';
 import type { RunSession } from './session/run-session.js';
 import { clearGuestSession } from './session/clear-guest-session.js';
 import { randomSeed } from './session/seed.js';
@@ -515,7 +519,11 @@ export function App({
   // notices `ProfileSession` itself surfaces once connected (those flow through `snapshot.notice` ->
   // `AppBanners` like any other session notice); there is no session object yet to carry a notice
   // when `ProfileSession.connect` itself rejects, so this is `App`'s own boot-error state for that.
-  const [profileError, setProfileError] = useState<string>();
+  /** A signed-in action that failed, as the title screen's boot-error branch renders it. `code` is
+   * the server `error` frame's code when the failure came from a handshake (see
+   * `ProtocolConnectError`), which is what decides whether the screen can offer more than Retry;
+   * failures with no wire code (a failed account delete) simply carry none. */
+  const [profileError, setProfileError] = useState<{ message: string; code?: string }>();
 
   const closeOverlay = (): void => setOverlay(null);
   /** Play-scope overlays (inventory / character sheet / map-journal) require an actual live run —
@@ -633,7 +641,26 @@ export function App({
     void deleteAccount(account.csrfToken ?? '', fetcher)
       .then(() => dropToGuest())
       .catch((thrown) => {
-        setProfileError(thrown instanceof Error ? thrown.message : 'Failed to delete the account.');
+        setProfileError({
+          message: thrown instanceof Error ? thrown.message : 'Failed to delete the account.',
+        });
+      });
+  }
+
+  /**
+   * Recovery for a `content-mismatch` handshake: the stored run was built against a content pack
+   * the server no longer has, so it can never be opened again and every reconnect fails the same
+   * way. Discarding it server-side is the only way out; clearing `profileError` afterwards is what
+   * re-arms the connect effect below, which then reconnects into chargen. A failed discard replaces
+   * the notice with its own message (and no code), leaving Retry as the remaining action.
+   */
+  function handleDiscardStrandedRun(): void {
+    void discardStrandedRun(account.csrfToken ?? '', fetcher)
+      .then(() => setProfileError(undefined))
+      .catch((thrown) => {
+        setProfileError({
+          message: thrown instanceof Error ? thrown.message : 'Failed to discard the run.',
+        });
       });
   }
 
@@ -691,9 +718,10 @@ export function App({
       },
       (thrown: unknown) => {
         if (cancelled) return;
-        setProfileError(
-          thrown instanceof Error ? thrown.message : 'Could not reach your saved run.',
-        );
+        setProfileError({
+          message: thrown instanceof Error ? thrown.message : 'Could not reach your saved run.',
+          ...(thrown instanceof ProtocolConnectError ? { code: thrown.code } : {}),
+        });
       },
     );
     return () => {
@@ -755,10 +783,25 @@ export function App({
           <main className="shell boot-error">
             <p className="eyebrow">The Woven Deep</p>
             <h1>Your run could not be reached.</h1>
-            <p role="alert">{profileError}</p>
+            <p role="alert">{profileError.message}</p>
             <button type="button" onClick={() => setProfileError(undefined)}>
               Retry
             </button>
+            {/* A content mismatch is the one failure Retry can never clear -- the stored run was
+                built against a pack the server no longer has, so every reconnect fails
+                identically until the run itself is thrown away. */}
+            {profileError.code === 'content-mismatch' && (
+              <>
+                <p>
+                  The world changed while this run was in progress, so it can no longer be
+                  continued. Discarding it lets you start a new run; your Hall records and lifetime
+                  progress are untouched.
+                </p>
+                <button type="button" onClick={handleDiscardStrandedRun}>
+                  Discard this run
+                </button>
+              </>
+            )}
           </main>
         );
       }

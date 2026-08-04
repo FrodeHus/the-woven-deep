@@ -36,12 +36,12 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v18 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v19 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(18);
+    expect(first.schemaVersion).toBe(19);
     expect(first.mode).toBe('classic');
     expect(first.hero.tempering).toEqual({
       banked: 0,
@@ -536,6 +536,17 @@ describe('createNewRun records input', () => {
     // `collectedFragmentIds` removed and `schemaVersion` forced back to 17 reproduces the
     // preceding v16-content digest (`1b405347...`) exactly, so the delta is those two keys and
     // nothing else -- no RNG stream, no placement, no content hash moved.
+    // Re-pinned again for issue #158 (consistency honorable mentions): save schema v19 adds
+    // `survival.starvationTicks`, and content schema v17 adds the `starvationDamageIncrement` /
+    // `starvationDamageMaximum` balance fields alongside the retuned `starvationInterval`,
+    // `turnEfficiencyDecayInterval`, and the `hungry` stage modifier. Verified by dumping the
+    // decoded run field-by-field against an origin/main build: exactly three keys differ --
+    // `schemaVersion` (18 -> 19), `survival` (gaining `starvationTicks: 0` and nothing else), and
+    // `contentHash`. `items`, `populations`, `identification`, and every RNG stream are
+    // byte-identical: no loot table, merchant service, or identification-pool member changed, so
+    // nothing shifts the draw order at creation, and every retuned knob is read during play rather
+    // than during run creation. Expected schema and content-authoring drift, not an engine
+    // regression.
     // Re-pinned again for the out-of-danger recovery retune: `recoveryInterval` 500 -> 50,
     // `recoveryAmount` 10 -> 2, `weaveRegenAmount` 2 -> 1. None of the three is reachable from
     // `createNewRun` -- recovery accrues in `advanceSurvival` once the clock moves, and
@@ -544,9 +555,11 @@ describe('createNewRun records input', () => {
     // preceding values restored), creating a run from each, and diffing the decoded objects
     // key-by-key: `contentHash` is the ONLY key that differs -- every RNG stream, `items`,
     // `identification`, `populations`, and `floors` are byte-identical. Expected content-authoring
-    // drift, not an engine regression.
+    // drift, not an engine regression. (Re-derived after merging #158/#231: the same single-key
+    // delta was re-verified on the merged tree, where the recovery block in `advanceSurvival` is
+    // untouched by the starvation ladder those PRs added.)
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '759b141e9599fe7a13514e15b7015e42c85642f3d68c574934567cc907f0723c',
+      'b6a2babe9a4e28f28f7910cd2bfd87c35bf6d514e8b5c895ef252b7a31534593',
     );
   });
 
