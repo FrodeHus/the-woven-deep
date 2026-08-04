@@ -1,6 +1,8 @@
 # Registered-Mode Latency — Design
 
-**Source:** playtest report, 2026-08-03 ("navigation is horribly slow in registered sessions, sometimes stuck on 'That action has already been handled'"). **Date:** 2026-08-04. **Status:** proposed.
+**Source:** playtest report, 2026-08-03 ("navigation is horribly slow in registered sessions, sometimes stuck on 'That action has already been handled'"). **Date:** 2026-08-04. **Status:** approved, implemented.
+
+Built as specified. `permessage-deflate` (listed under "Alternatives considered") was also enabled, and composes with the delta work rather than replacing it: deflate cut the whole-floor reply ~15x, and the deltas cut what has to be compressed in the first place.
 
 ## Goal
 

@@ -16,11 +16,13 @@ import {
   type ApplyOutcome,
 } from '../play/play-session.js';
 import {
+  isResyncRequest,
   parseClientMessage,
   PROTOCOL_VERSION,
   type ClientMessage,
   type ServerMessage,
 } from '../ws-protocol.js';
+import { FloorWireEncoder, type WireServerMessage } from '@woven-deep/session-core';
 
 export type { PlaySocket } from '../play/play-socket.js';
 
@@ -36,8 +38,14 @@ function generateSeed(): Uint32State {
   }
 }
 
-function send(socket: PlaySocket, message: ServerMessage): void {
-  socket.send(JSON.stringify(message));
+/** Writes a message in its wire form: the three snapshot-carrying variants have their cell array
+ * replaced by a full-minus-unknowns list or a patch against what this connection last sent (see
+ * `floor-wire.ts`). Every connection owns its own encoder, so a reconnect necessarily begins with
+ * a full sync. */
+function send(socket: PlaySocket, encoder: FloorWireEncoder, message: ServerMessage): void {
+  const wire: WireServerMessage =
+    'snapshot' in message ? { ...message, snapshot: encoder.encode(message.snapshot) } : message;
+  socket.send(JSON.stringify(wire));
 }
 
 function outcomeToMessage(outcome: ApplyOutcome): ServerMessage {
@@ -143,6 +151,13 @@ function handleRunMessage(
     return [outcomeToMessage(session.acceptDeath())];
   }
 
+  // The client could not apply a patch and needs the floor whole. Nothing is applied to the run --
+  // the current snapshot is simply re-sent, and the route has already cleared the encoder's cache
+  // (see `isResyncRequest`) so it encodes as a full sync.
+  if (message.type === 'resync') {
+    return [{ type: 'state', snapshot: session.getSnapshot() }];
+  }
+
   // message.type === 'final-chamber-choice'
   return [
     outcomeToMessage(
@@ -224,9 +239,13 @@ export function registerWsPlayRoute(
       // too, so there's no async gap for a message to slip through unhandled, but this is the
       // shape @fastify/websocket's own docs recommend to stay safe against future async additions
       // here).
+      const encoder = new FloorWireEncoder();
       socket.on('message', (raw) => {
+        // Cleared BEFORE the reply is built, so the re-sent snapshot encodes as a full sync rather
+        // than as another patch against the cache the client just told us it cannot use.
+        if (isResyncRequest(raw)) encoder.reset();
         for (const message of handleMessage(session, raw)) {
-          send(socket, message);
+          send(socket, encoder, message);
         }
       });
       socket.on('close', () => {
@@ -257,23 +276,31 @@ export function registerWsPlayRoute(
         // here is invisible to it. Deferring costs nothing in production and keeps the endpoint
         // testable through the harness the test suite uses.
         setImmediate(() => {
-          send(socket, {
+          send(socket, encoder, {
             type: 'hello',
             protocolVersion: PROTOCOL_VERSION,
             contentHash: pack.hash,
             gameVersion: ENGINE_GAME_VERSION,
             saveSchemaVersion: SAVE_SCHEMA_VERSION,
           });
-          send(socket, snapshot !== null ? { type: 'state', snapshot } : { type: 'no-run' });
+          send(
+            socket,
+            encoder,
+            snapshot !== null ? { type: 'state', snapshot } : { type: 'no-run' },
+          );
         });
       } catch (error) {
         if (error instanceof ContentHashMismatchError) {
-          send(socket, { type: 'error', code: 'content-mismatch', message: error.message });
+          send(socket, encoder, {
+            type: 'error',
+            code: 'content-mismatch',
+            message: error.message,
+          });
           socket.close(1008, 'content-mismatch');
           return;
         }
         if (error instanceof LockedClassError) {
-          send(socket, { type: 'error', code: 'locked-class', message: error.message });
+          send(socket, encoder, { type: 'error', code: 'locked-class', message: error.message });
           socket.close(1008, 'locked-class');
           return;
         }

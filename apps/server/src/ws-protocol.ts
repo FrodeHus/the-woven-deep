@@ -127,6 +127,17 @@ function validateIntent(value: unknown): value is PlayerIntent {
  * a malformed payload (bad JSON, unknown `type`, missing/mistyped fields) yields `ok: false` so the
  * caller can reply with `{type:'error'}` and keep the connection alive.
  */
+/**
+ * Whether a raw payload is a resync request, without committing to full parsing. The route needs
+ * this BEFORE `handleMessage` runs so it can clear the connection's `FloorWireEncoder` cache and
+ * have the resulting snapshot encode as a full sync -- which is the entire point of the request.
+ * Keeping it separate is what lets `handleMessage` stay pure and socket-free.
+ */
+export function isResyncRequest(raw: unknown): boolean {
+  const parsed = parseClientMessage(raw);
+  return parsed.ok && parsed.value.type === 'resync';
+}
+
 export function parseClientMessage(raw: unknown): ParsedClientMessage {
   let parsed: unknown;
   try {
@@ -138,6 +149,11 @@ export function parseClientMessage(raw: unknown): ParsedClientMessage {
 
   if (!isRecord(parsed) || typeof parsed.type !== 'string') {
     return { ok: false, reason: 'missing message type' };
+  }
+  // Checked ahead of the envelope: `resync` mutates nothing, so it carries no
+  // `commandId`/`expectedRevision` to validate.
+  if (parsed.type === 'resync') {
+    return { ok: true, value: { type: 'resync' } };
   }
   if (typeof parsed.commandId !== 'string' || typeof parsed.expectedRevision !== 'number') {
     return { ok: false, reason: 'missing commandId/expectedRevision' };

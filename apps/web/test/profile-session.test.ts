@@ -15,6 +15,7 @@ import {
   type PublicEvent,
   type Uint32State,
 } from '@woven-deep/engine';
+import { FloorWireEncoder, type WireServerMessage } from '@woven-deep/session-core';
 import {
   ProfileSession,
   type ServerMessage,
@@ -66,6 +67,7 @@ function snapshotOf(
 class FakeSocket implements WebSocketLike {
   readyState = 1;
   readonly rawSent: string[] = [];
+  private readonly encoder = new FloorWireEncoder();
   onopen: (() => void) | null = null;
   onclose: (() => void) | null = null;
   onerror: ((event: unknown) => void) | null = null;
@@ -80,8 +82,22 @@ class FakeSocket implements WebSocketLike {
     this.onclose?.();
   }
 
+  /** Encodes through a per-socket `FloorWireEncoder`, exactly as the real route's `send` does --
+   * one encoder per connection, so the first snapshot on this socket is a full sync and later ones
+   * are patches against it. Tests therefore drive the REAL wire encoding without having to build
+   * wire snapshots by hand, and a decoder bug shows up as an ordinary assertion failure. */
   emit(message: ServerMessage): void {
-    this.onmessage?.({ data: JSON.stringify(message) });
+    const wire: WireServerMessage =
+      'snapshot' in message
+        ? { ...message, snapshot: this.encoder.encode(message.snapshot) }
+        : (message as WireServerMessage);
+    this.onmessage?.({ data: JSON.stringify(wire) });
+  }
+
+  /** Emits a frame verbatim, bypassing the encoder -- for tests that need to forge a specific wire
+   * shape (an unapplicable patch, say) rather than a well-formed server reply. */
+  emitRaw(wire: unknown): void {
+    this.onmessage?.({ data: JSON.stringify(wire) });
   }
 
   get sentMessages(): readonly unknown[] {
@@ -241,6 +257,75 @@ describe('ProfileSession', () => {
     expect(snapshot.projection.metrics).toEqual(
       projectGameplayState({ state: advancedRun, content: pack }).metrics,
     );
+  });
+
+  it('asks for a resync when a floor patch does not apply, and ignores the unusable frame', async () => {
+    const { socket, connectPromise } = harness();
+    const run = freshRun();
+    socket().emit(HELLO);
+    socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+    const session = await connectPromise;
+    const before = session.getSnapshot();
+
+    const base = snapshotOf(run);
+    socket().emitRaw({
+      type: 'state',
+      snapshot: {
+        ...base,
+        revision: base.revision + 5,
+        projection: {
+          ...base.projection,
+          floor: {
+            ...base.projection.floor,
+            // A base revision this session has never held -- exactly what a dropped or reordered
+            // frame would look like.
+            cells: { kind: 'patch', baseRevision: 9999, changedCells: [] },
+          },
+        },
+      },
+    });
+
+    expect(socket().sentMessages.at(-1)).toEqual({ type: 'resync' });
+    // The unusable frame changed nothing: rendering a half-applied grid is the failure this path
+    // exists to prevent.
+    expect(session.getSnapshot().projection.floor.cells).toEqual(before.projection.floor.cells);
+    // The next command must still go out against the revision the session actually holds, not the
+    // one the unusable frame carried.
+    session.dispatch({ type: 'wait' });
+    expect(socket().sentMessages.at(-1)).toMatchObject({
+      type: 'command',
+      expectedRevision: run.revision,
+    });
+  });
+
+  it('recovers from an unusable patch when the server answers the resync with a full floor', async () => {
+    const { socket, connectPromise } = harness();
+    const run = freshRun();
+    socket().emit(HELLO);
+    socket().emit({ type: 'state', snapshot: snapshotOf(run) });
+    const session = await connectPromise;
+
+    const base = snapshotOf(run);
+    socket().emitRaw({
+      type: 'state',
+      snapshot: {
+        ...base,
+        projection: {
+          ...base.projection,
+          floor: {
+            ...base.projection.floor,
+            cells: { kind: 'patch', baseRevision: 9999, changedCells: [] },
+          },
+        },
+      },
+    });
+    expect(socket().sentMessages.at(-1)).toEqual({ type: 'resync' });
+
+    // The real server clears its encoder on `resync`, so the answer is a fresh full sync. Emitted
+    // through a NEW socket-side encoder here to reproduce exactly that.
+    const answering = new FloorWireEncoder();
+    socket().emitRaw({ type: 'state', snapshot: answering.encode(base) });
+    expect(session.getSnapshot().projection.floor.cells).toEqual(base.projection.floor.cells);
   });
 
   it('seeds its command-id counter from the server, so a reload never reuses a retained id', async () => {

@@ -15,7 +15,7 @@ import type { PlayerIntent } from './intents.js';
  * server's — never silently mismatched. Bump whenever a client/server-message shape changes in a
  * way older clients can't safely ignore.
  */
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 
 /**
  * The run-authoritative snapshot the server produces after applying a command. Only redacted,
@@ -86,6 +86,16 @@ export type ClientMessage =
       readonly type: 'accept-death';
       readonly commandId: string;
       readonly expectedRevision: number;
+    }
+  | {
+      /**
+       * Asks the server to re-send the whole floor rather than a patch against a cell array the
+       * client does not have. Sent when a `patch` cannot be applied -- no cached floor, a different
+       * floor, or a `baseRevision` the client does not hold. Carries no `commandId`/
+       * `expectedRevision`: it mutates nothing, so the idempotency envelope every other message
+       * needs would be meaningless here.
+       */
+      readonly type: 'resync';
     }
   | {
       /**

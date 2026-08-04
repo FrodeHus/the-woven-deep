@@ -6,4 +6,5 @@ export * from './intents.js';
 export * from './command-builder.js';
 export * from './dispatch.js';
 export * from './ws-protocol.js';
+export * from './floor-wire.js';
 export * from './unlocks.js';

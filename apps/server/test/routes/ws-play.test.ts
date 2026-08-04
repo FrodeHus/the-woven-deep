@@ -24,6 +24,7 @@ import type { AuthConfig } from '../../src/config.js';
 import { ServerPlaySession } from '../../src/play/play-session.js';
 import { handleMessage } from '../../src/routes/ws-play.js';
 import type { ServerMessage } from '../../src/ws-protocol.js';
+import type { WireFloorCells, WireRunSnapshot } from '@woven-deep/session-core';
 
 const PUBLIC_URL = 'http://localhost:3000';
 const SEED = [7, 14, 21, 28] as unknown as Uint32State;
@@ -344,6 +345,14 @@ describe('handleMessage (pure message routing)', () => {
   });
 });
 
+/** The wire encoding of a snapshot-carrying reply's cell array (`full` or `patch`). Reached through
+ * a cast because the route's messages are typed as `ServerMessage` at their construction site --
+ * the wire form is what `send` produces on the way out. */
+function cellsOf(message: ServerMessage): WireFloorCells {
+  if (!('snapshot' in message)) throw new Error(`message ${message.type} carries no snapshot`);
+  return (message.snapshot as unknown as WireRunSnapshot).projection.floor.cells;
+}
+
 describe('/ws/play connection', () => {
   let app: FastifyInstance;
   let database: Database.Database;
@@ -421,7 +430,9 @@ describe('/ws/play connection', () => {
           socket.destroy();
           resolveHeaders(response.headers);
         });
-        request.on('response', (response) => reject(new Error(`no upgrade: ${response.statusCode}`)));
+        request.on('response', (response) =>
+          reject(new Error(`no upgrade: ${response.statusCode}`)),
+        );
         request.on('error', reject);
         request.end();
       },
@@ -462,6 +473,48 @@ describe('/ws/play connection', () => {
       expect(afterCommand.type).toBe('state');
       if (afterCommand.type === 'state') {
         expect(afterCommand.snapshot.revision).toBeGreaterThan(revisionBefore);
+      }
+    } finally {
+      ws.terminate();
+    }
+  });
+
+  it('sends the floor whole once, then as patches, and whole again on resync', async () => {
+    await app.ready();
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-patching@example.com');
+
+    const ws = await app.injectWS('/ws/play', {
+      headers: { cookie: cookieHeader(sessionCookies), origin: PUBLIC_URL },
+    });
+    try {
+      const nextMessage = messageQueue(ws);
+      await nextMessage(); // hello
+      const initialState = await startRunOverWs(ws, nextMessage);
+      const revisionBefore = initialState.type === 'state' ? initialState.snapshot.revision : -1;
+      // The first snapshot on a connection has nothing to patch against.
+      expect(cellsOf(initialState).kind).toBe('full');
+
+      ws.send(
+        JSON.stringify({
+          type: 'command',
+          commandId: 'cmd-patch-1',
+          expectedRevision: revisionBefore,
+          intent: { type: 'wait' },
+        }),
+      );
+      const afterCommand = await nextMessage();
+      const patch = cellsOf(afterCommand);
+      expect(patch.kind).toBe('patch');
+      // Keyed on what the client actually holds -- not simply "one less than this revision".
+      if (patch.kind === 'patch') expect(patch.baseRevision).toBe(revisionBefore);
+
+      ws.send(JSON.stringify({ type: 'resync' }));
+      const resynced = await nextMessage();
+      expect(resynced.type).toBe('state');
+      expect(cellsOf(resynced).kind).toBe('full');
+      // A resync re-sends the CURRENT run; it must not rewind anything.
+      if (resynced.type === 'state' && afterCommand.type === 'state') {
+        expect(resynced.snapshot.revision).toBe(afterCommand.snapshot.revision);
       }
     } finally {
       ws.terminate();
