@@ -1905,7 +1905,10 @@ entries:
   });
 
   it('defaults an omitted modifiers block to empty', () => {
-    const source = focusSource('{ weaveRegen: 1 }').replace('    modifiers: { weaveRegen: 1 }\n', '');
+    const source = focusSource('{ weaveRegen: 1 }').replace(
+      '    modifiers: { weaveRegen: 1 }\n',
+      '',
+    );
     const [entry] = parseContentFile({ path: 'items/test.yaml', source });
     expect(entry).toMatchObject({ modifiers: {} });
   });

@@ -1,4 +1,4 @@
-import type { DerivedStatName, ItemContentEntry } from '@woven-deep/content';
+import type { ItemContentEntry } from '@woven-deep/content';
 import { DERIVED_STAT_NAMES } from '@woven-deep/content';
 import { DERIVED_STAT_LABELS } from '../ui/derived-stats-display.js';
 import { formatDice } from '../ui/labels.js';
@@ -31,7 +31,7 @@ export function itemKnownFacts(content: ItemContentEntry): readonly ItemFact[] {
   // them as un-formulaic internal knobs, but on the item that grants one it is the whole point
   // of picking the item up. Walked in `DERIVED_STAT_NAMES` order so two items never disagree.
   for (const name of DERIVED_STAT_NAMES) {
-    const amount = content.modifiers?.[name as DerivedStatName];
+    const amount = content.modifiers?.[name];
     if (amount === undefined) continue;
     facts.push({ label: DERIVED_STAT_LABELS[name], value: `+${String(amount)}` });
   }
