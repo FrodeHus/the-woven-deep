@@ -93,6 +93,25 @@ describe('TitleScreen', () => {
     expect(screen.getByRole('option', { name: /continue/i })).toBeInTheDocument();
   });
 
+  it('renders Continue when the save decodes cleanly against the loaded pack', () => {
+    renderTitle({ storage: fakeStorage(decodableSave()), content: pack });
+
+    expect(screen.getByRole('option', { name: /continue/i })).toBeInTheDocument();
+  });
+
+  it('does not render Continue when the pack is missing an engine-required loot table', () => {
+    // The save itself is fine; the pack it would boot against is not. Continue must be gated on
+    // the same decode the session performs, pack included, or the player picks it and the boot
+    // fails behind them.
+    const stripped: CompiledContentPack = {
+      ...pack,
+      entries: pack.entries.filter((entry) => entry.id !== 'loot-table.chest-deep'),
+    };
+    renderTitle({ storage: fakeStorage(decodableSave()), content: stripped });
+
+    expect(screen.queryByRole('option', { name: /continue/i })).not.toBeInTheDocument();
+  });
+
   it('dispatches the right navigation callback for each option via keyboard selection', async () => {
     const user = userEvent.setup();
     const onEnterTheDeep = vi.fn();

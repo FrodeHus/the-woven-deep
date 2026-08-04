@@ -4,8 +4,10 @@ import type {
   RunConclusionProjection,
   RunRecordRepository,
 } from '@woven-deep/engine';
+import type { TravelBatchRequest } from '@woven-deep/session-core';
 import type { PlayerIntent } from './intents.js';
 import type { SessionSnapshot } from './guest-session.js';
+import type { TravelWalkEnd } from './profile-session.js';
 
 /**
  * The public surface the UI (`App.tsx`, screens, overlays, `store.ts`) drives a run session
@@ -51,4 +53,19 @@ export interface RunSession {
    * how auto-explore reports why it stopped, or that there is nothing left to explore. Never a
    * dispatch: no turn passes, no randomness is consumed. */
   noteSystemLine(text: string): void;
+  /**
+   * Walks an auto-travel plan in BATCHES rather than one dispatched step per round trip.
+   *
+   * Optional on purpose: only a server-backed session has round trips worth batching away.
+   * `GuestSession` runs the engine in-process, where a step costs nothing, so it omits this and
+   * `useAutoTravel` keeps stepping it locally -- both paths run the identical planner and stop
+   * rules from `@woven-deep/session-core`, so they agree step for step.
+   */
+  travelBatch?(
+    request: TravelBatchRequest,
+    options: Readonly<{ stepMs: number }>,
+    onEnded: (end: TravelWalkEnd) => void,
+  ): void;
+  /** Stops requesting further travel batches. Steps already applied server-side still arrive. */
+  cancelTravel?(): void;
 }

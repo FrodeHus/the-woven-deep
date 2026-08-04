@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import type { CompiledContentPack } from '@woven-deep/content';
 import { decodeActiveRun } from '@woven-deep/engine';
 import type { AccountState } from '../../session/account.js';
 import { SAVE_KEY, type SessionStorageLike } from '../../session/storage.js';
@@ -29,21 +30,32 @@ export interface TitleScreenProps {
    * connection, or no-ops while the connect is still in flight). Guests ignore this entirely:
    * their Continue is gated on the decodable local save (see `canContinue`). */
   readonly profileHasRun?: boolean;
+  /** The loaded content pack the guest's save would boot against, passed straight through to the
+   * `canContinue` probe so it performs the same decode `GuestSession` will. Optional so callers
+   * that render the title before a pack exists keep working -- they get the pack-less decode,
+   * which is strictly weaker but never wrong about a save that is itself undecodable. */
+  readonly content?: CompiledContentPack;
 }
 
 /**
  * Whether Continue should be offered: only when storage holds a save AND that save decodes
- * cleanly through the real engine codec. A corrupt or schema-incompatible save must NOT surface
- * Continue — `GuestSession` would discard it anyway (with a save-discarded notice) once
- * constructed, but the title screen shouldn't invite the player into that path in the first
- * place. Probed fresh on every render so a save that appears between renders (there is no such
+ * cleanly through the real engine codec against the pack it would boot against. A corrupt or
+ * schema-incompatible save must NOT surface Continue — `GuestSession` would discard it anyway
+ * (with a save-discarded notice) once constructed, but the title screen shouldn't invite the
+ * player into that path in the first place. The `content` argument matters for exactly the cases
+ * the save alone cannot show: `decodeActiveRun` only preflights the engine-required loot tables
+ * when it is given the pack, so without it a pack missing one offers Continue and then fails at
+ * boot. Probed fresh on every render so a save that appears between renders (there is no such
  * path today, but the check is cheap) is picked up.
  */
-function canContinue(storage: SessionStorageLike): boolean {
+function canContinue(
+  storage: SessionStorageLike,
+  content: CompiledContentPack | undefined,
+): boolean {
   const raw = storage.get(SAVE_KEY);
   if (raw === null) return false;
   try {
-    decodeActiveRun(raw);
+    decodeActiveRun(raw, content);
     return true;
   } catch {
     return false;
@@ -66,6 +78,7 @@ export function TitleScreen({
   onSignIn,
   onSignOut,
   profileHasRun = false,
+  content,
 }: TitleScreenProps): JSX.Element {
   const signedIn = account.status === 'signed-in';
   const options: readonly {
@@ -76,7 +89,7 @@ export function TitleScreen({
     ...(signedIn && profileHasRun
       ? [{ key: 'continue', label: 'Continue', onSelect: onContinue }]
       : [{ key: 'enter', label: 'Enter the Deep', onSelect: onEnterTheDeep }]),
-    ...(!signedIn && canContinue(storage)
+    ...(!signedIn && canContinue(storage, content)
       ? [{ key: 'continue', label: 'Continue', onSelect: onContinue }]
       : []),
     { key: 'hall', label: 'Hall of Records', onSelect: onHall },

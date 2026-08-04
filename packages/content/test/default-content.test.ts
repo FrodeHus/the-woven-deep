@@ -34,7 +34,7 @@ describe('bundled content', () => {
       ),
     ).toEqual({
       monster: 46,
-      item: 54,
+      item: 58,
       spell: 14,
       trap: 2,
       'loot-table': 28,
@@ -55,7 +55,7 @@ describe('bundled content', () => {
     expect(
       pack.entries.filter((entry) => entry.kind === 'class' && (entry as any).playable),
     ).toHaveLength(3);
-    expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(12);
+    expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(13);
     expect(pack.entries.map((entry) => entry.id)).toEqual(
       [...pack.entries.map((entry) => entry.id)].sort(),
     );

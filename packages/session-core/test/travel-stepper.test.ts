@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GameplayProjection, Point, PublicEvent } from '@woven-deep/engine';
-import type { PlayerIntent } from '../src/session/intents.js';
-import type { GroundItemView } from '../src/session/projection-view.js';
+import type { PlayerIntent } from '../src/intents.js';
+import type { GroundItemView } from '../src/projection-view.js';
 import {
   advanceTravel,
   baseStopPredicate,
   beginTravel,
   classicStopPredicate,
-} from '../src/session/travel.js';
-import type { AutoPickupPolicy } from '../src/session/auto-pickup.js';
+} from '../src/travel.js';
+import type { AutoPickupPolicy } from '../src/auto-pickup.js';
 
 const WIDTH = 12;
 const HEIGHT = 8;

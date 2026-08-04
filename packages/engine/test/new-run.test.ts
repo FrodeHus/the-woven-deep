@@ -461,6 +461,18 @@ describe('createNewRun records input', () => {
     // retuned across every band. None of those fields are read by `createNewRun` -- monsters spawn
     // on first DESCENT, not at creation, and the town seeds only NPC populations -- so the only
     // field that can differ is the embedded `contentHash`, exactly like the #154 re-pin above.
+    // Re-pinned again for issue #145 (potion risk): four new `shuffled` potions joined
+    // `identification-pool.potions`. Unlike every content re-pin above, this one DOES move an RNG
+    // stream by design -- `allocateIdentificationMap` runs during run creation, and a larger pool
+    // means a longer name shuffle plus one extra visual roll per new item, so the shared `effects`
+    // cursor advances further and every pool sorted after `potions` (rings, shields, weapons) draws
+    // different names. Verified by diffing the decoded run objects field-by-field against the prior
+    // pin: only `contentHash`, `identification.appearanceByContentId`, and `rng.effects` differ --
+    // the appearance delta is exactly the four added entries plus re-rolled names in the potions
+    // pool and the three pools that follow it, while `armor`/`light-sources` (sorted before
+    // `potions`) are untouched, and no `items`, `populations`, `floors`, or other stream moved.
+    // Expected content-authoring drift from growing an identification pool, not an engine
+    // regression.
     // Re-pinned again for issue #157 (dead and near-dead items ship as rewards) and content schema
     // v15: every file's `schemaVersion` moves 14 -> 15, items gain the optional `modifiers` block,
     // `item.weave-focus` trades its stopgap `combat.defense` for `modifiers: { weaveRegen: 1 }`,
@@ -469,11 +481,14 @@ describe('createNewRun records input', () => {
     // the loomcaller kit places weave-focus by content ID (the instance records no stat), a
     // definition's stat block is read only through `equipmentModifiers` at derive time, and
     // echo-spoils is rolled on an Echo kill, never at creation -- `rolls` stays 2 there, so no
-    // stream shifts either way. Verified by rebuilding the pre-#157 tree in a scratch worktree and
-    // diffing the decoded run objects field-by-field: `contentHash` is the ONLY key that differs.
+    // stream shifts either way. Unlike the #145 re-pin directly above, this one moves NO stream:
+    // none of the touched items is `shuffled`, so `identification-pool.potions` is the same size it
+    // was and the `effects` cursor lands where #145 left it. Verified twice -- against the pre-#157
+    // tree before this branch merged main, and again against merged main afterwards -- by diffing
+    // the decoded run objects field-by-field: `contentHash` is the ONLY key that differs each time.
     // Expected content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '8bfe30dfa7781edc9eefe71064eb2c997d85d042b75ec60f28ff3f32e2eb0db1',
+      'e7e69f52c8df35bd3964330208d1aff86fa8f67357f72da36faeb80bd661e121',
     );
   });
 

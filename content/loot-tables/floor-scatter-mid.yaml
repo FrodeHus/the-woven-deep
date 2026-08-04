@@ -10,6 +10,10 @@ entries:
       - { contentId: item.travel-ration, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 2 }
       - { contentId: item.ashen-potion, lootTableId: null, weight: 4, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.crimson-potion, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.numbing-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.bitter-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.searing-potion, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
+      - { contentId: item.clouded-potion, lootTableId: null, weight: 1, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.lamp-oil, lootTableId: null, weight: 3, minimumQuantity: 1, maximumQuantity: 2 }
       - { contentId: item.frost-shard-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }
       - { contentId: item.chain-spark-scroll, lootTableId: null, weight: 2, minimumQuantity: 1, maximumQuantity: 1 }

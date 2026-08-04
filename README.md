@@ -35,7 +35,7 @@ A single run is turn-based, procedurally generated, and unforgiving — and draw
 - The Deep is worth looting: gold piles, scattered supplies, and chests — some locked. Iron keys are rare; lockpicks break.
 - Doors creak open as you push through them. The locked ones guard side passages and want a key, a pick, or a good reason.
 - Monsters behave according to their nature: lone hunters, packs with leaders, swarms that grow from a source, and rare bosses with phases of their own.
-- Potions and rings start unidentified. Drinking the crimson one is one way to find out what it does.
+- Potions and rings start unidentified, and the names shuffle every run. Drinking the crimson one is one way to find out what it does — some of them heal, some of them set you on fire, and one of them is the antidote to the ones that don't.
 - Light matters. Torches burn down, lanterns need lamp oil, and the dark is not on your side.
 - Hunger, rest, and wounds force real decisions about when to push deeper and when to hole up.
 - Travelling merchants roam the Deep. You can trade with them. You can also attack them, and they remember that too.

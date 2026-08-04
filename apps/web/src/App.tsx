@@ -766,6 +766,7 @@ export function App({
         <main className="shell">
           <TitleScreen
             storage={storage}
+            content={pack}
             account={account}
             profileHasRun={session !== undefined}
             onEnterTheDeep={() => {
