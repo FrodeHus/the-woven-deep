@@ -185,6 +185,7 @@ const fallbackMonster: MonsterContentEntry = {
   threat: 4,
   lootTableId: null,
   dropChance: 1,
+  onHitConditions: [],
 };
 
 /** Builds a genuine `StoredHallRecord` by driving a real demo run to death via `resolveCommand`

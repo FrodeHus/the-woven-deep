@@ -55,7 +55,7 @@ describe('bundled content', () => {
     expect(
       pack.entries.filter((entry) => entry.kind === 'class' && (entry as any).playable),
     ).toHaveLength(3);
-    expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(13);
+    expect(pack.entries.filter((entry) => entry.kind === 'condition')).toHaveLength(14);
     expect(pack.entries.map((entry) => entry.id)).toEqual(
       [...pack.entries.map((entry) => entry.id)].sort(),
     );
@@ -202,7 +202,7 @@ describe('bundled content', () => {
     const pack = await compileContentDirectory({
       rootDir: resolve(import.meta.dirname, '../../../content'),
     });
-    expect(pack.schemaVersion).toBe(15);
+    expect(pack.schemaVersion).toBe(16);
     const entries = new Map(pack.entries.map((entry) => [entry.id, entry]));
     expect(entries.get('achievement.defeated-the-deeps-champion')).toMatchObject({
       kind: 'achievement',

@@ -20,6 +20,35 @@ export function monsterIssues(
         'behavior',
       ),
     );
+    entry.onHitConditions.forEach((rider, index) => {
+      const path = `$.entries.${entry.id}.onHitConditions.${index}`;
+      const referenceIssues = referencedKindIssue(
+        file,
+        `${path}.conditionId`,
+        rider.conditionId,
+        'condition',
+        byId,
+      );
+      issues.push(...referenceIssues);
+      if (referenceIssues.length > 0) return;
+      const condition = byId.get(rider.conditionId);
+      if (condition?.kind !== 'condition' || rider.duration === null) return;
+      if (condition.duration.mode === 'permanent') {
+        issues.push({
+          file,
+          path: `${path}.duration`,
+          message: 'permanent condition rejects a duration override',
+        });
+        return;
+      }
+      if (rider.duration > condition.duration.maximum) {
+        issues.push({
+          file,
+          path: `${path}.duration`,
+          message: `duration ${rider.duration} exceeds maximum ${condition.duration.maximum}`,
+        });
+      }
+    });
     if (entry.lootTableId !== null) {
       issues.push(
         ...referencedKindIssue(

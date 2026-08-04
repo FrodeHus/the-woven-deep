@@ -9,6 +9,16 @@ import type {
   PresentedContentEntry,
 } from './common.js';
 
+/**
+ * A condition this monster applies to whatever it hits. `chance` is a 0..1 probability rolled
+ * once per landed hit; `duration` overrides the condition's own default when non-null.
+ */
+export interface MonsterOnHitCondition {
+  readonly conditionId: ContentId;
+  readonly chance: number;
+  readonly duration: number | null;
+}
+
 export interface MonsterContentEntry extends PresentedContentEntry {
   readonly kind: 'monster';
   readonly attributes: BaseAttributeDefinition;
@@ -29,4 +39,5 @@ export interface MonsterContentEntry extends PresentedContentEntry {
   readonly rarity: ItemRarity;
   readonly lootTableId: ContentId | null;
   readonly dropChance: number;
+  readonly onHitConditions: readonly MonsterOnHitCondition[];
 }

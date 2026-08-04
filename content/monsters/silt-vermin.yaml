@@ -1,4 +1,4 @@
-schemaVersion: 15
+schemaVersion: 16
 entries:
   - kind: monster
     id: monster.silt-nibbler
@@ -53,6 +53,8 @@ entries:
     rarity: common
     lootTableId: loot-table.silt-vermin
     dropChance: 0.25
+    onHitConditions:
+      - { conditionId: condition.poisoned, chance: 0.25 }
 
   - kind: monster
     id: monster.gorge-swarm

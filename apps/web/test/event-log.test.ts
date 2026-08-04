@@ -37,6 +37,7 @@ const boneGnawer: MonsterContentEntry = {
   threat: 1,
   lootTableId: null,
   dropChance: 1,
+  onHitConditions: [],
 };
 
 const emberBolt: SpellContentEntry = {
