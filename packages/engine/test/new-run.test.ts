@@ -487,8 +487,25 @@ describe('createNewRun records input', () => {
     // tree before this branch merged main, and again against merged main afterwards -- by diffing
     // the decoded run objects field-by-field: `contentHash` is the ONLY key that differs each time.
     // Expected content-authoring drift, not an engine regression.
+    // Re-pinned again for the loot-coverage/torch-curve change: seven previously unreachable spell
+    // tomes joined the three chest tables, `loot-table.town-spellvendor-stock` gained
+    // `item.chain-spark-tome` (w2, unbanded) and `item.fireball-tome` (w1, minDepth 8), and the
+    // pitch-torch weights moved in floor-scatter-shallow (3 -> 7) and floor-scatter-mid (new, w2).
+    // Unlike the #154 light-pressure re-pin above -- which touched only tables unreachable from
+    // creation -- this one DOES reach `createNewRun`, because the town is materialized at creation
+    // and `materializeMerchant` rolls the spellvendor stock there. It still moves no stream: the
+    // table's `rolls` stays 3, so the draw count is unchanged and `rng` is byte-identical; what
+    // moved is which choice each unchanged draw lands on, because two added choices shifted the
+    // table's cumulative weight boundaries. Verified by diffing the decoded run objects
+    // field-by-field against the prior pin: only `contentHash` and `items` differ, and the entire
+    // `items` delta is two of the vendor's three stock slots swapping contents
+    // (stock.000001 ember-scroll <-> stock.000003 frost-shard-tome) -- same 17 items, same stock
+    // size, nothing added or removed. Neither new tome appears in town stock at creation:
+    // fireball-tome is correctly ineligible at depth 1 by its minDepth-8 guard, and chain-spark-tome
+    // was simply not selected by these draws. Expected content-authoring drift from widening a
+    // merchant table, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'e7e69f52c8df35bd3964330208d1aff86fa8f67357f72da36faeb80bd661e121',
+      '2bf2019b78ab4ab56a4b418edea9c1e8a52351c9914d1808c034bd411a2ce31a',
     );
   });
 
