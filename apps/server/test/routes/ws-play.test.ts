@@ -1,3 +1,4 @@
+import { request as httpRequest } from 'node:http';
 import { resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -386,6 +387,50 @@ describe('/ws/play connection', () => {
     await expect(
       app.injectWS('/ws/play', { headers: { cookie: cookieHeader(sessionCookies) } }),
     ).rejects.toThrow(/403/);
+  });
+
+  it('negotiates permessage-deflate on the upgrade', async () => {
+    // Asserted against a REAL listening socket and a hand-written upgrade, not `injectWS`: the
+    // inject harness does not offer the extension, so it can neither confirm nor deny that the
+    // server accepts it. A dungeon command reply is dominated by near-identical cell objects and
+    // compresses ~15x (see `PER_MESSAGE_DEFLATE` in app.ts) -- if a refactor silently drops the
+    // option, registered play quietly gets an order of magnitude more expensive over the wire with
+    // nothing else failing, so the negotiation itself is pinned here.
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    const address = app.server.address();
+    const port = typeof address === 'object' && address !== null ? address.port : 0;
+    const sessionCookies = await verifyAndGetCookies(app, database, 'ws-deflate@example.com');
+
+    const headers = await new Promise<Record<string, string | string[] | undefined>>(
+      (resolveHeaders, reject) => {
+        const request = httpRequest({
+          host: '127.0.0.1',
+          port,
+          path: '/ws/play',
+          headers: {
+            connection: 'Upgrade',
+            upgrade: 'websocket',
+            'sec-websocket-version': '13',
+            'sec-websocket-key': Buffer.from('0123456789abcdef').toString('base64'),
+            'sec-websocket-extensions': 'permessage-deflate; client_max_window_bits',
+            cookie: cookieHeader(sessionCookies),
+            origin: PUBLIC_URL,
+          },
+        });
+        request.on('upgrade', (response, socket) => {
+          socket.destroy();
+          resolveHeaders(response.headers);
+        });
+        request.on('response', (response) => reject(new Error(`no upgrade: ${response.statusCode}`)));
+        request.on('error', reject);
+        request.end();
+      },
+    );
+
+    expect(headers['sec-websocket-extensions']).toContain('permessage-deflate');
+    // Both bounded-memory flags from PER_MESSAGE_DEFLATE must survive into the negotiated result.
+    expect(headers['sec-websocket-extensions']).toContain('server_no_context_takeover');
+    expect(headers['sec-websocket-extensions']).toContain('client_no_context_takeover');
   });
 
   it('authenticated connect receives hello then the initial state, and a command advances the revision', async () => {
