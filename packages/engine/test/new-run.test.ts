@@ -558,8 +558,18 @@ describe('createNewRun records input', () => {
     // drift, not an engine regression. (Re-derived after merging #158/#231: the same single-key
     // delta was re-verified on the merged tree, where the recovery block in `advanceSurvival` is
     // untouched by the starvation ladder those PRs added.)
+    // Re-pinned for the torch identification carve-out (spec amendment 2026-08-05):
+    // `item.pitch-torch` moves to `mode: known` and its torch-shaped appearances leave
+    // `identification-pool.light-sources`. Verified by compiling the pack twice (this tree, and a
+    // scratch copy with the two content files restored from the prior commit), creating a run from
+    // each, and diffing the decoded objects key-by-key: exactly four keys differ --
+    // `contentHash`, `identification` (the torch's appearance entry is gone and the remaining
+    // allocation reshuffles), `items` (the starting torch flips `identified` false -> true, and
+    // nothing else about it), and `rng.effects` (one fewer allocation draw at creation). Every
+    // other key, including `floors`, `populations`, and every other RNG stream, is byte-identical.
+    // Expected content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'b6a2babe9a4e28f28f7910cd2bfd87c35bf6d514e8b5c895ef252b7a31534593',
+      '78716f0cf1c5a70958ed0d84ff051b047c4a8d437b977a44a2a4230d66ab765b',
     );
   });
 

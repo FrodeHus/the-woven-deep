@@ -662,6 +662,42 @@ describe('buildIntent', () => {
     });
   });
 
+  it('builds equip for an unidentified item from its projected equipment slots', () => {
+    const backpack = baseProjection.hero as unknown as {
+      backpack: readonly Readonly<Record<string, unknown>>[];
+    };
+    const brand = {
+      itemId: 'item.found-brand',
+      name: 'Sputtering brand',
+      category: 'light',
+      quantity: 1,
+      identified: false,
+      appearanceId: 'identification-pool.light-sources.v0-n0-x0',
+      equipment: { slots: ['off-hand'] },
+    };
+    const projectionWithBrand: GameplayProjection = {
+      ...baseProjection,
+      hero: { ...baseProjection.hero, backpack: [...backpack.backpack, brand] },
+    };
+    const equip = buildIntent({
+      intent: { type: 'backpack', action: 'equip', itemId: brand.itemId },
+      projection: projectionWithBrand,
+      commandId: 'command.guest-000060',
+      expectedRevision: 12,
+      pack,
+    });
+    expect(equip).toEqual({
+      kind: 'command',
+      command: {
+        type: 'equip',
+        itemId: brand.itemId,
+        slot: 'off-hand',
+        commandId: 'command.guest-000060',
+        expectedRevision: 12,
+      },
+    });
+  });
+
   it('rejects equip of a non-equipment item with the item name in the message', () => {
     const backpack = baseProjection.hero as unknown as {
       backpack: readonly Readonly<Record<string, unknown>>[];
