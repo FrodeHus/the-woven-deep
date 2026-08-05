@@ -109,6 +109,10 @@ const ESCAPE_TEXT: Readonly<Record<CompletionType, string>> = {
   'became-heart': 'was bound into the Heart with it',
   refused: 'refused the Deep with it',
   died: OUTCOME_TEXT['died-with'],
+  // Unreachable in practice: `artifactStints` gives a surrendered run the `died-with` outcome, so
+  // no surrendered record ever produces an `escaped-with` stint to look up here. Required for the
+  // record to close over `CompletionType`, and reads as a death if it ever did surface.
+  surrendered: OUTCOME_TEXT['died-with'],
 };
 
 /**

@@ -158,6 +158,10 @@ export const finalChamberChoiceCommand = z.strictObject({
   type: z.literal('final-chamber-choice'),
   choice: z.enum(['become-heart', 'turn-away', 'break-cycle']),
 });
+export const surrenderCommand = z.strictObject({
+  ...commandBase,
+  type: z.literal('surrender'),
+});
 export const dialogueConsequenceCommand = z.strictObject({
   ...commandBase,
   type: z.literal('dialogue-consequence'),
@@ -174,6 +178,9 @@ export const command = z.discriminatedUnion('type', [
   houseDepositCommand,
   houseWithdrawCommand,
   finalChamberChoiceCommand,
+  // Live union only -- never `commandV7`: no legacy save can contain a surrender, and adding a NEW
+  // variant is exactly the additive change the v10-v12 freeze tripwire tolerates.
+  surrenderCommand,
   dialogueConsequenceCommand,
 ]);
 

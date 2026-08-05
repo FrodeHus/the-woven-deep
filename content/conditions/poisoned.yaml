@@ -1,4 +1,4 @@
-schemaVersion: 17
+schemaVersion: 18
 entries:
   # Venom injected by a bite or a spit, as opposed to condition.sickened, which is what a bad
   # draught does to the gut. Refresh rather than intensify: tickEffects do not scale with stacks,

@@ -162,7 +162,7 @@ export const RUN_MODES = ['classic', 'wanderer'] as const;
 export type RunMode = (typeof RUN_MODES)[number];
 
 export interface ActiveRun {
-  readonly schemaVersion: 19;
+  readonly schemaVersion: 20;
   readonly gameVersion: '0.1.0';
   readonly contentHash: string;
   readonly mode: RunMode;

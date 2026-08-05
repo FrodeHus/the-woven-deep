@@ -28,6 +28,7 @@ const SCORE_LINE_LABEL: Readonly<Record<string, string>> = {
 
 const COMPLETION_HEADLINE: Readonly<Record<RunConclusionProjection['completionType'], string>> = {
   died: 'You have fallen.',
+  surrendered: 'You gave yourself to the Deep.',
   'became-heart': 'You have become the Heart.',
   'broke-cycle': 'You have broken the cycle.',
   refused: 'You have refused the Deep.',
@@ -49,6 +50,10 @@ const COMPLETION_EPILOGUE: Readonly<
     'The weakened Heart breaks and falls silent, and the Deep it anchored comes apart around ' +
     'you. Walls crack; the prisoners it held stir and scatter into the dark, freed. You run for ' +
     'daylight through the crumbling passages, the last of the Deep collapsing at your back.',
+  surrendered:
+    'You stop walking. There is nothing left to burn and nowhere further to feel your way, so you ' +
+    'set down what you carried and let the dark have you. It is not violent. The Deep has been ' +
+    'waiting a long time and is in no hurry, and what it keeps, it keeps whole.',
   'broke-cycle':
     "The tablet's fragments lock together, whole for the first time in an age, and the binding " +
     'unravels. The Heart is freed, and no one takes their place. The Deep, unanchored, begins to ' +

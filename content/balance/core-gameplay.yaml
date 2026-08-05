@@ -1,4 +1,4 @@
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: balance
     startingCurrency: 40
@@ -69,7 +69,7 @@ entries:
       bossDefeatCoefficient: 250
       threatCoefficient: 5
       discoveryCoefficient: 25
-      completionBonus: { died: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }
+      completionBonus: { died: 0, surrendered: 0, refused: 400, became-heart: 800, broke-cycle: 1500 }
       turnEfficiencyBudget: 500
       # One point per 50 turns: a brisk twenty-floor run keeps most of the budget, a thorough one
       # keeps a fraction, and a grind past ~25,000 turns keeps none. At 200 the line only bottomed

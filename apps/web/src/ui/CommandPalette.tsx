@@ -62,6 +62,9 @@ export interface CommandPaletteProps {
    * descend/ascend in place when already on the matching stair, otherwise walk to a discovered one
    * first. Kept separate from `onStartExplore` because it's parameterized by direction. */
   readonly onTravelToStairs: (direction: StairDirection) => void;
+  /** Opens the surrender confirmation. Deliberately has no keymap action and therefore no shortcut
+   * hint: a single stray keypress must never be able to start ending a run. */
+  readonly onSurrender: () => void;
 }
 
 /**
@@ -80,6 +83,7 @@ export function CommandPalette({
   onCast,
   onStartExplore,
   onTravelToStairs,
+  onSurrender,
 }: Readonly<CommandPaletteProps>): JSX.Element {
   const sessionCtx = useSessionCtx();
   const { keymap } = useSettingsCtx();
@@ -112,6 +116,11 @@ export function CommandPalette({
   const runStairs = (direction: StairDirection): void => {
     onTravelToStairs(direction);
     onOpenChange(false);
+  };
+
+  const runSurrender = (): void => {
+    onOpenChange(false);
+    onSurrender();
   };
 
   // Same gating as the HUD Spells panel (Task 7): omit spells the hero can't afford rather than
@@ -200,6 +209,11 @@ export function CommandPalette({
                   </CommandItem>
                 );
               })}
+              {/* No `CommandShortcut`: this verb has no keymap action on purpose. It is also last
+               * in the group so it never sits under the cursor when the palette opens. */}
+              <CommandItem value="Surrender to the Deep" onSelect={runSurrender}>
+                <span>Surrender to the Deep</span>
+              </CommandItem>
             </CommandGroup>
             {castableEntries.length > 0 && (
               <CommandGroup heading="Spells">

@@ -23,6 +23,8 @@ export interface RunSession {
   dispatch(intent: PlayerIntent): void;
   answerDecision(confirmed: boolean): void;
   chooseFinalChamber(choice: FinalChamberChoiceCommand['choice']): void;
+  /** Gives the run up. Always reached through the confirm dialog, never from a keypress. */
+  surrender(): void;
   setHouseOpen(open: boolean): void;
   finalizeConcludedRun(
     repository: RunRecordRepository,

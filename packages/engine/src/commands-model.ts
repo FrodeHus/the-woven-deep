@@ -104,6 +104,16 @@ export interface FinalChamberChoiceCommand extends CommandEnvelope {
   readonly type: 'final-chamber-choice';
   readonly choice: 'become-heart' | 'turn-away' | 'break-cycle';
 }
+/**
+ * Gives the run up: the hero lays down what they carried and lets the Deep have them. Available at
+ * every point in a live run, at any depth, town included. The motivating case is a hero who has run
+ * out of light and cannot find their way, but the command is deliberately NOT gated on light -- such
+ * a gate would have to model every future light source and every future way to relight one, and
+ * would still refuse a player who is lost for some other reason.
+ */
+export interface SurrenderCommand extends CommandEnvelope {
+  readonly type: 'surrender';
+}
 export interface DisarmCommand extends CommandEnvelope {
   readonly type: 'disarm';
   readonly featureId: OpaqueId;
@@ -194,7 +204,8 @@ export type GameCommand =
   | TradeCommand
   | DialogueConsequenceCommand
   | HouseCommand
-  | FinalChamberChoiceCommand;
+  | FinalChamberChoiceCommand
+  | SurrenderCommand;
 
 export type MovementInvalidReason =
   | 'blocked.bounds'

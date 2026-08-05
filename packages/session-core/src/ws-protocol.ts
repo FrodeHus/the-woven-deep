@@ -81,6 +81,13 @@ export type ClientMessage =
       readonly choice: FinalChamberChoiceCommand['choice'];
     }
   | {
+      /** Gives the run up. Carries nothing beyond the envelope: the server's engine decides
+       * everything about the conclusion, exactly as it does for every other command. */
+      readonly type: 'surrender';
+      readonly commandId: string;
+      readonly expectedRevision: number;
+    }
+  | {
       /** Wanderer only: rewind the concluded run to its stored floor-entry checkpoint. The reply
        * is the ordinary `state` push (the reconnect-push shape), which re-syncs the client's
        * cached `revision` after the rewind lowers it. */

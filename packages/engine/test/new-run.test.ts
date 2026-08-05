@@ -36,12 +36,12 @@ beforeAll(async () => {
 const SEED = [11, 22, 33, 44] as const;
 
 describe('createNewRun', () => {
-  it('builds a valid, deterministic schema-v19 run starting in the authored town', () => {
+  it('builds a valid, deterministic schema-v20 run starting in the authored town', () => {
     const first = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     const second = createNewRun({ pack, seed: SEED, hero: DEFAULT_GUEST_HERO });
     expect(encodeActiveRun(first)).toBe(encodeActiveRun(second));
     expect(() => validateActiveRun(first)).not.toThrow();
-    expect(first.schemaVersion).toBe(19);
+    expect(first.schemaVersion).toBe(20);
     expect(first.mode).toBe('classic');
     expect(first.hero.tempering).toEqual({
       banked: 0,
@@ -568,8 +568,21 @@ describe('createNewRun records input', () => {
     // nothing else about it), and `rng.effects` (one fewer allocation draw at creation). Every
     // other key, including `floors`, `populations`, and every other RNG stream, is byte-identical.
     // Expected content-authoring drift, not an engine regression.
+    // Re-pinned again for the surrender feature, on top of the torch carve-out above: content
+    // schema v17 -> v18 (every file's `schemaVersion`, plus a `surrendered: 0` key on the balance
+    // entry's `score.completionBonus`) and save schema v19 -> v20 (`conclusion.completionType`
+    // gains `surrendered`). Neither is reachable from `createNewRun`: a completion bonus is read
+    // only by `scoreRun` at finalization, the widened enum only admits a value nothing here
+    // produces, and the new `surrender` command draws no randomness and cannot have been issued by
+    // a run that has just been created. Re-derived against the POST-#237 main rather than reusing
+    // the pre-rebase verification: the decoded run was dumped key-by-key against a build of that
+    // merge base in a scratch worktree with its OWN `npm install` (a symlinked `node_modules`
+    // silently leaks the new content dist into the baseline and invalidates the comparison), and
+    // exactly two keys differ -- `contentHash` and `schemaVersion` (19 -> 20). Every RNG stream,
+    // `items`, `identification`, `populations`, and `floors` are byte-identical. Expected schema
+    // and content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      '78716f0cf1c5a70958ed0d84ff051b047c4a8d437b977a44a2a4230d66ab765b',
+      'f80a9512831647143570ac0144a5449b6edd8376ef1f963f64d414410086bb09',
     );
   });
 
