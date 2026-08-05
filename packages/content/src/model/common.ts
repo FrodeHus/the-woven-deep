@@ -19,7 +19,7 @@ import type { TraitContentEntry } from './trait.js';
 import type { TrapContentEntry } from './trap.js';
 import type { VaultContentEntry } from './vault.js';
 
-export const CONTENT_SCHEMA_VERSION = 17 as const;
+export const CONTENT_SCHEMA_VERSION = 18 as const;
 
 export type ContentId = string;
 export const CONTENT_KIND_IDS = [
@@ -141,7 +141,7 @@ export interface PresentedContentEntry extends BaseContentEntry {
   readonly lore?: string;
 }
 
-export type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle';
+export type CompletionType = 'died' | 'became-heart' | 'refused' | 'broke-cycle' | 'surrendered';
 
 export const MERCHANT_SERVICE_IDS = [
   'merchant-service.identify',

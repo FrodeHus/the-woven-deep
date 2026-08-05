@@ -80,7 +80,7 @@ content/
 Every file is one strict document:
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: monster
     id: monster.example
@@ -93,7 +93,7 @@ Unknown fields are errors, including plausible misspellings.
 
 | Field | Type | Required/default | Rules and meaning |
 |---|---|---|---|
-| `schemaVersion` | integer | Required | Must be exactly `17`. |
+| `schemaVersion` | integer | Required | Must be exactly `18`. |
 | `entries` | array | Required, at least one | May contain any supported content kind. |
 | `kind` | enum | Required | One of `monster`, `npc`, `npc-faction`, `item`, `identification-pool`, `spell`, `trap`, `loot-table`, `balance`, `vault`, `condition`, `encounter`, `fallen-champion-template`, `achievement`, `class`, `background`, `trait`, `curse`, or `enchantment`. |
 | `id` | string | Required | Globally unique stable ID such as `monster.cave-rat`. |
@@ -219,7 +219,7 @@ pointBuy:
 ```
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: balance
     id: balance.core-gameplay
@@ -329,7 +329,7 @@ The `score` object supplies every coefficient used to compute a deterministic ru
 | `rarity` | enum | Yes | `common`, `uncommon`, `rare`, or `legendary`. |
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: monster
     id: monster.cave-rat
@@ -500,8 +500,10 @@ Content schema version `16` adds the optional monster `onHitConditions` block: c
 
 Content schema version `17` adds the balance `starvationDamageIncrement` and `starvationDamageMaximum` knobs, which turn starvation from a flat tick into an escalating one. Migration from 16: bump every file's `schemaVersion` to 17 and add both fields to the balance entry. `starvationDamageIncrement` is a non-negative safe integer added to the previous tick's damage on each successive starvation tick; `starvationDamageMaximum` is a positive safe integer ceiling that must be at least `starvationDamage` (the compiler rejects a maximum below the floor). Damage on the *n*-th consecutive tick is `min(starvationDamage + (n - 1) * starvationDamageIncrement, starvationDamageMaximum)`. Setting `starvationDamageIncrement: 0` and `starvationDamageMaximum: starvationDamage` reproduces the v16 flat tick exactly, so a v16 balance entry migrates without any behavioural change. The tick counter resets whenever the hero stops starving, so eating always returns the next tick to `starvationDamage`. No other field changes.
 
+Content schema version `18` adds `surrendered` to `CompletionType`, the completion a run records when the player gives it up deliberately rather than dying or reaching an ending at the Final Chamber. Migration from 17: bump every file's `schemaVersion` to 18 and add a `surrendered` key to the balance entry's `score.completionBonus` map, which is a closed record over `CompletionType` and rejects a pack that omits it. A value of `0` reproduces the shipped balance — the same bonus an ordinary death pays, because the cost of surrendering is charged against banked Ancient Tablet fragments rather than against score: a surrendered run banks none of the fragments its hero was carrying. No other field changes, and no existing entry is affected. For Hall ordering, `surrendered` shares the bottom tier with `died`, so the two sort against each other on score alone.
+
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: encounter
     id: encounter.cave-rat-individuals
@@ -546,7 +548,7 @@ the entire pack.
 The Champion heirloom is selected once at the original death from unique equipped item instances only. Backpack items never qualify, and a multi-slot item is still one candidate. Better rarity and positive quality ranks raise its weight, but common equipment retains a non-zero chance. There is no minimum rarity and no reroll, so damaged, depleted, or mundane equipped gear remains possible. If nothing equipped is eligible, the fallback relic is recorded.
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: fallen-champion-template
     id: fallen-champion-template.core
@@ -635,7 +637,7 @@ Identification modes have distinct contracts:
 Items never contain their unidentified names. The generated mapping is saved with the run, so save/reload cannot reroll it, and a later run receives a new mapping. Items using the same pool must have the pool's category. The compiler requires at least as many unique verb–noun combinations as item definitions using the pool.
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: item
     id: item.brass-lantern
@@ -672,7 +674,7 @@ Identification pools are normal content-pack entries and may be placed in any `.
 The pool's `name` is an administrator-facing label. It is not shown as an unidentified item name.
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: identification-pool
     id: identification-pool.potions
@@ -703,7 +705,7 @@ identification: { mode: shuffled, poolId: identification-pool.potions }
 | `effects` | non-empty effect array | Yes | Applied in listed order. |
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: spell
     id: spell.mend
@@ -731,7 +733,7 @@ entries:
 | `effects` | non-empty effect array | Yes | Ordered trigger effects. |
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: trap
     id: trap.poison-dart
@@ -761,7 +763,7 @@ entries:
 A curse's trigger `effect` is restricted to `effect.damage`, `effect.heal`, `effect.condition.apply`, `effect.condition.remove`, `effect.force-move`, and `effect.hunger.restore` — deliberately excluding every effect that can mutate terrain, features, or item inventories, so a curse can never gate the win path. Forced movement is the one traversal effect on the list, and the engine guards it: a shove that would land the hero out of bounds, on unwalkable terrain (a closed door included), or on top of another living actor is dropped, so a curse can never wedge the hero somewhere illegal. A curse must declare `drawbackModifiers`, `trigger`, or both; a curse with neither is rejected. Trigger damage from `effect.damage` bypasses armor and resistances entirely — deliberate, consistent with every other self-damage path (starvation, traps the hero springs on themselves), so author trigger dice as the final damage the hero takes. The compiler also cross-checks the balance entry: a nonzero `curses.chanceBps` band with zero `curse` entries in the pack is a compile error, since the first floor that rolled a curse would otherwise throw mid-run.
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: curse
     id: curse.hungering-edge
@@ -786,7 +788,7 @@ entries:
 | `weight` | positive safe integer | Yes | Relative draw weight within its eligible pool. |
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: enchantment
     id: enchantment.keen-edge
@@ -825,7 +827,7 @@ Boss guaranteed-unique content is forbidden anywhere in an ordinary loot graph, 
 | `choices[].minDepth`, `choices[].maxDepth` | safe integers 0–999 | No | Optional per-choice depth band. Absent means unbanded: the choice is always available, matching prior behavior. When present, `0 <= minDepth <= maxDepth <= 999`; `minDepth` may be given alone to mean "available from this depth onward." Town merchant restocks use these bands to widen their stock at `balance.restockMilestones` so deeper runs surface new goods. Honoring the band during loot and stock rolls is engine work tracked separately from this content-layer authoring and validation. |
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: loot-table
     id: loot-table.basic-supplies
@@ -868,7 +870,7 @@ A slot's `lootTableId` and `contentId` name what it can contain once placed. A `
 A `kind: door` or `kind: chest` slot authors a locked feature and must set `difficulty` (a safe integer from `1` to `30`, the DC a lockpick check must meet or beat). A `kind: door` slot may also set `keyContentId`, naming an `item` that opens it without a check; every other slot kind must leave `difficulty` and `keyContentId` unset. A `chest` slot may not set `keyContentId` (chests take no keys).
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: vault
     id: vault.locked-cache
@@ -893,7 +895,7 @@ entries:
 ```
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: vault
     id: vault.small-cache
@@ -943,7 +945,7 @@ The bundled `content/vaults/town.yaml` is the complete copyable reference: a wal
 Replace and refresh produce one stack; intensify adds one up to the cap. Every reapplication refreshes source, application time, and deadline. Timed applications may omit duration to use the default or supply a positive override no greater than the maximum. Permanent conditions reject an override. Removal and expiration remove the complete condition instance.
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: condition
     id: condition.stunned
@@ -976,7 +978,7 @@ The `criteria.type` field is one of the four registered criteria types:
 | `complete-ending` | `ending` (`became-heart`, `refused`, or `broke-cycle`) | Grants when the run concludes with the matching ending. |
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: achievement
     id: achievement.defeated-the-deeps-champion
@@ -1018,7 +1020,7 @@ Each kit has a slug `kitId` unique within the class, a display `name`, an `equip
 | `backpack[].quantity` | positive safe integer | Defaults to `1` | Starting stack size. |
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: class
     id: class.wayfarer
@@ -1061,7 +1063,7 @@ entries:
 `background` and `trait` both carry a `modifiers` derived-stat integer map (non-zero safe-integer values, keys drawn from the same closed stat names as condition modifiers: `maxHealth`, `meleeAccuracy`, `meleeDamageBonus`, `rangedAccuracy`, `defense`, `search`, `disarm`). A `trait` must declare exactly one modifier key; a `background` may declare any number, including zero. A `background` additionally carries `extraItems`, an array of `{ contentId, quantity }` starting-inventory grants using the same shape as a class kit's `backpack`, each `contentId` resolving to an `item` entry.
 
 ```yaml
-schemaVersion: 17
+schemaVersion: 18
 entries:
   - kind: background
     id: background.caravan-guard

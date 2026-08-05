@@ -144,12 +144,16 @@ const HALL_TIER_RANK: Readonly<Record<CompletionType, number>> = {
   'became-heart': 2,
   refused: 1,
   died: 0,
+  // Same tier as `died`, deliberately. Tier dominates score absolutely below, so a lower tier of
+  // its own would sort a depth-18 surrender beneath a depth-1 death. Both outcomes are "did not
+  // make it out"; surrender's cost is paid in banked fragments, not in Hall ordering.
+  surrendered: 0,
 };
 
 /**
  * Total order for the Hall of the Fallen: completion tier dominates any score difference
- * (`broke-cycle` > `became-heart` > `refused` > `died`), then score descending, then record ID
- * ascending by code units as the final tiebreak so the ordering is never ambiguous.
+ * (`broke-cycle` > `became-heart` > `refused` > `died`/`surrendered`), then score descending, then
+ * record ID ascending by code units as the final tiebreak so the ordering is never ambiguous.
  */
 export function compareHallRecords(left: HallRecordOrdering, right: HallRecordOrdering): number {
   const tierDifference = HALL_TIER_RANK[right.completionType] - HALL_TIER_RANK[left.completionType];

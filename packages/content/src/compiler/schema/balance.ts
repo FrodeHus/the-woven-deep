@@ -9,6 +9,7 @@ const scoreCoefficients = z.strictObject({
   discoveryCoefficient: safeNonNegative,
   completionBonus: z.strictObject({
     died: safeNonNegative,
+    surrendered: safeNonNegative,
     'became-heart': safeNonNegative,
     refused: safeNonNegative,
     'broke-cycle': safeNonNegative,
