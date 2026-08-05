@@ -58,9 +58,19 @@ describe('curse-eligible items', () => {
     }
   });
 
-  it('every eligible item declares mode: instance with an identification pool', () => {
+  /** Spec amendment (2026-08-05, cursed-items design): items whose identity is visually
+   * unmistakable stay `mode: known` even in an eligible category -- a pitch torch is a stick with
+   * a burning cloth. They remain curse-eligible (eligibility keys on category); only the
+   * unidentified-appearance gamble is waived. */
+  const VISUALLY_UNMISTAKABLE = new Set(['item.pitch-torch']);
+
+  it('every eligible item declares mode: instance with an identification pool, unless visually unmistakable', () => {
     const eligible = eligibleCurseItems(pack);
     for (const item of eligible) {
+      if (VISUALLY_UNMISTAKABLE.has(item.id)) {
+        expect(item.identification.mode, `${item.id} should be mode: known`).toBe('known');
+        continue;
+      }
       expect(item.identification.mode, `${item.id} should be mode: instance`).toBe('instance');
       expect(item.identification.poolId, `${item.id} should declare a pool`).not.toBeNull();
     }
