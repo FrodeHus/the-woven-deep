@@ -555,6 +555,17 @@ export class ProfileSession implements RunSession {
     });
   }
 
+  /** Registered counterpart of `GuestSession.surrender`: the server's engine does the concluding. */
+  surrender(): void {
+    this.notice = null;
+    this.lastDispatchedIntentType = null;
+    this.send({
+      type: 'surrender',
+      commandId: this.nextCommandId(),
+      expectedRevision: this.serverSnapshot.revision,
+    });
+  }
+
   chooseFinalChamber(choice: FinalChamberChoiceCommand['choice']): void {
     this.notice = null;
     this.lastDispatchedIntentType = null;

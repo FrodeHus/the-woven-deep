@@ -29,13 +29,22 @@ export interface HallScreenProps {
 type OutcomeFilter = 'all' | CompletionType;
 type ClassFilter = string;
 
-const OUTCOME_ORDER: readonly CompletionType[] = ['broke-cycle', 'became-heart', 'refused', 'died'];
+// Best outcome first. `surrendered` sits last rather than beside `died` because the two share a
+// Hall tier -- the list is a filter, so a stable spelled-out order matters more than the tie.
+const OUTCOME_ORDER: readonly CompletionType[] = [
+  'broke-cycle',
+  'became-heart',
+  'refused',
+  'died',
+  'surrendered',
+];
 
 const OUTCOME_LABEL: Readonly<Record<CompletionType, string>> = {
   'broke-cycle': 'Broke the cycle',
   'became-heart': 'Became the Heart',
   refused: 'Refused the Deep',
   died: 'Died',
+  surrendered: 'Surrendered',
 };
 
 const SCORE_LINE_LABEL: Readonly<Record<string, string>> = {

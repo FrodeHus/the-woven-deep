@@ -71,6 +71,7 @@ function harness(
     onCast?: (spellId: string) => void;
     onStartExplore?: () => void;
     onTravelToStairs?: (direction: 'up' | 'down') => void;
+    onSurrender?: () => void;
     projection?: GameplayProjection;
   }> = {},
 ) {
@@ -80,6 +81,7 @@ function harness(
   const onCast = overrides.onCast ?? vi.fn();
   const onStartExplore = overrides.onStartExplore ?? vi.fn();
   const onTravelToStairs = overrides.onTravelToStairs ?? vi.fn();
+  const onSurrender = overrides.onSurrender ?? vi.fn();
   render(
     <UiProviders
       pack={pack}
@@ -97,10 +99,19 @@ function harness(
         onCast={onCast}
         onStartExplore={onStartExplore}
         onTravelToStairs={onTravelToStairs}
+        onSurrender={onSurrender}
       />
     </UiProviders>,
   );
-  return { dispatch, onOpenChange, onOpenOverlay, onCast, onStartExplore, onTravelToStairs };
+  return {
+    dispatch,
+    onOpenChange,
+    onOpenOverlay,
+    onCast,
+    onStartExplore,
+    onTravelToStairs,
+    onSurrender,
+  };
 }
 
 describe('CommandPalette', () => {
@@ -214,6 +225,20 @@ describe('CommandPalette', () => {
     expect(onStartExplore).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenCalledWith(false);
     // A discovery surface, not a parallel command path: no intent is dispatched for this entry.
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('typing "surrender" and Enter opens the confirmation and closes the palette', async () => {
+    const user = userEvent.setup();
+    const { onSurrender, onOpenChange, dispatch } = harness();
+
+    await user.type(screen.getByRole('combobox'), 'surrender');
+    await user.keyboard('{Enter}');
+
+    // The palette only ASKS: it opens the confirm dialog and never concludes the run itself, so no
+    // command leaves this component.
+    expect(onSurrender).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(dispatch).not.toHaveBeenCalled();
   });
 

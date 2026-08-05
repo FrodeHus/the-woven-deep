@@ -387,6 +387,22 @@ export class GuestSession implements RunSession {
     this.handleResolution(dispatchCommand(this.run, command, { pack: this.pack }));
   }
 
+  /**
+   * Dispatches the `surrender` command -- the ONLY path that ever produces one. Like
+   * `chooseFinalChamber` above, it never goes through `buildIntent`/`PlayerIntent`: there is no
+   * intent for a conclusion. The UI always reaches it through the confirm dialog, never
+   * automatically and never from a keypress.
+   */
+  surrender(): void {
+    this.notice = null;
+    const command: GameCommand = {
+      type: 'surrender',
+      commandId: this.nextCommandId(),
+      expectedRevision: this.run.revision,
+    };
+    this.handleResolution(dispatchCommand(this.run, command, { pack: this.pack }));
+  }
+
   answerDecision(confirmed: boolean): void {
     const decision = this.pendingDecision;
     if (!decision) return;

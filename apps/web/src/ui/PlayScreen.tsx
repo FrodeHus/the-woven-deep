@@ -5,6 +5,7 @@ import type { RunSession } from '../session/run-session.js';
 import { useRunSession } from '../session/store.js';
 import { actorsOf, dialogueTargetAvailable, tradeIsAvailable } from '../session/projection-view.js';
 import { CommandPalette } from './CommandPalette.js';
+import { SurrenderConfirm } from './overlays/SurrenderConfirm.js';
 import type { OverlayActionId } from './KeyRouter.js';
 import { activeHint, HINTS } from '../session/onboarding.js';
 import { cellNavigability } from '../session/travel.js';
@@ -169,6 +170,8 @@ export function PlayScreen({
   });
 
   const [paletteOpen, setPaletteOpen] = useCommandPaletteHotkey(isModalActive);
+  // Purely local: the confirm dialog is client-side UI state, opened only by the palette entry.
+  const [surrenderOpen, setSurrenderOpen] = useState(false);
 
   const { hover, hoverAtCell } = useCellHover(snapshot);
   // The navigation cursor drawn on the hovered cell. Kept as raw state and suppressed at render time
@@ -363,6 +366,15 @@ export function PlayScreen({
           onCast={targeting.begin}
           onStartExplore={autoTravel.startExplore}
           onTravelToStairs={autoTravel.travelToStairs}
+          onSurrender={() => setSurrenderOpen(true)}
+        />
+        <SurrenderConfirm
+          open={surrenderOpen}
+          onOpenChange={setSurrenderOpen}
+          onConfirm={() => {
+            setSurrenderOpen(false);
+            session.surrender();
+          }}
         />
       </div>
     </ScreenFade>
