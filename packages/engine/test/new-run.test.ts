@@ -582,7 +582,7 @@ describe('createNewRun records input', () => {
     // `items`, `identification`, `populations`, and `floors` are byte-identical. Expected schema
     // and content-authoring drift, not an engine regression.
     expect(createHash('sha256').update(encodeActiveRun(omitted)).digest('hex')).toBe(
-      'REDERIVE_ME',
+      'f80a9512831647143570ac0144a5449b6edd8376ef1f963f64d414410086bb09',
     );
   });
 
