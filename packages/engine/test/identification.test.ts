@@ -329,6 +329,39 @@ describe('per-run item identification', () => {
     expect(json).not.toContain('enchantment');
   });
 
+  it('projects equipment placement on an unidentified instance item without leaking its identity', () => {
+    const definition = {
+      ...potion('item.ring.secret'),
+      category: 'ring',
+      equipment: { slots: ['left-ring', 'right-ring'], handedness: null, reservedSlots: [] },
+      identification: { mode: 'instance', poolId: 'identification-pool.rings' },
+    } as ItemContentEntry;
+    const content = contentWith(definition);
+    const item: ItemInstance = {
+      itemId: 'item.ring.1',
+      contentId: definition.id,
+      quantity: 1,
+      condition: 100,
+      enchantment: null,
+      identified: false,
+      charges: null,
+      fuel: null,
+      enabled: null,
+      location: { type: 'backpack', actorId: 'hero.demo' },
+    };
+    const identification = allocateIdentificationMap({
+      content,
+      rng: createDemoRun().rng,
+    }).identification;
+    const run = { ...createDemoRun(), items: [item], identification };
+    const projected = projectItem({ run, content, itemId: item.itemId });
+    expect(projected).toMatchObject({
+      identified: false,
+      equipment: { slots: ['left-ring', 'right-ring'] },
+    });
+    expect(stableJson(projected)).not.toContain(definition.id);
+  });
+
   it('projects an identified, non-heirloom item with the definition glyph and color', () => {
     const definition: ItemContentEntry = {
       kind: 'item',

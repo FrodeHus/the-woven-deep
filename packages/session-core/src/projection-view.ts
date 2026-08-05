@@ -56,6 +56,9 @@ export interface ItemView {
   readonly identified: boolean;
   readonly appearanceId?: string;
   readonly contentId?: OpaqueId;
+  /** The equipment slots the item can occupy -- projected even for an unidentified item (where
+   * `contentId` is redacted), since placement is observable and the equip intent needs a slot. */
+  readonly equipment?: Readonly<{ slots: readonly string[] }>;
   readonly effects?: readonly ItemEffectView[];
   readonly enchantment?: ItemEnchantmentView;
   readonly unknownProperties?: boolean;

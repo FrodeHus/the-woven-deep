@@ -37,6 +37,8 @@ Compile validation:
 
 Eligible categories: `weapon`, `armor`, `shield`, `ring`, `light`. Base equipment items in those categories move to `identification.mode: instance` (with appearance pools where sensible) so the unidentified gamble actually exists. Items with an `artifact` block are excluded regardless of category.
 
+Amendment (2026-08-05): items whose identity is visually unmistakable stay `identification.mode: known` even in an eligible category — a pitch torch is a stick with a burning cloth, and pretending the hero cannot tell undermines the fiction the pools exist to serve. Curse eligibility is unaffected: it keys on category, and a known-mode item's curse still hides until an equip or identify path reveals it. The lanterns stay in the pool (a caged flame could be brass or warded — that gamble is real), and torch-shaped appearances leave the pool so an unidentified light can never masquerade as an item the pool no longer contains.
+
 Balance knobs in `content/balance/core-gameplay.yaml`:
 
 ```yaml

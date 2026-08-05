@@ -120,14 +120,23 @@ function heroAdjacentToHouseDoor(projection: GameplayProjection): boolean {
 }
 
 function equipSlotFor(
-  pack: CompiledContentPack,
-  contentId: OpaqueId,
+  slots: readonly EquipmentSlot[],
   occupiedSlots: ReadonlySet<EquipmentSlot>,
 ): EquipmentSlot | undefined {
-  const entry = itemById(pack, contentId);
-  if (!entry || entry.equipment === null) return undefined;
-  const { slots } = entry.equipment;
   return slots.find((slot) => !occupiedSlots.has(slot)) ?? slots[0];
+}
+
+/** The slots an item can occupy: from the projection's own `equipment` placement when present
+ * (the only source for an unidentified item, whose `contentId` is redacted), else from the
+ * content entry. */
+function equippableSlots(
+  item: Readonly<{ contentId?: OpaqueId; equipment?: Readonly<{ slots: readonly string[] }> }>,
+  pack: CompiledContentPack | undefined,
+): readonly EquipmentSlot[] | undefined {
+  if (item.equipment) return item.equipment.slots as readonly EquipmentSlot[];
+  if (!pack || !item.contentId) return undefined;
+  const entry = itemById(pack, item.contentId);
+  return entry?.equipment?.slots;
 }
 
 function buildMoveIntent(
@@ -306,7 +315,8 @@ function buildBackpackIntent(
   }
 
   // action === 'equip'
-  if (!pack || !item.contentId) {
+  const slots = equippableSlots(item, pack);
+  if (!slots || slots.length === 0) {
     return { kind: 'rejected', message: `${item.name} cannot be equipped.` };
   }
   const equipment = heroOf(projection).equipment;
@@ -315,7 +325,7 @@ function buildBackpackIntent(
       .filter(([, value]) => value !== null)
       .map(([slot]) => slot as EquipmentSlot),
   );
-  const slot = equipSlotFor(pack, item.contentId, occupiedSlots);
+  const slot = equipSlotFor(slots, occupiedSlots);
   if (!slot) return { kind: 'rejected', message: `${item.name} cannot be equipped.` };
   return { kind: 'command', command: { type: 'equip', itemId, slot, commandId, expectedRevision } };
 }

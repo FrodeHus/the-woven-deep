@@ -196,6 +196,11 @@ export function projectItem(
     entry.identification.mode === 'shuffled'
       ? !appearanceKnown
       : entry.identification.mode === 'instance' && !item.identified;
+  // Where an item is worn is a legitimately observable fact -- a hero can see that a brand fits
+  // the hand or a band fits a finger without knowing which one it is -- and the client needs it
+  // to build an equip command at all. Only the slots are exposed: within a pool every member
+  // shares the observable silhouette, so this narrows nothing the appearance hasn't already.
+  const equipmentPlacement = entry.equipment ? { equipment: { slots: entry.equipment.slots } } : {};
   if (appearanceId && appearanceHidden) {
     return {
       itemId: item.itemId,
@@ -203,6 +208,7 @@ export function projectItem(
       category: entry.category,
       quantity: item.quantity,
       identified: false,
+      ...equipmentPlacement,
     };
   }
   const projected: Record<string, unknown> = {
