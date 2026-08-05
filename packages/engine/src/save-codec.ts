@@ -20,6 +20,7 @@ import {
   legacyActiveRunV16Schema,
   legacyActiveRunV17Schema,
   legacyActiveRunV18Schema,
+  legacyActiveRunV19Schema,
   emptyLegacyRunMetricsV9,
   validateActiveRun,
 } from './save-schema.js';
@@ -272,11 +273,22 @@ function migrateV18ToV19(input: unknown): unknown {
 }
 
 /**
+ * v19 -> v20: `conclusion.completionType` gained `surrendered`. No save written at v19 or earlier
+ * can carry it, so this rewrites nothing and only stamps the new version. It exists because the
+ * ordered chain is this codec's record of what changed and when, and a widened enum that skips the
+ * chain leaves a gap in that record.
+ */
+function migrateV19ToV20(input: unknown): unknown {
+  const v19 = legacyActiveRunV19Schema.parse(input);
+  return { ...v19, schemaVersion: 20 };
+}
+
+/**
  * Every supported legacy save version, oldest first, and the ordered v(N)->v(N+1) transforms that
  * carry one forward. `ORDERED_MIGRATIONS[i]` migrates `LEGACY_SCHEMA_VERSIONS[i]` to the next
  * version, so a save enters the chain at its own version and runs every step above it.
  */
-const LEGACY_SCHEMA_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] as const;
+const LEGACY_SCHEMA_VERSIONS = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19] as const;
 type LegacySchemaVersion = (typeof LEGACY_SCHEMA_VERSIONS)[number];
 
 const ORDERED_MIGRATIONS: readonly ((input: unknown) => unknown)[] = [
@@ -295,6 +307,7 @@ const ORDERED_MIGRATIONS: readonly ((input: unknown) => unknown)[] = [
   migrateV16ToV17,
   migrateV17ToV18,
   migrateV18ToV19,
+  migrateV19ToV20,
 ];
 
 function isLegacySchemaVersion(value: unknown): value is LegacySchemaVersion {

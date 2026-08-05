@@ -6,6 +6,7 @@ import {
   identifier,
   nullableIdentifier,
   positiveQuantity,
+  runConclusionCause,
   safeInteger,
   safeNonNegative,
   uint32,
@@ -59,12 +60,51 @@ import {
   population,
   populationV7,
   relationship,
+  survival,
   legacySurvivalPreStarvationLadder,
 } from './population.js';
-import { rngEntries, runConclusionSchema, runKillsByModel, runMetrics } from './run-record.js';
+import { rngEntries, runKillsByModel, runMetrics } from './run-record.js';
 import { ENGINE_GAME_VERSION, RECENT_COMMAND_LIMIT } from '../versions.js';
 import type { RNG_STREAM_NAMES } from '../versions.js';
 import { RUN_MODES } from '../model.js';
+
+/**
+ * The run conclusion as it stood through save v19, frozen as a literal for the same reason
+ * `legacyHeirloomV13` below is: legacy run schemas reference the LIVE sub-schemas, so widening the
+ * live `completionType` enum at v20 (which added `surrendered`) would otherwise retroactively let
+ * a v4 save claim a completion that did not exist when it was written. Shared by every legacy run
+ * schema, because the conclusion's shape has not changed across any of them.
+ *
+ * The same enum reaches recorded events, so the two conclusion EVENT shapes are frozen just below
+ * for the v10-v12 unions that embed them.
+ */
+const legacyCompletionTypePreSurrender = z.enum(['died', 'became-heart', 'refused', 'broke-cycle']);
+
+const legacyRunConclusionPreSurrender = z.strictObject({
+  completionType: legacyCompletionTypePreSurrender,
+  cause: runConclusionCause,
+  concludedAtRevision: safeNonNegative,
+  finalized: z.boolean(),
+});
+
+// The `run.concluded` / `run.finalized` events as they stood through save v19. The v10-v12 legacy
+// unions below embed these event shapes, so widening the live `completionType` reaches them the
+// same way it reaches the conclusion itself -- which the #186 freeze tripwire
+// (`test/legacy-v11-freeze.test.ts`) detects and, per its own instructions, is answered by spelling
+// the affected variant out as a frozen literal rather than by re-pinning the fixture.
+export const legacyRunConcludedEventPreSurrender = z.strictObject({
+  type: z.literal('run.concluded'),
+  eventId: identifier,
+  completionType: legacyCompletionTypePreSurrender,
+  cause: runConclusionCause,
+});
+export const legacyRunFinalizedEventPreSurrender = z.strictObject({
+  type: z.literal('run.finalized'),
+  eventId: identifier,
+  recordId: identifier,
+  completionType: legacyCompletionTypePreSurrender,
+  scoreTotal: safeNonNegative,
+});
 
 // The pre-curse heirloom snapshot: identical to the live `heirloom` except it carries no `curse`,
 // which the cursed-item feature introduced at v14. Spelled out as a frozen literal (not derived
@@ -184,8 +224,8 @@ export const legacyEventV10 = z.discriminatedUnion('type', [
   merchantStockDroppedEvent,
   merchantDiedEvent,
   merchantRestockedEvent,
-  runConcludedEvent,
-  runFinalizedEvent,
+  legacyRunConcludedEventPreSurrender,
+  legacyRunFinalizedEventPreSurrender,
   legacyAchievementGrantedEventV10,
 ]);
 export const legacyAuthoritativeEventV10 = legacyEventV10.refine(
@@ -232,8 +272,8 @@ export const legacyEventV11 = z.discriminatedUnion('type', [
   merchantStockDroppedEvent,
   merchantDiedEvent,
   merchantRestockedEvent,
-  runConcludedEvent,
-  runFinalizedEvent,
+  legacyRunConcludedEventPreSurrender,
+  legacyRunFinalizedEventPreSurrender,
   legacyAchievementGrantedEventV11,
 ]);
 export const legacyAuthoritativeEventV11 = legacyEventV11.refine(
@@ -462,7 +502,7 @@ export const legacyActiveRunV7Schema = z.strictObject({
   fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
 });
 
 // The pre-boss-tracking save shape: identical to the current run schema except `metrics` carries
@@ -509,7 +549,7 @@ export const legacyActiveRunV9Schema = z.strictObject({
   fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -558,7 +598,7 @@ export const legacyActiveRunV10Schema = z.strictObject({
   fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -615,6 +655,59 @@ const legacyV17RngEntries = Object.fromEntries(
 // cross-run tablet assembly introduced at v18. Spelled out as a frozen literal (not derived from
 // the live `activeRunSchema`) so a future schema bump can't silently change what a real v18 save is
 // validated against.
+// The pre-surrender save shape: structurally identical to the current run schema, because the only
+// thing v20 changed is that `conclusion.completionType` gained `surrendered`. It therefore differs
+// from the live schema in exactly one place -- the frozen conclusion above, which still refuses the
+// new member, as no save written at v19 or earlier could have held it.
+export const legacyActiveRunV19Schema = z.strictObject({
+  schemaVersion: z.literal(19),
+  gameVersion: z.literal(ENGINE_GAME_VERSION),
+  contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  mode: z.enum(RUN_MODES),
+  runId: identifier,
+  runSeed: uint32Tuple,
+  rng: z.strictObject(rngEntries as Record<(typeof RNG_STREAM_NAMES)[number], typeof uint32State>),
+  revision: safeNonNegative,
+  turn: safeNonNegative,
+  worldTime: safeNonNegative,
+  hero,
+  reputations: z
+    .array(z.strictObject({ factionId: identifier, value: z.number().int().safe() }))
+    .readonly(),
+  activeTrade: z
+    .strictObject({
+      merchantPopulationId: identifier,
+      merchantActorId: identifier,
+      openedByCommandId: identifier,
+      openedAtRevision: safeNonNegative,
+      completedCommerce: z.boolean(),
+    })
+    .nullable(),
+  actors: z.array(actor).min(1).readonly(),
+  items: z.array(item).readonly(),
+  features: z.array(feature).readonly(),
+  relationships: z.array(relationship).readonly(),
+  survival,
+  identification,
+  activeFloorId: identifier,
+  activeFloorEnteredAt: safeNonNegative,
+  returnAnchorFloorId: identifier.optional(),
+  floors: z.array(floor).min(1).readonly(),
+  recentCommands: z.array(recorded).max(RECENT_COMMAND_LIMIT).readonly(),
+  encounterDecisions: z.array(encounterDecision).readonly(),
+  populations: z.array(population).readonly(),
+  fallenHeroStandings: z.array(fallenStanding).max(10).readonly(),
+  fallenHeroDecisions: z.array(fallenDecision).max(10).readonly(),
+  conqueredChampionRecordIds: z.array(identifier).readonly(),
+  offeredArtifact: identifier.nullable(),
+  artifactsUndiscovered: z.array(identifier).readonly(),
+  collectedFragmentIds: z.array(identifier).readonly(),
+  metrics: runMetrics,
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
+  house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
+  restockedMilestones: z.array(positiveQuantity).readonly(),
+});
+
 export const legacyActiveRunV18Schema = z.strictObject({
   schemaVersion: z.literal(18),
   gameVersion: z.literal(ENGINE_GAME_VERSION),
@@ -659,7 +752,7 @@ export const legacyActiveRunV18Schema = z.strictObject({
   artifactsUndiscovered: z.array(identifier).readonly(),
   collectedFragmentIds: z.array(identifier).readonly(),
   metrics: runMetrics,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -709,7 +802,7 @@ export const legacyActiveRunV17Schema = z.strictObject({
   offeredArtifact: identifier.nullable(),
   artifactsUndiscovered: z.array(identifier).readonly(),
   metrics: runMetrics,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -757,7 +850,7 @@ export const legacyActiveRunV16Schema = z.strictObject({
   offeredArtifact: identifier.nullable(),
   artifactsUndiscovered: z.array(identifier).readonly(),
   metrics: runMetrics,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -811,7 +904,7 @@ export const legacyActiveRunV15Schema = z.strictObject({
   offeredArtifact: identifier.nullable(),
   artifactsUndiscovered: z.array(identifier).readonly(),
   metrics: runMetrics,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -865,7 +958,7 @@ export const legacyActiveRunV14Schema = z.strictObject({
   offeredArtifact: identifier.nullable(),
   artifactsUndiscovered: z.array(identifier).readonly(),
   metrics: runMetrics,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -916,7 +1009,7 @@ export const legacyActiveRunV13Schema = z.strictObject({
   offeredArtifact: identifier.nullable(),
   artifactsUndiscovered: z.array(identifier).readonly(),
   metrics: runMetrics,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -965,7 +1058,7 @@ export const legacyActiveRunV12Schema = z.strictObject({
   fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -1014,7 +1107,7 @@ export const legacyActiveRunV11Schema = z.strictObject({
   fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: runMetrics,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -1062,7 +1155,7 @@ export const legacyActiveRunV8Schema = z.strictObject({
   fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
   house: z.strictObject({ capacity: positiveQuantity, upgradesPurchased: safeNonNegative }),
   restockedMilestones: z.array(positiveQuantity).readonly(),
 });
@@ -1106,7 +1199,7 @@ export const legacyActiveRunV6Schema = z.strictObject({
   fallenHeroDecisions: z.array(legacyFallenDecisionPreHaunt).max(10).readonly(),
   conqueredChampionRecordIds: z.array(identifier).readonly(),
   metrics: legacyRunMetricsV9,
-  conclusion: runConclusionSchema.nullable(),
+  conclusion: legacyRunConclusionPreSurrender.nullable(),
 });
 
 export const legacyActiveRunV5Schema = z.strictObject({

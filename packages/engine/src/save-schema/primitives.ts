@@ -109,7 +109,13 @@ export const blockReason = z.enum([
   'dialogue.out-of-range',
   'dialogue.invalid-topic',
 ]);
-export const completionType = z.enum(['died', 'became-heart', 'refused', 'broke-cycle']);
+export const completionType = z.enum([
+  'died',
+  'became-heart',
+  'refused',
+  'broke-cycle',
+  'surrendered',
+]);
 export const runConclusionCause = z.strictObject({
   killerContentId: identifier.nullable(),
   depth: safeNonNegative,

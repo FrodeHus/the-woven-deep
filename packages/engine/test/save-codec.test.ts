@@ -946,7 +946,7 @@ describe('active-run save codec', () => {
     const legacy = v4Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(decoded.hero.currency).toBe(0);
     expect(decoded.hero.classTags).toEqual([]);
@@ -971,7 +971,7 @@ describe('active-run save codec', () => {
     const legacy = v5Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
@@ -991,7 +991,7 @@ describe('active-run save codec', () => {
     const legacy = v6Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(decoded.hero.classTags).toEqual([]);
     expect(decoded.hero.statModifiers).toEqual({});
@@ -1007,7 +1007,7 @@ describe('active-run save codec', () => {
     const legacy = v7Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(decoded.house).toEqual({ capacity: 6, upgradesPurchased: 0 });
     expect(decoded.restockedMilestones).toEqual([]);
@@ -1025,7 +1025,7 @@ describe('active-run save codec', () => {
     const legacy = v8Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     // A pre-Weave hero migrates to full Weave: maxWeave is base 4 + Wits, and weave starts full.
     const migratedHero = decoded.actors.find((actor) => actor.actorId === decoded.hero.actorId)!;
@@ -1047,7 +1047,7 @@ describe('active-run save codec', () => {
     const legacy = v9Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(decoded.metrics.defeatedBossMonsterIds).toEqual([]);
     expect(stripV10Fields(decoded)).toEqual(legacy);
@@ -1060,7 +1060,7 @@ describe('active-run save codec', () => {
     const legacy = v10Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(stripV11Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -1072,7 +1072,7 @@ describe('active-run save codec', () => {
     const legacy = v11Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(decoded.rng['loot-placement']).toEqual(
       deriveRngStreams(legacy.runSeed as any)['loot-placement'],
@@ -1087,7 +1087,7 @@ describe('active-run save codec', () => {
     const legacy = v12Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(decoded.offeredArtifact).toBeNull();
     expect(decoded.artifactsUndiscovered).toEqual([]);
@@ -1101,7 +1101,7 @@ describe('active-run save codec', () => {
     const legacy = v13Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(stripV14Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -1113,7 +1113,7 @@ describe('active-run save codec', () => {
     const legacy = v14Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(stripV15Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -1125,7 +1125,7 @@ describe('active-run save codec', () => {
     const legacy = v15Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(stripV16Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -1137,7 +1137,7 @@ describe('active-run save codec', () => {
     const legacy = v16Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.hero.tempering).toEqual({
       banked: 0,
       spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
@@ -1153,7 +1153,7 @@ describe('active-run save codec', () => {
     const legacy = v17Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.collectedFragmentIds).toEqual([]);
     expect(stripV18Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -1165,7 +1165,7 @@ describe('active-run save codec', () => {
     const legacy = v18Fixture();
     const decoded = decodeActiveRun(JSON.stringify(legacy));
 
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.survival.starvationTicks).toBe(0);
     expect(stripV19Fields(decoded)).toEqual(legacy);
     expect(encodeActiveRun(decodeActiveRun(encodeActiveRun(decoded)))).toBe(
@@ -1192,7 +1192,7 @@ describe('active-run save codec', () => {
     delete (v16.rng as Record<string, unknown>).enchanting;
     delete v16.collectedFragmentIds;
     const decoded = decodeActiveRun(JSON.stringify(v16), compiledContent);
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.hero.tempering).toEqual({
       banked: 0,
       spent: { might: 0, agility: 0, vitality: 0, wits: 0, resolve: 0 },
@@ -1204,7 +1204,7 @@ describe('active-run save codec', () => {
     const v18 = v18Fixture();
     expect((v18.survival as Record<string, unknown>).starvationTicks).toBeUndefined();
     const decoded = decodeActiveRun(JSON.stringify(v18), compiledContent);
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.survival.starvationTicks).toBe(0);
   });
 
@@ -1224,7 +1224,7 @@ describe('active-run save codec', () => {
         JSON.stringify(legacyFixtureAtVersion(version)),
         compiledContent,
       );
-      expect(decoded.schemaVersion).toBe(19);
+      expect(decoded.schemaVersion).toBe(20);
       expect(decoded.hero.tempering.banked).toBe(0);
       expect(decoded.rng.enchanting).toEqual(deriveRngStreams(decoded.runSeed).enchanting);
     }
@@ -1264,7 +1264,7 @@ describe('active-run save codec', () => {
   it('migrates a v15 standing to a cause-less single-item death inventory', () => {
     const v15 = { ...structuredClone(encodedFixtureWithStandings()), schemaVersion: 15 };
     const decoded = decodeActiveRun(JSON.stringify(v15), compiledContent);
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     for (const standing of decoded.fallenHeroStandings) {
       expect(standing.cause).toBeNull();
       expect(standing.deathInventory).toEqual([standing.heirloom]);
@@ -1452,7 +1452,7 @@ describe('active-run save codec', () => {
     // Decoded WITH the demo pack the fixture's contentHash names, so this covers the content-bound
     // validation tier end to end, not only the schema tier.
     const decoded = decodeActiveRun(JSON.stringify(v15WithDefeatedHaunts()), context.content);
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     const champion = decoded.populations.find(
       (population) => population.model === 'champion',
     ) as Extract<(typeof decoded.populations)[number], { model: 'champion' }>;
@@ -1506,7 +1506,7 @@ describe('active-run save codec', () => {
         JSON.stringify(legacyFixtureAtVersion(version)),
         compiledContent,
       );
-      expect(decoded.schemaVersion).toBe(19);
+      expect(decoded.schemaVersion).toBe(20);
       expect(decoded.fallenHeroStandings.every((standing) => standing.cause === null)).toBe(true);
       expect(
         decoded.fallenHeroStandings.every((standing) => standing.deathInventory.length === 1),
@@ -1542,7 +1542,7 @@ describe('active-run save codec', () => {
     const v14 = v14Fixture();
     const decoded = decodeActiveRun(JSON.stringify(v14));
     expect(decoded.mode).toBe('classic');
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
   });
 
   it('defaults the mode to classic for every legacy entry version', () => {
@@ -1587,7 +1587,7 @@ describe('active-run save codec', () => {
     for (const item of v13.items as Record<string, unknown>[]) delete item.curse;
     const decoded = decodeActiveRun(JSON.stringify(v13));
     expect(decoded.items.every((item) => item.curse === undefined)).toBe(true);
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
   });
 
@@ -1598,7 +1598,7 @@ describe('active-run save codec', () => {
   it('migrates a v13 save with a Hall standing by defaulting the recorded heirloom curse to null', () => {
     const legacy = withRecordedHeirloom(v13Fixture(), preCurseHeirloomFixture(), { legacy: true });
     const decoded = decodeActiveRun(JSON.stringify(legacy));
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(decoded.fallenHeroStandings[0]!.heirloom.curse).toBeNull();
     expect(decoded.fallenHeroStandings[0]!.cause).toBeNull();
@@ -1614,7 +1614,7 @@ describe('active-run save codec', () => {
   it('migrates a v12 save with a Hall standing through v14, defaulting item and heirloom curse', () => {
     const legacy = withRecordedHeirloom(v12Fixture(), preCurseHeirloomFixture(), { legacy: true });
     const decoded = decodeActiveRun(JSON.stringify(legacy));
-    expect(decoded.schemaVersion).toBe(19);
+    expect(decoded.schemaVersion).toBe(20);
     expect(decoded.mode).toBe('classic');
     expect(decoded.fallenHeroStandings[0]!.heirloom.curse).toBeNull();
     expect(decoded.items.every((item) => item.curse === undefined)).toBe(true);
@@ -3646,7 +3646,7 @@ describe('active-run save codec', () => {
     );
   });
 
-  it.each([0, 1, 2, 3, 20])(
+  it.each([0, 1, 2, 3, 21])(
     'rejects unsupported schema version %i without partial state',
     (schemaVersion) => {
       try {
@@ -3965,5 +3965,46 @@ describe('active-run save codec', () => {
     }
     expect(state.recentCommands[0]?.command.expectedRevision).toBe(1);
     expect(() => encodeActiveRun(state)).not.toThrow();
+  });
+});
+
+describe('surrendered conclusion', () => {
+  /** A run concluded `surrendered`: the hero is alive, there is no killer, and the depth is the
+   * hero's own floor -- the exact shape `concludeRunOnChoice` produces for a surrender. */
+  function surrenderedRun() {
+    const base = createDemoRun();
+    const floor = base.floors.find((candidate) => candidate.floorId === base.activeFloorId)!;
+    return validateActiveRun({
+      ...base,
+      conclusion: {
+        completionType: 'surrendered' as const,
+        cause: {
+          killerContentId: null,
+          depth: floor.depth,
+          turn: base.turn,
+          worldTime: base.worldTime,
+        },
+        concludedAtRevision: base.revision,
+        finalized: false,
+      },
+    });
+  }
+
+  it('round-trips byte-identically', () => {
+    const encoded = encodeActiveRun(surrenderedRun());
+    const decoded = decodeActiveRun(encoded);
+
+    expect(decoded.conclusion?.completionType).toBe('surrendered');
+    expect(encodeActiveRun(decoded)).toBe(encoded);
+  });
+
+  it('rejects a surrendered conclusion smuggled into a legacy save', () => {
+    // No save written at v19 or earlier could hold `surrendered`, so the frozen legacy conclusion
+    // schema must refuse one. This is what the freeze buys: without it, widening the live enum
+    // would retroactively change what every old save is validated against.
+    const legacy = JSON.parse(encodeActiveRun(surrenderedRun())) as Record<string, unknown>;
+    legacy.schemaVersion = 19;
+
+    expect(() => decodeActiveRun(JSON.stringify(legacy))).toThrow(SaveLoadError);
   });
 });
