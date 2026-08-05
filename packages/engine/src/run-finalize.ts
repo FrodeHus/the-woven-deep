@@ -168,12 +168,19 @@ function newlyConqueredChampionRecordIds(
  *
  * Held at the end is the whole test. A fragment sold, dropped, or never picked up banks nothing:
  * the Deep remembers what the hero carried out of it, or died with.
+ *
+ * A SURRENDERED run banks nothing at all, whatever the hero was holding. That is the entire cost of
+ * surrendering: the score bonus is zero, the same as an ordinary death, so the only thing the choice
+ * actually forfeits is progress toward the one ending that requires fragments. The hero gave
+ * themselves to the Deep, and the Deep keeps what they carried.
  */
 function newlyCollectedFragmentIds(
   run: ActiveRun,
   content: CompiledContentPack,
   lifetime: LifetimeState,
 ): readonly OpaqueId[] {
+  if (run.conclusion!.completionType === 'surrendered') return [];
+
   return tabletFragmentIds(content)
     .filter(
       (fragmentId) =>
@@ -184,7 +191,8 @@ function newlyCollectedFragmentIds(
 
 /**
  * One run's effect on the artifact ledger: the artifact that became this record's heirloom is
- * `lost` to the record (`died-with`, or `escaped-with` when the hero left the Deep any other way),
+ * `lost` to the record (`died-with` for a death or a surrender, `escaped-with` when the hero left
+ * the Deep any other way),
  * and every other artifact the hero was carrying is recycled straight back into circulation
  * (`reclaimed-by-the-deep`, `undiscovered`, no holder). Sorted by artifact id; empty when the hero
  * held none. The stint depth is where the run ended, which is where the artifact came to rest.
@@ -199,8 +207,12 @@ function artifactStints(
     depth: number;
   }>,
 ): ArtifactDeltas['stints'] {
+  // `escaped-with` means the hero LEFT the Deep still holding it. A surrendered hero did not leave,
+  // so their carried artifact reads exactly as a death does.
   const carriedOutcome: ArtifactStint['outcome'] =
-    input.completionType === 'died' ? 'died-with' : 'escaped-with';
+    input.completionType === 'died' || input.completionType === 'surrendered'
+      ? 'died-with'
+      : 'escaped-with';
   return [...input.heldArtifactIds].sort(compareCodeUnits).map((artifactId) => {
     const carried = artifactId === input.chosenArtifactId;
     return {

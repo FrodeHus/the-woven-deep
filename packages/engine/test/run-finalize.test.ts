@@ -776,6 +776,31 @@ describe('finalizeRun', () => {
       ]);
       expect(finalized.record.heirloom.contentId).toBe('item.marias-grace');
     });
+
+    it('records died-with, not escaped-with, when the run was surrendered', () => {
+      // A surrendered hero never left the Deep, so the artifact did not escape with them either --
+      // this is the one non-death completion that reads as a death on the ledger.
+      const content = pack([artifactDef('item.marias-grace')]);
+      const run = concludedRun({
+        items: [equippedItem('item.hero.grace', 'item.marias-grace')],
+        conclusion: {
+          completionType: 'surrendered',
+          cause: { killerContentId: null, depth: 6, turn: 200, worldTime: 20_000 },
+          concludedAtRevision: 11,
+          finalized: false,
+        },
+      });
+      const recordId = deriveHallRecordId(run.runSeed, run.contentHash);
+      const finalized = finalizeRun({ run, content, lifetime: emptyLifetime() });
+      expect(finalized.artifactDeltas.stints).toEqual([
+        {
+          artifactId: 'item.marias-grace',
+          stint: { heroName: run.hero.name, recordId, outcome: 'died-with', depth: 6 },
+          newStatus: 'lost',
+          holderRecordId: recordId,
+        },
+      ]);
+    });
   });
 
   it('computes discovery protection updates over the run decisions, sorted by encounter ID', () => {
@@ -1073,5 +1098,49 @@ describe('finalizeRun lifetime fragment collection', () => {
       lifetime: emptyLifetime(),
     });
     expect(deltas.newlyCollectedFragmentIds).toEqual([]);
+  });
+
+  /** The conclusion a surrender produces: alive hero, no killer, non-death completion. */
+  const SURRENDERED_CONCLUSION = {
+    completionType: 'surrendered' as const,
+    cause: { killerContentId: null, depth: 4, turn: 120, worldTime: 12_000 },
+    concludedAtRevision: 9,
+    finalized: false,
+  };
+
+  it('banks no fragments at all when the run was surrendered', () => {
+    const items = [carried(FRAGMENT_A), carried(FRAGMENT_B)];
+    const { deltas } = finalizeRun({
+      run: concludedRun({ items, conclusion: SURRENDERED_CONCLUSION }),
+      content: fragmentPack(),
+      lifetime: emptyLifetime(),
+    });
+    expect(deltas.newlyCollectedFragmentIds).toEqual([]);
+  });
+
+  it('banks those same fragments when the identical run ends in death', () => {
+    // The paired case: without it an empty result proves nothing, since the setup might simply
+    // have failed to give the hero any fragments at all.
+    const items = [carried(FRAGMENT_A), carried(FRAGMENT_B)];
+    const { deltas } = finalizeRun({
+      run: concludedRun({ items }),
+      content: fragmentPack(),
+      lifetime: emptyLifetime(),
+    });
+    expect(deltas.newlyCollectedFragmentIds).toEqual([FRAGMENT_A, FRAGMENT_B]);
+  });
+
+  it('still produces a heirloom, a death inventory, and a zero completion bonus', () => {
+    const { record } = finalizeRun({
+      run: concludedRun({ conclusion: SURRENDERED_CONCLUSION }),
+      content: fragmentPack(),
+      lifetime: emptyLifetime(),
+    });
+
+    expect(record.completionType).toBe('surrendered');
+    expect(record.heirloom).toBeDefined();
+    expect(record.deathInventory.length).toBeGreaterThan(0);
+    const line = record.score.lines.find((candidate) => candidate.lineId === 'completion-bonus');
+    expect(line!.amount).toBe(0);
   });
 });
