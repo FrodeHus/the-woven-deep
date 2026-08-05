@@ -440,6 +440,46 @@ export function resolveCommand(
     };
   }
 
+  // Surrender advances the revision only -- exactly like the house and trade branches above, and
+  // deliberately NOT like the Final Chamber choice, which is an ordinary player action charged a
+  // turn (`actionCostFor` falls through to `normalActionCost`) and followed by a full world step.
+  // Routing surrender that way would let the world act -- and possibly kill the hero -- inside the
+  // very transition that concludes the run, leaving `concludeRunOnChoice` to throw on an
+  // already-concluded run. Here nothing steps: no turn, no world time, no survival tick, no RNG
+  // draw. An already-concluded run never reaches this branch either, because the generic
+  // `state.conclusion !== null` guard at the top of `resolveCommand` has already rejected it with
+  // `run.concluded`.
+  if (command.type === 'surrender') {
+    assertCountersCanAdvance(current, false);
+    const result = {
+      status: 'applied',
+      commandId: command.commandId,
+      revision: current.revision + 1,
+      turn: current.turn,
+    } as const;
+    const resolved = concludeRunOnChoice({
+      state: current,
+      completionType: 'surrendered',
+      turn: current.turn,
+      eventId: command.commandId,
+    });
+    const events = [...preEvents, ...resolved.events];
+    const publicEvents = [
+      ...prePublicEvents,
+      ...projectDomainEvents({
+        state: resolved.state,
+        content: context.content,
+        heroId: resolved.state.hero.actorId,
+        events: resolved.events,
+      }),
+    ];
+    return {
+      state: record(resolved.state, context.content, command, result, events, publicEvents),
+      result,
+      events: publicEvents,
+    };
+  }
+
   const validation = validatePlayerAction({ state: current, command, context });
   if ('status' in validation && validation.status === 'decision_required') {
     // A pending decision leaves the command unrecorded, but the modal-session normalization above
