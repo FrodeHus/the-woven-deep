@@ -28,8 +28,6 @@ import {
   publicOnlyEventTypes,
   recorded,
   reputationChangedEvent,
-  runConcludedEvent,
-  runFinalizedEvent,
   tradeBoughtEvent,
   tradeClosedEvent,
   tradeOpenedEvent,
