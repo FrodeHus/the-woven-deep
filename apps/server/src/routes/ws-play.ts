@@ -185,6 +185,21 @@ function handleRunMessage(
     return [{ type: 'state', snapshot: session.getSnapshot() }];
   }
 
+  // Surrender goes through `applyCommand` like any other command: the browser asks, and the
+  // server's engine decides and produces the record. Nothing about the conclusion is accepted from
+  // the client.
+  if (message.type === 'surrender') {
+    return [
+      outcomeToMessage(
+        session.applyCommand({
+          type: 'surrender',
+          commandId: message.commandId,
+          expectedRevision: message.expectedRevision,
+        }),
+      ),
+    ];
+  }
+
   // message.type === 'final-chamber-choice'
   return [
     outcomeToMessage(

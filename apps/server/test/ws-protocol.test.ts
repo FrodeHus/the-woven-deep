@@ -53,3 +53,21 @@ describe('parseClientMessage — temper intent', () => {
     ).toBe(false);
   });
 });
+
+describe('parseClientMessage — surrender', () => {
+  it('accepts a well-formed surrender', () => {
+    const parsed = parseClientMessage(
+      JSON.stringify({ type: 'surrender', commandId: 'c.1', expectedRevision: 7 }),
+    );
+    expect(parsed.ok).toBe(true);
+    expect(parsed.ok && parsed.value).toEqual({
+      type: 'surrender',
+      commandId: 'c.1',
+      expectedRevision: 7,
+    });
+  });
+
+  it('rejects a surrender missing its envelope fields', () => {
+    expect(parseClientMessage(JSON.stringify({ type: 'surrender' })).ok).toBe(false);
+  });
+});

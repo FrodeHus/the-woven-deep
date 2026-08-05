@@ -242,9 +242,13 @@ export function parseClientMessage(raw: unknown): ParsedClientMessage {
       },
     };
   }
-  // Both carry nothing beyond the shared `commandId`/`expectedRevision` envelope validated above,
-  // so there is no per-variant payload left to check here.
-  if (parsed.type === 'rise-again' || parsed.type === 'accept-death') {
+  // All three carry nothing beyond the shared `commandId`/`expectedRevision` envelope validated
+  // above, so there is no per-variant payload left to check here.
+  if (
+    parsed.type === 'rise-again' ||
+    parsed.type === 'accept-death' ||
+    parsed.type === 'surrender'
+  ) {
     return {
       ok: true,
       value: {
