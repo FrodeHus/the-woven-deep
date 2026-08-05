@@ -67,15 +67,35 @@ export interface SurrenderCommand extends CommandEnvelope {
 
 added to the `Command` union there and to the command union in `packages/session-core/src/ws-protocol.ts`.
 
-`reducer.ts` resolves it in the same conclusion branch that already handles the Final Chamber, by calling the existing shared helper:
+`reducer.ts` resolves it in a **dedicated branch modelled on the house-command branch** (`reducer.ts:402`), not on the Final Chamber branch. This is the load-bearing routing decision.
+
+The Final Chamber choice is an ordinary player action: it runs through `validatePlayerAction`, is charged `actionCostFor(rules, 'action.final-chamber-choice')` — which falls through to `normalActionCost`, since no `action.final-chamber-choice` key exists in `content/balance/core-gameplay.yaml`'s `actionCosts` — and then drives a full `resolveWorldStep`. Routing surrender that way would cost a turn, advance world time, let every monster act, and draw from the combat and effects streams. That contradicts this design's no-turn/no-randomness requirement, and it introduces a genuine collision: if the world killed the hero in that same transition, the run would already be concluded `died` by the time the choice branch called `concludeRunOnChoice`, which throws on an already-concluded run.
+
+The house and trade branches are the existing precedent for a command that advances the revision and nothing else. Following it, surrender:
 
 ```ts
-concludeRunOnChoice({ state, completionType: 'surrendered', turn, eventId: command.commandId })
+// after the modal-session normalization, before validatePlayerAction
+if (command.type === 'surrender') {
+  assertCountersCanAdvance(current, false);
+  const result = {
+    status: 'applied',
+    commandId: command.commandId,
+    revision: current.revision + 1,
+    turn: current.turn,          // unchanged: surrender costs no turn
+  } as const;
+  const resolved = concludeRunOnChoice({
+    state: current,
+    completionType: 'surrendered',
+    turn: current.turn,
+    eventId: command.commandId,
+  });
+  // ... project events and `record(...)`, exactly as the house branch does
+}
 ```
 
-`concludeRunOnChoice` already does everything required: null killer, depth from the hero's active floor, `concludedAtRevision: state.revision + 1`, and a `run.concluded` domain event. It throws on an already-concluded run, so the command's validation must reject with `run.concluded` before reaching it — which is the existing generic guard, not a new one.
+`concludeRunOnChoice` already supplies everything else the conclusion needs: null killer, depth from the hero's active floor, `concludedAtRevision: state.revision + 1` (which matches `result.revision`), and a `run.concluded` domain event. Its throw-on-already-concluded guard can never fire here, because the generic `state.conclusion !== null` check at the top of `resolveCommand` (`reducer.ts:165`) already rejects with `run.concluded` well before this branch.
 
-No new invalid-reason code is introduced.
+No world step, no `resolveWorldStep`, no curse post-pass, no RNG. No new invalid-reason code is introduced.
 
 ## Save schema
 
@@ -134,7 +154,17 @@ Correspondingly, `ESCAPE_TEXT` in `apps/web/src/session/artifact-view.ts:107` is
 
 **Conclusion screen.** `ConclusionScreen.tsx` gains a `surrendered` entry in `COMPLETION_HEADLINE` and one in `COMPLETION_EPILOGUE`, alongside the existing four. The Wanderer epilogue path already replaces every per-completion epilogue and needs no change.
 
-**Session dispatch.** `surrender()` on both `guest-session.ts` and `profile-session.ts`, mirroring the existing `chooseFinalChamber` dispatch on each.
+**Session dispatch.** `surrender()` on both `guest-session.ts` and `profile-session.ts`, mirroring the existing `chooseFinalChamber` dispatch on each. Guest builds the `GameCommand` directly and calls `dispatchCommand`; registered sends a `surrender` websocket message. Neither routes through `PlayerIntent` — there is no intent for a conclusion, exactly as `chooseFinalChamber` documents.
+
+## Server
+
+The registered path needs the message accepted and forwarded, mirroring `final-chamber-choice` at each hop:
+
+- `packages/session-core/src/ws-protocol.ts` — a `{ type: 'surrender'; commandId; expectedRevision }` member on the client-message union.
+- `apps/server/src/ws-protocol.ts:272` — a parse branch validating the same envelope fields.
+- `apps/server/src/routes/ws-play.ts:188` — dispatch the `surrender` `GameCommand` into the play session.
+
+The server stays authoritative throughout: the browser asks to surrender, the server's engine decides and produces the record. No record, score, or conclusion is ever accepted from the client.
 
 ## Testing
 
